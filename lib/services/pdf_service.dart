@@ -1,6 +1,9 @@
+import 'dart:io';
+import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
-import 'package:printing/printing.dart';
 import 'package:intl/intl.dart';
 import '../models/pending_item.dart';
 
@@ -26,24 +29,30 @@ class PdfService {
       case 'tapeçaria':
       case 'tapecaria':
         return PdfColors.purple700;
-      case 'laminação':
-      case 'laminacao':
-        return PdfColors.blue700;
-      case 'produtos':
-        return PdfColors.teal700;
-      case 'montagem':
-        return PdfColors.indigo700;
-      case 'mk':
+      case 'comunicação visual':
         return PdfColors.pink700;
       default:
         return PdfColors.grey700;
     }
   }
 
+  /// Salva o PDF em arquivo temporário e abre o compartilhamento do Android
+  static Future<void> _saveAndShare(pw.Document pdf, String filename) async {
+    final bytes = await pdf.save();
+    final dir = await getTemporaryDirectory();
+    final file = File('${dir.path}/$filename');
+    await file.writeAsBytes(bytes);
+    await Share.shareXFiles(
+      [XFile(file.path, mimeType: 'application/pdf')],
+      subject: filename.replaceAll('_', ' ').replaceAll('.pdf', ''),
+    );
+  }
+
   static Future<void> generatePendingReport(
       List<PendingItem> items, bool showResolved) async {
     final pdf = pw.Document();
     final now = _dateFmt.format(DateTime.now());
+    final title = showResolved ? 'PENDÊNCIAS RESOLVIDAS' : 'PENDÊNCIAS ABERTAS';
 
     final grouped = <String, List<PendingItem>>{};
     for (final item in items) {
@@ -51,117 +60,118 @@ class PdfService {
     }
     final sortedKeys = grouped.keys.toList()..sort();
 
-    pdf.addPage(
-      pw.MultiPage(
-        pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(32),
-        header: (_) => pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.start,
-          children: [
-            pw.Row(
-              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-              children: [
-                pw.Text(
-                  showResolved
-                      ? 'PENDÊNCIAS RESOLVIDAS'
-                      : 'PENDÊNCIAS ABERTAS',
+    pdf.addPage(pw.MultiPage(
+      pageFormat: PdfPageFormat.a4,
+      margin: const pw.EdgeInsets.all(32),
+      header: (_) => pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Text(title,
                   style: pw.TextStyle(
-                    fontSize: 16,
-                    fontWeight: pw.FontWeight.bold,
-                    color: showResolved
-                        ? PdfColors.green800
-                        : PdfColors.red800,
-                  ),
-                ),
-                pw.Text('CAS 2026 — $now',
-                    style: const pw.TextStyle(
-                        fontSize: 9, color: PdfColors.grey600)),
-              ],
-            ),
-            pw.Divider(color: PdfColors.grey400),
-            pw.SizedBox(height: 4),
-          ],
-        ),
-        build: (_) {
-          if (items.isEmpty) {
-            return [
-              pw.Center(
-                  child: pw.Text(
-                      'Nenhuma pendência ${showResolved ? "resolvida" : "encontrada"}.'))
-            ];
-          }
-          final widgets = <pw.Widget>[];
-          for (final key in sortedKeys) {
-            widgets.add(pw.Container(
-              color: PdfColors.blue50,
-              padding: const pw.EdgeInsets.symmetric(
-                  horizontal: 10, vertical: 6),
-              margin: const pw.EdgeInsets.only(bottom: 6),
-              child: pw.Text(key,
-                  style: pw.TextStyle(
-                      fontWeight: pw.FontWeight.bold, fontSize: 12)),
-            ));
-            for (final item in grouped[key]!) {
-              final teamColor = _teamColor(item.team);
-              widgets.add(pw.Container(
-                margin: const pw.EdgeInsets.only(bottom: 8, left: 8),
-                padding: const pw.EdgeInsets.all(10),
-                decoration: pw.BoxDecoration(
-                  border: pw.Border.all(color: PdfColors.grey300),
-                  borderRadius:
-                      const pw.BorderRadius.all(pw.Radius.circular(4)),
-                ),
-                child: pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.start,
-                  children: [
-                    pw.Row(children: [
-                      pw.Text('Stand ${item.local}  ',
-                          style: pw.TextStyle(
-                              fontWeight: pw.FontWeight.bold,
-                              fontSize: 11)),
-                      pw.Text('${item.clientName}  ',
-                          style: const pw.TextStyle(fontSize: 11)),
-                      pw.Container(
-                        padding: const pw.EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 2),
-                        decoration: pw.BoxDecoration(
-                          color: teamColor,
-                          borderRadius: const pw.BorderRadius.all(
-                              pw.Radius.circular(4)),
-                        ),
-                        child: pw.Text(item.team,
-                            style: const pw.TextStyle(
-                                fontSize: 9, color: PdfColors.white)),
-                      ),
-                    ]),
-                    pw.SizedBox(height: 4),
-                    pw.Text(item.description,
-                        style: const pw.TextStyle(fontSize: 11)),
-                    pw.SizedBox(height: 4),
-                    pw.Text(
-                      'Criado: ${_dtFmt.format(item.createdAt)}'
-                      '${item.resolvedAt != null ? "  |  Resolvido: ${_dtFmt.format(item.resolvedAt!)}" : ""}',
-                      style: const pw.TextStyle(
-                          fontSize: 9, color: PdfColors.grey600),
-                    ),
-                    if (showResolved && item.resolvedAt != null)
-                      pw.Text(
-                        'Tempo: ${_dur(item.resolvedAt!.difference(item.createdAt))}',
-                        style: const pw.TextStyle(
-                            fontSize: 9, color: PdfColors.green700),
-                      ),
-                  ],
-                ),
-              ));
-            }
-            widgets.add(pw.SizedBox(height: 6));
-          }
-          return widgets;
-        },
+                      fontSize: 16,
+                      fontWeight: pw.FontWeight.bold,
+                      color: showResolved
+                          ? PdfColors.green800
+                          : PdfColors.red800)),
+              pw.Text('CAS 2026 — $now',
+                  style: const pw.TextStyle(
+                      fontSize: 9, color: PdfColors.grey600)),
+            ],
+          ),
+          pw.Divider(color: PdfColors.grey400),
+          pw.SizedBox(height: 4),
+        ],
       ),
-    );
+      build: (_) {
+        if (items.isEmpty) {
+          return [
+            pw.Center(
+                child: pw.Text('Nenhuma pendência encontrada.',
+                    style: const pw.TextStyle(color: PdfColors.grey600)))
+          ];
+        }
+        final widgets = <pw.Widget>[];
+        for (final key in sortedKeys) {
+          widgets.add(pw.Container(
+            color: PdfColors.blue50,
+            padding:
+                const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            margin: const pw.EdgeInsets.only(bottom: 6),
+            child: pw.Text(key,
+                style: pw.TextStyle(
+                    fontWeight: pw.FontWeight.bold, fontSize: 12)),
+          ));
+          for (final item in grouped[key]!) {
+            final teamColor = _teamColor(item.team);
+            widgets.add(pw.Container(
+              margin: const pw.EdgeInsets.only(bottom: 8, left: 8),
+              padding: const pw.EdgeInsets.all(10),
+              decoration: pw.BoxDecoration(
+                border: pw.Border.all(color: PdfColors.grey300),
+                borderRadius:
+                    const pw.BorderRadius.all(pw.Radius.circular(4)),
+              ),
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Row(children: [
+                    pw.Text('Stand ${item.local}  ',
+                        style: pw.TextStyle(
+                            fontWeight: pw.FontWeight.bold, fontSize: 11)),
+                    pw.Text('${item.clientName}  ',
+                        style: const pw.TextStyle(fontSize: 11)),
+                    pw.Container(
+                      padding: const pw.EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
+                      decoration: pw.BoxDecoration(
+                        color: teamColor,
+                        borderRadius: const pw.BorderRadius.all(
+                            pw.Radius.circular(4)),
+                      ),
+                      child: pw.Text(item.team,
+                          style: const pw.TextStyle(
+                              fontSize: 9, color: PdfColors.white)),
+                    ),
+                    if (item.responsible.isNotEmpty) ...[
+                      pw.SizedBox(width: 6),
+                      pw.Text('(${item.responsible})',
+                          style: const pw.TextStyle(
+                              fontSize: 9, color: PdfColors.grey600)),
+                    ],
+                  ]),
+                  pw.SizedBox(height: 4),
+                  pw.Text(item.description,
+                      style: const pw.TextStyle(fontSize: 11)),
+                  pw.SizedBox(height: 4),
+                  pw.Text(
+                    'Criado: ${_dtFmt.format(item.createdAt)}'
+                    '${item.resolvedAt != null ? "  |  Resolvido: ${_dtFmt.format(item.resolvedAt!)}" : ""}',
+                    style: const pw.TextStyle(
+                        fontSize: 9, color: PdfColors.grey600),
+                  ),
+                  if (showResolved && item.resolvedAt != null)
+                    pw.Text(
+                      'Tempo: ${_dur(item.resolvedAt!.difference(item.createdAt))}',
+                      style: const pw.TextStyle(
+                          fontSize: 9, color: PdfColors.green700),
+                    ),
+                ],
+              ),
+            ));
+          }
+          widgets.add(pw.SizedBox(height: 6));
+        }
+        return widgets;
+      },
+    ));
 
-    await Printing.layoutPdf(onLayout: (_) => pdf.save());
+    final filename = showResolved
+        ? 'CAS2026_pendencias_resolvidas.pdf'
+        : 'CAS2026_pendencias_abertas.pdf';
+    await _saveAndShare(pdf, filename);
   }
 
   static Future<void> generateSummaryReport(
@@ -170,16 +180,15 @@ class PdfService {
     final now = _dateFmt.format(DateTime.now());
 
     Duration total = Duration.zero;
-    int count = 0;
+    int cnt = 0;
     for (final item in resolved) {
       if (item.resolvedAt != null) {
         total += item.resolvedAt!.difference(item.createdAt);
-        count++;
+        cnt++;
       }
     }
-    final avg = count > 0
-        ? Duration(minutes: total.inMinutes ~/ count)
-        : Duration.zero;
+    final avg =
+        cnt > 0 ? Duration(minutes: total.inMinutes ~/ cnt) : Duration.zero;
 
     final byTeam = <String, int>{};
     for (final item in resolved) {
@@ -192,8 +201,7 @@ class PdfService {
           child: pw.Row(
             mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
             children: [
-              pw.Text(label,
-                  style: const pw.TextStyle(fontSize: 12)),
+              pw.Text(label, style: const pw.TextStyle(fontSize: 12)),
               pw.Text(value,
                   style: pw.TextStyle(
                       fontSize: 12,
@@ -226,8 +234,7 @@ class PdfService {
             color: PdfColors.orange700),
         statRow('Pendências abertas', '${stats['total_pending'] ?? 0}',
             color: PdfColors.red700),
-        statRow(
-            'Pendências resolvidas', '${stats['resolved_pending'] ?? 0}',
+        statRow('Pendências resolvidas', '${stats['resolved_pending'] ?? 0}',
             color: PdfColors.green700),
         statRow('Tempo médio de resolução', _dur(avg)),
         pw.SizedBox(height: 20),
@@ -242,6 +249,31 @@ class PdfService {
       ],
     ));
 
-    await Printing.layoutPdf(onLayout: (_) => pdf.save());
+    await _saveAndShare(pdf, 'CAS2026_relatorio_final.pdf');
+  }
+
+  /// Mostra snackbar de feedback enquanto gera o PDF
+  static Future<void> generateAndShow(
+    BuildContext context,
+    Future<void> Function() generator,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(const SnackBar(
+      content: Row(children: [
+        SizedBox(
+            width: 18,
+            height: 18,
+            child: CircularProgressIndicator(
+                strokeWidth: 2, color: Colors.white)),
+        SizedBox(width: 12),
+        Text('Gerando PDF...'),
+      ]),
+      duration: Duration(seconds: 30),
+    ));
+    try {
+      await generator();
+    } finally {
+      messenger.hideCurrentSnackBar();
+    }
   }
 }

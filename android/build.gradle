@@ -5,6 +5,17 @@ allprojects {
     }
 }
 
+// Força compileSdk 34 para todos os plugins Flutter (inclusive 'printing')
+subprojects {
+    afterEvaluate { project ->
+        if (project.hasProperty('android')) {
+            project.android {
+                compileSdkVersion 34
+            }
+        }
+    }
+}
+
 rootProject.buildDir = "../build"
 subprojects {
     project.buildDir = "${rootProject.buildDir}/${project.name}"

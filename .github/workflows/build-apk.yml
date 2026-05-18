@@ -5,7 +5,7 @@ on:
     branches:
       - main
       - claude/fair-setup-tracker-app-J9EOm
-  workflow_dispatch:  # Permite rodar manualmente pelo GitHub
+  workflow_dispatch:
 
 jobs:
   build:
@@ -22,7 +22,14 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Configurar Flutter
+      - name: Instalar Android SDK 34
+        run: |
+          echo "y" | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager \
+            "platforms;android-34" \
+            "build-tools;34.0.0" \
+            "platform-tools"
+
+      - name: Configurar Flutter 3.24.0
         uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.24.0'
@@ -32,20 +39,22 @@ jobs:
       - name: Instalar dependências
         run: flutter pub get
 
-      - name: Verificar código
+      - name: Verificar código Dart
         run: flutter analyze --no-fatal-warnings
 
       - name: Build APK release
         run: flutter build apk --release
+        env:
+          ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}
 
-      - name: Upload APK
+      - name: Upload APK release
         uses: actions/upload-artifact@v4
         with:
           name: CAS2026-Pendencias-APK
           path: build/app/outputs/flutter-apk/app-release.apk
           retention-days: 30
 
-      - name: Build APK debug (mais fácil de instalar sem assinar)
+      - name: Build APK debug
         run: flutter build apk --debug
 
       - name: Upload APK debug

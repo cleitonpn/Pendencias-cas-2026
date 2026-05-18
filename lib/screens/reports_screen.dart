@@ -77,8 +77,8 @@ class _ReportsScreenState extends State<ReportsScreen>
                   emptyIcon: Icons.check_circle_outline,
                   emptyColor: Colors.green,
                   showResolved: false,
-                  onExport: () =>
-                      PdfService.generatePendingReport(_open, false),
+                  onExport: () => PdfService.generateAndShow(context,
+                      () => PdfService.generatePendingReport(_open, false)),
                   onReload: _load,
                 ),
                 _ListTab(
@@ -87,15 +87,15 @@ class _ReportsScreenState extends State<ReportsScreen>
                   emptyIcon: Icons.pending_actions,
                   emptyColor: Colors.grey,
                   showResolved: true,
-                  onExport: () =>
-                      PdfService.generatePendingReport(_resolved, true),
+                  onExport: () => PdfService.generateAndShow(context,
+                      () => PdfService.generatePendingReport(_resolved, true)),
                   onReload: null,
                 ),
                 _SummaryTab(
                   stats: _stats,
                   resolved: _resolved,
-                  onExport: () =>
-                      PdfService.generateSummaryReport(_stats, _resolved),
+                  onExport: () => PdfService.generateAndShow(context,
+                      () => PdfService.generateSummaryReport(_stats, _resolved)),
                 ),
               ],
             ),
