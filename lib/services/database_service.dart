@@ -77,7 +77,12 @@ class DatabaseService {
     final database = await db;
     final result = await database.rawQuery(
         "SELECT DISTINCT hangar FROM clients WHERE hangar != '' ORDER BY hangar");
-    return result.map((r) => r['hangar'] as String).toList();
+    final hangars = result.map((r) => r['hangar'] as String).toList();
+    // Fallback: clientes que ficaram sem hangar mapeado aparecem como grupo próprio
+    final orphans = Sqflite.firstIntValue(await database.rawQuery(
+        "SELECT COUNT(*) FROM clients WHERE hangar = ''")) ?? 0;
+    if (orphans > 0) hangars.add('Externos');
+    return hangars;
   }
 
   static Future<List<PendingItem>> getPendingItemsByClient(

@@ -60,9 +60,12 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  List<Client> getClientsByHangar(String hangar) =>
-      _clients.where((c) => c.hangar == hangar).toList()
-        ..sort((a, b) => a.local.compareTo(b.local));
+  List<Client> getClientsByHangar(String hangar) {
+    final list = hangar == 'Externos'
+        ? _clients.where((c) => c.hangar.isEmpty).toList()
+        : _clients.where((c) => c.hangar == hangar).toList();
+    return list..sort((a, b) => a.local.compareTo(b.local));
+  }
 
   Future<void> markClientCompleted(Client client, bool completed) async {
     await DatabaseService.updateClientStatus(client.rowId, completed);
