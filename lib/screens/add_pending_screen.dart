@@ -14,18 +14,16 @@ class AddPendingScreen extends StatefulWidget {
 }
 
 class _AddPendingScreenState extends State<AddPendingScreen> {
+  // Equipes disponíveis com cores e ícones
   static const _teams = [
-    'Limpeza',
-    'Elétrica',
-    'Marcenaria',
-    'Tapeçaria',
-    'Laminação',
-    'Produtos',
-    'Montagem',
-    'MK',
+    _TeamInfo('Limpeza',               Icons.cleaning_services, Color(0xFF00897B)),
+    _TeamInfo('Elétrica',              Icons.bolt,              Color(0xFFFF6F00)),
+    _TeamInfo('Marcenaria',            Icons.carpenter,         Color(0xFF795548)),
+    _TeamInfo('Tapeçaria',             Icons.chair,             Color(0xFF7B1FA2)),
+    _TeamInfo('Comunicação Visual',    Icons.brush,             Color(0xFFD81B60)),
   ];
 
-  String? _team;
+  String? _selectedTeam;
   final _descCtrl = TextEditingController();
   bool _saving = false;
 
@@ -35,8 +33,21 @@ class _AddPendingScreenState extends State<AddPendingScreen> {
     super.dispose();
   }
 
+  // Retorna o responsável da equipe a partir dos dados do cliente (colunas O-T)
+  String _getResponsible(String team) {
+    final c = widget.client;
+    switch (team) {
+      case 'Limpeza':         return c.faxineira;
+      case 'Elétrica':        return c.eletricista;
+      case 'Marcenaria':      return c.marceneiro;
+      case 'Tapeçaria':       return c.tapeceiro;
+      case 'Comunicação Visual': return c.produtor; // produtor coordena comvis
+      default:                return '';
+    }
+  }
+
   Future<void> _save() async {
-    if (_team == null) {
+    if (_selectedTeam == null) {
       _snack('Selecione a equipe responsável.', isError: true);
       return;
     }
@@ -46,12 +57,15 @@ class _AddPendingScreenState extends State<AddPendingScreen> {
     }
     setState(() => _saving = true);
 
+    final responsible = _getResponsible(_selectedTeam!);
+
     final newItem = PendingItem(
       clientId: widget.client.rowId,
       clientName: widget.client.displayName,
-      stand: widget.client.stand,
+      local: widget.client.local,
       hangar: widget.client.hangar,
-      team: _team!,
+      team: _selectedTeam!,
+      responsible: responsible,
       description: _descCtrl.text.trim(),
       createdAt: DateTime.now(),
     );
@@ -70,8 +84,7 @@ class _AddPendingScreenState extends State<AddPendingScreen> {
       context: context,
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         title: const Row(children: [
           Icon(Icons.check_circle, color: Colors.green),
           SizedBox(width: 8),
@@ -87,11 +100,9 @@ class _AddPendingScreenState extends State<AddPendingScreen> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.grey.shade100,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child:
-                  Text(text, style: const TextStyle(fontSize: 13)),
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(8)),
+              child: Text(text, style: const TextStyle(fontSize: 13)),
             ),
           ],
         ),
@@ -108,9 +119,8 @@ class _AddPendingScreenState extends State<AddPendingScreen> {
             icon: const Icon(Icons.copy, size: 16),
             label: const Text('Copiar'),
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF25D366),
-              foregroundColor: Colors.white,
-            ),
+                backgroundColor: const Color(0xFF25D366),
+                foregroundColor: Colors.white),
           ),
         ],
       ),
@@ -127,20 +137,21 @@ class _AddPendingScreenState extends State<AddPendingScreen> {
   @override
   Widget build(BuildContext context) {
     final c = widget.client;
+    final responsible = _selectedTeam != null ? _getResponsible(_selectedTeam!) : '';
+
     return Scaffold(
       backgroundColor: const Color(0xFFF0F2F5),
       appBar: AppBar(
         backgroundColor: Colors.orange,
         title: const Text('Nova Pendência',
-            style: TextStyle(
-                color: Colors.white, fontWeight: FontWeight.bold)),
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Client info card
+            // Info do cliente
             Card(
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10)),
@@ -150,7 +161,8 @@ class _AddPendingScreenState extends State<AddPendingScreen> {
                 title: Text(c.displayName,
                     style: const TextStyle(fontWeight: FontWeight.bold)),
                 subtitle: Text(
-                    'Hangar ${c.hangar} • Stand ${c.stand}',
+                    'Hangar ${c.hangar}  •  Stand ${c.local}'
+                    '${c.area.isNotEmpty ? "  •  ${c.area} m²" : ""}',
                     style: TextStyle(
                         color: Colors.grey.shade600, fontSize: 12)),
               ),
@@ -165,43 +177,77 @@ class _AddPendingScreenState extends State<AddPendingScreen> {
                     letterSpacing: 1)),
             const SizedBox(height: 10),
 
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: _teams.map((team) {
-                final sel = _team == team;
-                return GestureDetector(
-                  onTap: () => setState(() => _team = team),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 150),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: sel ? Colors.orange : Colors.white,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: sel ? Colors.orange : Colors.grey.shade300,
-                        width: sel ? 2 : 1,
-                      ),
-                      boxShadow: sel
-                          ? [
-                              BoxShadow(
-                                  color: Colors.orange.withOpacity(0.3),
-                                  blurRadius: 6,
-                                  offset: const Offset(0, 2))
-                            ]
-                          : [],
+            // Seleção de equipe
+            ...(_teams.map((t) {
+              final sel = _selectedTeam == t.name;
+              final resp = _getResponsible(t.name);
+              return GestureDetector(
+                onTap: () => setState(() => _selectedTeam = t.name),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: sel ? t.color.withOpacity(0.1) : Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: sel ? t.color : Colors.grey.shade200,
+                      width: sel ? 2 : 1,
                     ),
-                    child: Text(team,
-                        style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            color: sel ? Colors.white : Colors.black87)),
                   ),
-                );
-              }).toList(),
-            ),
+                  child: Row(children: [
+                    Icon(t.icon,
+                        color: sel ? t.color : Colors.grey,
+                        size: 22),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(t.name,
+                              style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  color: sel ? t.color : Colors.black87,
+                                  fontSize: 15)),
+                          if (resp.isNotEmpty)
+                            Text('Responsável: $resp',
+                                style: TextStyle(
+                                    fontSize: 12,
+                                    color: sel
+                                        ? t.color.withOpacity(0.8)
+                                        : Colors.grey)),
+                        ],
+                      ),
+                    ),
+                    if (sel)
+                      Icon(Icons.check_circle, color: t.color, size: 20),
+                  ]),
+                ),
+              );
+            })),
 
-            const SizedBox(height: 24),
+            // Aviso se equipe selecionada tem responsável
+            if (responsible.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.blue.shade200),
+                ),
+                child: Row(children: [
+                  const Icon(Icons.person, color: Colors.blue, size: 16),
+                  const SizedBox(width: 8),
+                  Text('Responsável: $responsible',
+                      style: const TextStyle(
+                          color: Colors.blue, fontSize: 13)),
+                ]),
+              ),
+            ],
+
+            const SizedBox(height: 20),
             const Text('DESCRIÇÃO DA PENDÊNCIA',
                 style: TextStyle(
                     fontSize: 11,
@@ -251,4 +297,11 @@ class _AddPendingScreenState extends State<AddPendingScreen> {
       ),
     );
   }
+}
+
+class _TeamInfo {
+  final String name;
+  final IconData icon;
+  final Color color;
+  const _TeamInfo(this.name, this.icon, this.color);
 }

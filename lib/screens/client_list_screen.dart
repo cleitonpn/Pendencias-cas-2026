@@ -25,7 +25,7 @@ class _ClientListScreenState extends State<ClientListScreen> {
       clients = clients
           .where((c) =>
               c.nome.toLowerCase().contains(q) ||
-              c.stand.contains(q) ||
+              c.local.contains(q) ||
               c.montagem.toLowerCase().contains(q))
           .toList();
     }
@@ -182,7 +182,7 @@ class _ClientCard extends StatelessWidget {
                       ? const Icon(Icons.check_circle,
                           color: Colors.green, size: 30)
                       : Text(
-                          client.stand.isEmpty ? '—' : client.stand,
+                          client.local.isEmpty ? '—' : client.local,
                           style: const TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 13,

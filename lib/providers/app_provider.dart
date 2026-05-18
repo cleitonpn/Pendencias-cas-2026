@@ -29,7 +29,7 @@ class AppProvider extends ChangeNotifier {
     try {
       final sheetClients = await SheetsService.fetchClients();
 
-      // Preserve local completion status
+      // Preserva status de conclusão local
       final localMap = {for (final c in _clients) c.rowId: c};
       for (final c in sheetClients) {
         final local = localMap[c.rowId];
@@ -62,7 +62,7 @@ class AppProvider extends ChangeNotifier {
 
   List<Client> getClientsByHangar(String hangar) =>
       _clients.where((c) => c.hangar == hangar).toList()
-        ..sort((a, b) => a.stand.compareTo(b.stand));
+        ..sort((a, b) => a.local.compareTo(b.local));
 
   Future<void> markClientCompleted(Client client, bool completed) async {
     await DatabaseService.updateClientStatus(client.rowId, completed);
@@ -77,9 +77,10 @@ class AppProvider extends ChangeNotifier {
       id: id,
       clientId: item.clientId,
       clientName: item.clientName,
-      stand: item.stand,
+      local: item.local,
       hangar: item.hangar,
       team: item.team,
+      responsible: item.responsible,
       description: item.description,
       createdAt: item.createdAt,
     );

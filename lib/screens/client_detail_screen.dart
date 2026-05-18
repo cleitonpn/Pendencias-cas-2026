@@ -27,8 +27,8 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
 
   Future<void> _load() async {
     setState(() => _loading = true);
-    _items = await DatabaseService.getPendingItemsByClient(
-        widget.client.rowId);
+    _items =
+        await DatabaseService.getPendingItemsByClient(widget.client.rowId);
     setState(() => _loading = false);
   }
 
@@ -79,7 +79,7 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
       backgroundColor: const Color(0xFFF0F2F5),
       appBar: AppBar(
         backgroundColor: headerColor,
-        title: Text('Stand ${c.stand}',
+        title: Text(c.local.isNotEmpty ? 'Stand ${c.local}' : c.displayName,
             style: const TextStyle(
                 color: Colors.white, fontWeight: FontWeight.bold)),
         actions: [
@@ -89,7 +89,8 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
                     ? Icons.check_circle
                     : Icons.check_circle_outline,
                 color: Colors.white),
-            tooltip: c.isCompleted ? 'Desfazer conclusão' : 'Marcar concluído',
+            tooltip:
+                c.isCompleted ? 'Desfazer conclusão' : 'Marcar concluído',
             onPressed: _toggle,
           ),
         ],
@@ -98,7 +99,7 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header
+            // Header info
             Container(
               width: double.infinity,
               color: headerColor,
@@ -112,23 +113,13 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
                           fontSize: 22,
                           fontWeight: FontWeight.bold)),
                   const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 4,
-                    children: [
-                      _chip(Icons.warehouse, 'Hangar ${c.hangar}'),
-                      _chip(Icons.grid_on, 'Stand ${c.stand}'),
-                      if (c.block.isNotEmpty)
-                        _chip(Icons.view_module, 'Bloco ${c.block}'),
-                    ],
-                  ),
-                  if (c.montagem.isNotEmpty) ...[
-                    const SizedBox(height: 6),
-                    Text(c.montagem,
-                        style: TextStyle(
-                            color: Colors.white.withOpacity(0.7),
-                            fontSize: 12)),
-                  ],
+                  Wrap(spacing: 8, runSpacing: 4, children: [
+                    _chip(Icons.warehouse, 'Hangar ${c.hangar}'),
+                    if (c.local.isNotEmpty) _chip(Icons.grid_on, c.local),
+                    if (c.area.isNotEmpty) _chip(Icons.square_foot, '${c.area} m²'),
+                    if (c.montagem.isNotEmpty)
+                      _chip(Icons.business, c.montagem),
+                  ]),
                   if (c.isCompleted && c.completedAt != null) ...[
                     const SizedBox(height: 10),
                     Row(children: [
@@ -146,9 +137,10 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
               ),
             ),
 
-            // Responsible people
+            // Responsáveis (colunas O-T)
             if (_hasResp(c)) ...[
-              const _SectionTitle(text: 'RESPONSÁVEIS', color: Colors.grey),
+              const _SectionTitle(
+                  text: 'RESPONSÁVEIS POR EQUIPE', color: Colors.grey),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Card(
@@ -160,18 +152,18 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
                       spacing: 8,
                       runSpacing: 8,
                       children: [
-                        if (c.respProdutos.isNotEmpty)
-                          _RespChip('Produtos', c.respProdutos, Colors.teal),
-                        if (c.respMontagem.isNotEmpty)
-                          _RespChip('Montagem', c.respMontagem, Colors.indigo),
-                        if (c.respTapecaria.isNotEmpty)
-                          _RespChip('Tapeçaria', c.respTapecaria, Colors.purple),
-                        if (c.respEletrica.isNotEmpty)
-                          _RespChip('Elétrica', c.respEletrica, Colors.orange),
-                        if (c.respLaminacao.isNotEmpty)
-                          _RespChip('Laminação', c.respLaminacao, Colors.blue),
-                        if (c.respMK.isNotEmpty)
-                          _RespChip('MK', c.respMK, Colors.pink),
+                        if (c.produtor.isNotEmpty)
+                          _RespChip('Produtor', c.produtor, Colors.indigo),
+                        if (c.marceneiro.isNotEmpty)
+                          _RespChip('Marcenaria', c.marceneiro, Colors.brown),
+                        if (c.tapeceiro.isNotEmpty)
+                          _RespChip('Tapeçaria', c.tapeceiro, Colors.purple),
+                        if (c.eletricista.isNotEmpty)
+                          _RespChip('Elétrica', c.eletricista, Colors.orange),
+                        if (c.faxineira.isNotEmpty)
+                          _RespChip('Limpeza', c.faxineira, Colors.cyan.shade700),
+                        if (c.teto50.isNotEmpty)
+                          _RespChip('Teto 50', c.teto50, Colors.teal),
                       ],
                     ),
                   ),
@@ -179,7 +171,7 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
               ),
             ],
 
-            // Action buttons
+            // Botões de ação
             Padding(
               padding: const EdgeInsets.all(16),
               child: Row(
@@ -187,17 +179,14 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
                   Expanded(
                     child: ElevatedButton.icon(
                       onPressed: _toggle,
-                      icon:
-                          Icon(c.isCompleted ? Icons.undo : Icons.check),
-                      label: Text(c.isCompleted
-                          ? 'Desfazer'
-                          : 'Concluído'),
+                      icon: Icon(c.isCompleted ? Icons.undo : Icons.check),
+                      label:
+                          Text(c.isCompleted ? 'Desfazer' : 'Concluído'),
                       style: ElevatedButton.styleFrom(
                         backgroundColor:
                             c.isCompleted ? Colors.grey : Colors.green,
                         foregroundColor: Colors.white,
-                        padding:
-                            const EdgeInsets.symmetric(vertical: 14),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(10)),
                       ),
@@ -212,8 +201,7 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.orange,
                         foregroundColor: Colors.white,
-                        padding:
-                            const EdgeInsets.symmetric(vertical: 14),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(10)),
                       ),
@@ -262,30 +250,27 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
   }
 
   Widget _chip(IconData icon, String label) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        padding:
+            const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
           color: Colors.white.withOpacity(0.2),
           borderRadius: BorderRadius.circular(12),
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 13, color: Colors.white),
-            const SizedBox(width: 4),
-            Text(label,
-                style:
-                    const TextStyle(color: Colors.white, fontSize: 12)),
-          ],
-        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(icon, size: 13, color: Colors.white),
+          const SizedBox(width: 4),
+          Text(label,
+              style: const TextStyle(color: Colors.white, fontSize: 12)),
+        ]),
       );
 
   bool _hasResp(Client c) =>
-      c.respProdutos.isNotEmpty ||
-      c.respMontagem.isNotEmpty ||
-      c.respTapecaria.isNotEmpty ||
-      c.respEletrica.isNotEmpty ||
-      c.respLaminacao.isNotEmpty ||
-      c.respMK.isNotEmpty;
+      c.produtor.isNotEmpty ||
+      c.marceneiro.isNotEmpty ||
+      c.tapeceiro.isNotEmpty ||
+      c.eletricista.isNotEmpty ||
+      c.faxineira.isNotEmpty ||
+      c.teto50.isNotEmpty;
 
   String _fmtDate(DateTime dt) =>
       '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year} '
@@ -316,8 +301,7 @@ class _RespChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding:
-            const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
           color: color.withOpacity(0.1),
           borderRadius: BorderRadius.circular(8),
@@ -332,7 +316,7 @@ class _RespChip extends StatelessWidget {
                     fontSize: 10,
                     color: color,
                     fontWeight: FontWeight.bold)),
-            Text(person, style: const TextStyle(fontSize: 12)),
+            Text(person, style: const TextStyle(fontSize: 13)),
           ],
         ),
       );
@@ -344,9 +328,7 @@ class _PendingCard extends StatelessWidget {
   final VoidCallback onCopy;
 
   const _PendingCard(
-      {required this.item,
-      required this.onResolve,
-      required this.onCopy});
+      {required this.item, required this.onResolve, required this.onCopy});
 
   @override
   Widget build(BuildContext context) {
@@ -372,69 +354,68 @@ class _PendingCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                _TeamBadge(team: item.team),
-                const Spacer(),
-                if (resolved)
-                  const Row(children: [
-                    Icon(Icons.check_circle,
-                        color: Colors.green, size: 16),
-                    SizedBox(width: 4),
-                    Text('Resolvido',
-                        style: TextStyle(
-                            color: Colors.green,
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold)),
-                  ]),
+            Row(children: [
+              _TeamBadge(team: item.team),
+              if (item.responsible.isNotEmpty) ...[
+                const SizedBox(width: 8),
+                Text(item.responsible,
+                    style: const TextStyle(
+                        color: Colors.grey, fontSize: 12)),
               ],
-            ),
+              const Spacer(),
+              if (resolved)
+                const Row(children: [
+                  Icon(Icons.check_circle, color: Colors.green, size: 16),
+                  SizedBox(width: 4),
+                  Text('Resolvido',
+                      style: TextStyle(
+                          color: Colors.green,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold)),
+                ]),
+            ]),
             const SizedBox(height: 8),
-            Text(item.description,
-                style: const TextStyle(fontSize: 14)),
+            Text(item.description, style: const TextStyle(fontSize: 14)),
             const SizedBox(height: 6),
             Text(
               _fmt(item.createdAt) +
                   (item.resolvedAt != null
                       ? '\nResolvido: ${_fmt(item.resolvedAt!)}'
                       : ''),
-              style: const TextStyle(
-                  color: Colors.grey, fontSize: 11),
+              style: const TextStyle(color: Colors.grey, fontSize: 11),
             ),
             const SizedBox(height: 10),
-            Row(
-              children: [
-                OutlinedButton.icon(
-                  onPressed: onCopy,
-                  icon: const Icon(Icons.copy, size: 14),
-                  label: const Text('WhatsApp',
+            Row(children: [
+              OutlinedButton.icon(
+                onPressed: onCopy,
+                icon: const Icon(Icons.copy, size: 14),
+                label: const Text('WhatsApp',
+                    style: TextStyle(fontSize: 12)),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF25D366),
+                  side: const BorderSide(color: Color(0xFF25D366)),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  minimumSize: Size.zero,
+                ),
+              ),
+              if (onResolve != null) ...[
+                const SizedBox(width: 8),
+                ElevatedButton.icon(
+                  onPressed: onResolve,
+                  icon: const Icon(Icons.check, size: 14),
+                  label: const Text('Resolver',
                       style: TextStyle(fontSize: 12)),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(0xFF25D366),
-                    side: const BorderSide(color: Color(0xFF25D366)),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 6),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green,
+                    foregroundColor: Colors.white,
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     minimumSize: Size.zero,
                   ),
                 ),
-                if (onResolve != null) ...[
-                  const SizedBox(width: 8),
-                  ElevatedButton.icon(
-                    onPressed: onResolve,
-                    icon: const Icon(Icons.check, size: 14),
-                    label: const Text('Resolver',
-                        style: TextStyle(fontSize: 12)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 6),
-                      minimumSize: Size.zero,
-                    ),
-                  ),
-                ],
               ],
-            ),
+            ]),
           ],
         ),
       ),
@@ -462,15 +443,6 @@ class _TeamBadge extends StatelessWidget {
       case 'tapeçaria':
       case 'tapecaria':
         return Colors.purple;
-      case 'laminação':
-      case 'laminacao':
-        return Colors.blue;
-      case 'produtos':
-        return Colors.teal;
-      case 'montagem':
-        return Colors.indigo;
-      case 'mk':
-        return Colors.pink;
       default:
         return Colors.grey;
     }
@@ -478,8 +450,7 @@ class _TeamBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding:
-            const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(
           color: _color.withOpacity(0.12),
           borderRadius: BorderRadius.circular(6),

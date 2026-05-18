@@ -13,29 +13,35 @@ class DatabaseService {
 
   static Future<Database> _initDb() async {
     final path = join(await getDatabasesPath(), 'cas2026.db');
-    return openDatabase(path, version: 1, onCreate: _onCreate);
+    return openDatabase(path, version: 2, onCreate: _onCreate, onUpgrade: _onUpgrade);
   }
 
   static Future<void> _onCreate(Database db, int version) async {
     await db.execute('''
       CREATE TABLE clients (
         row_id TEXT PRIMARY KEY,
-        nome TEXT, stand TEXT, hangar TEXT, block TEXT,
-        hangar_label TEXT, montagem TEXT,
-        resp_produtos TEXT, resp_montagem TEXT, resp_tapecaria TEXT,
-        resp_eletrica TEXT, resp_laminacao TEXT, resp_mk TEXT,
+        nome TEXT, montagem TEXT, local TEXT, hangar TEXT,
+        area TEXT, deck TEXT, total_area TEXT, mezanino TEXT,
+        produtor TEXT, marceneiro TEXT, tapeceiro TEXT,
+        eletricista TEXT, faxineira TEXT, teto50 TEXT,
         is_completed INTEGER DEFAULT 0, completed_at TEXT
       )
     ''');
     await db.execute('''
       CREATE TABLE pending_items (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        client_id TEXT, client_name TEXT, stand TEXT, hangar TEXT,
-        team TEXT, description TEXT,
+        client_id TEXT, client_name TEXT, local TEXT, hangar TEXT,
+        team TEXT, responsible TEXT, description TEXT,
         is_resolved INTEGER DEFAULT 0, created_at TEXT, resolved_at TEXT,
         FOREIGN KEY (client_id) REFERENCES clients(row_id)
       )
     ''');
+  }
+
+  static Future<void> _onUpgrade(Database db, int oldV, int newV) async {
+    await db.execute('DROP TABLE IF EXISTS clients');
+    await db.execute('DROP TABLE IF EXISTS pending_items');
+    await _onCreate(db, newV);
   }
 
   static Future<void> upsertClients(List<Client> clients) async {
@@ -54,8 +60,7 @@ class DatabaseService {
       'clients',
       {
         'is_completed': completed ? 1 : 0,
-        'completed_at':
-            completed ? DateTime.now().toIso8601String() : null,
+        'completed_at': completed ? DateTime.now().toIso8601String() : null,
       },
       where: 'row_id = ?',
       whereArgs: [rowId],
@@ -64,7 +69,7 @@ class DatabaseService {
 
   static Future<List<Client>> getClients() async {
     final database = await db;
-    final maps = await database.query('clients', orderBy: 'hangar, stand');
+    final maps = await database.query('clients', orderBy: 'hangar, local');
     return maps.map(Client.fromMap).toList();
   }
 
@@ -106,7 +111,7 @@ class DatabaseService {
       'pending_items',
       where: resolved != null ? 'is_resolved = ?' : null,
       whereArgs: resolved != null ? [resolved ? 1 : 0] : null,
-      orderBy: 'hangar, stand, created_at',
+      orderBy: 'hangar, local, created_at',
     );
     return maps.map(PendingItem.fromMap).toList();
   }

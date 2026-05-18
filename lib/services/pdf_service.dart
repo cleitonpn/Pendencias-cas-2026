@@ -115,7 +115,7 @@ class PdfService {
                   crossAxisAlignment: pw.CrossAxisAlignment.start,
                   children: [
                     pw.Row(children: [
-                      pw.Text('Stand ${item.stand}  ',
+                      pw.Text('Stand ${item.local}  ',
                           style: pw.TextStyle(
                               fontWeight: pw.FontWeight.bold,
                               fontSize: 11)),

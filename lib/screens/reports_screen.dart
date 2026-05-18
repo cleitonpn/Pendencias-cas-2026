@@ -223,7 +223,7 @@ class _ItemCard extends StatelessWidget {
               children: [
                 Expanded(
                   child: Text(
-                    'Stand ${item.stand} — ${item.clientName}',
+                    'Stand ${item.local} — ${item.clientName}',
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
                 ),

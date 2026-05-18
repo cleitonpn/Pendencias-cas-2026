@@ -2,9 +2,10 @@ class PendingItem {
   final int? id;
   final String clientId;
   final String clientName;
-  final String stand;
-  final String hangar;
-  final String team;
+  final String local;        // código do stand (I74, I02...)
+  final String hangar;       // hangar (1, 3, 4, EXT 1...)
+  final String team;         // equipe (Limpeza, Elétrica, Marcenaria, Tapeçaria)
+  final String responsible;  // responsável da equipe (vem da coluna O-T)
   final String description;
   bool isResolved;
   final DateTime createdAt;
@@ -14,9 +15,10 @@ class PendingItem {
     this.id,
     required this.clientId,
     required this.clientName,
-    required this.stand,
+    required this.local,
     required this.hangar,
     required this.team,
+    this.responsible = '',
     required this.description,
     this.isResolved = false,
     required this.createdAt,
@@ -27,9 +29,10 @@ class PendingItem {
         if (id != null) 'id': id,
         'client_id': clientId,
         'client_name': clientName,
-        'stand': stand,
+        'local': local,
         'hangar': hangar,
         'team': team,
+        'responsible': responsible,
         'description': description,
         'is_resolved': isResolved ? 1 : 0,
         'created_at': createdAt.toIso8601String(),
@@ -40,9 +43,10 @@ class PendingItem {
         id: map['id'] as int?,
         clientId: map['client_id'] as String,
         clientName: map['client_name'] ?? '',
-        stand: map['stand'] ?? '',
+        local: map['local'] ?? map['stand'] ?? '',
         hangar: map['hangar'] ?? '',
         team: map['team'] as String,
+        responsible: map['responsible'] ?? '',
         description: map['description'] as String,
         isResolved: (map['is_resolved'] as int? ?? 0) == 1,
         createdAt: DateTime.parse(map['created_at'] as String),
@@ -56,10 +60,11 @@ class PendingItem {
     final dateStr =
         '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year} '
         '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
-    return '*PENDÊNCIA - CAS 2026*\n'
-        'Hangar: $hangar | Stand: $stand\n'
+    final respLine = responsible.isNotEmpty ? '\nResponsável: $responsible' : '';
+    return '*PENDÊNCIA — CAS 2026*\n'
+        'Hangar: $hangar | Stand: $local\n'
         'Cliente: $clientName\n'
-        'Equipe: $team\n'
+        'Equipe: $team$respLine\n'
         'Pendência: $description\n'
         'Registrado: $dateStr';
   }
