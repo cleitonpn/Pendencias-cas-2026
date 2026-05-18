@@ -18,6 +18,15 @@ android {
         jvmTarget = "1.8"
     }
 
+    signingConfigs {
+        release {
+            keyAlias "cas2026"
+            keyPassword "cas2026key"
+            storeFile file("cas2026.keystore")
+            storePassword "cas2026key"
+        }
+    }
+
     defaultConfig {
         applicationId "com.cas.pendencias2026"
         minSdk 21
@@ -28,7 +37,10 @@ android {
 
     buildTypes {
         release {
-            signingConfig signingConfigs.debug
+            signingConfig signingConfigs.release
+        }
+        debug {
+            signingConfig signingConfigs.release
         }
     }
 }
