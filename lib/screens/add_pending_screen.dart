@@ -20,6 +20,7 @@ class _AddPendingScreenState extends State<AddPendingScreen> {
     _TeamInfo('Elétrica',              Icons.bolt,              Color(0xFFFF6F00)),
     _TeamInfo('Marcenaria',            Icons.carpenter,         Color(0xFF795548)),
     _TeamInfo('Tapeçaria',             Icons.chair,             Color(0xFF7B1FA2)),
+    _TeamInfo('Vidraceiro',            Icons.window,            Color(0xFF0288D1)),
     _TeamInfo('Comunicação Visual',    Icons.brush,             Color(0xFFD81B60)),
   ];
 
@@ -41,6 +42,7 @@ class _AddPendingScreenState extends State<AddPendingScreen> {
       case 'Elétrica':        return c.eletricista;
       case 'Marcenaria':      return c.marceneiro;
       case 'Tapeçaria':       return c.tapeceiro;
+      case 'Vidraceiro':         return 'Rodrigo';
       case 'Comunicação Visual': return 'Vinícius';
       default:                return '';
     }

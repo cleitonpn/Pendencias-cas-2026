@@ -383,6 +383,8 @@ class _TeamDot extends StatelessWidget {
       case 'tapeçaria':
       case 'tapecaria':
         return Colors.purple;
+      case 'vidraceiro':
+        return Colors.lightBlue;
       case 'comunicação visual':
         return Colors.pink;
       default:
