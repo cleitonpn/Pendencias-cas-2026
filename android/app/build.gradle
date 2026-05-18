@@ -6,8 +6,8 @@ plugins {
 
 android {
     namespace "com.cas.pendencias2026"
-    compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
+    compileSdk 34
+    ndkVersion flutter.ndkVersion
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_1_8
@@ -20,10 +20,10 @@ android {
 
     defaultConfig {
         applicationId "com.cas.pendencias2026"
-        minSdk = flutter.minSdkVersion
-        targetSdk = flutter.targetSdkVersion
-        versionCode = flutter.versionCode
-        versionName = flutter.versionName
+        minSdk 21
+        targetSdk 34
+        versionCode flutter.versionCode
+        versionName flutter.versionName
     }
 
     buildTypes {
