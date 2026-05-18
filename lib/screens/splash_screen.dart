@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../providers/app_provider.dart';
-import 'settings_screen.dart';
 import 'hangar_list_screen.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -20,23 +18,15 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _init() async {
-    await Future.delayed(const Duration(milliseconds: 500));
+    await Future.delayed(const Duration(milliseconds: 800));
     if (!mounted) return;
 
-    final prefs = await SharedPreferences.getInstance();
-    final apiKey = prefs.getString('google_api_key') ?? '';
-
+    // Carrega dados locais salvos; sincroniza em background se necessário
+    await context.read<AppProvider>().loadFromLocal();
     if (!mounted) return;
 
-    if (apiKey.isEmpty) {
-      Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const SettingsScreen(isInitial: true)));
-    } else {
-      await context.read<AppProvider>().loadFromLocal();
-      if (!mounted) return;
-      Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const HangarListScreen()));
-    }
+    Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const HangarListScreen()));
   }
 
   @override
