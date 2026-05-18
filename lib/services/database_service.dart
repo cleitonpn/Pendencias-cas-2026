@@ -94,6 +94,17 @@ class DatabaseService {
     return maps.map(Client.fromMap).toList();
   }
 
+  static Future<Map<String, int>> getPendingCounts(List<String> clientIds) async {
+    if (clientIds.isEmpty) return {};
+    final database = await db;
+    final ids = clientIds.map((id) => "'$id'").join(',');
+    final rows = await database.rawQuery(
+      'SELECT client_id, COUNT(*) as cnt FROM pending_items '
+      'WHERE client_id IN ($ids) AND is_resolved = 0 GROUP BY client_id',
+    );
+    return {for (final r in rows) r['client_id'] as String: r['cnt'] as int};
+  }
+
   static Future<List<String>> getHangars() async {
     final database = await db;
     final result = await database.rawQuery(

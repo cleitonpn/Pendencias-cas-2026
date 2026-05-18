@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_provider.dart';
 import '../models/client.dart';
+import '../services/database_service.dart';
 import 'client_detail_screen.dart';
 
 class ClientListScreen extends StatefulWidget {
@@ -14,6 +15,21 @@ class ClientListScreen extends StatefulWidget {
 
 class _ClientListScreenState extends State<ClientListScreen> {
   String _search = '';
+  Map<String, int> _pendingCounts = {};
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadCounts());
+  }
+
+  Future<void> _loadCounts() async {
+    final clients =
+        context.read<AppProvider>().getClientsByHangar(widget.hangar);
+    final counts = await DatabaseService.getPendingCounts(
+        clients.map((c) => c.rowId).toList());
+    if (mounted) setState(() => _pendingCounts = counts);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -79,12 +95,15 @@ class _ClientListScreenState extends State<ClientListScreen> {
                     itemCount: clients.length,
                     itemBuilder: (context, i) => _ClientCard(
                       client: clients[i],
+                      pendingCount:
+                          _pendingCounts[clients[i].rowId] ?? 0,
                       onTap: () async {
                         await Navigator.push(
                             context,
                             MaterialPageRoute(
                                 builder: (_) => ClientDetailScreen(
                                     client: clients[i])));
+                        await _loadCounts();
                         setState(() {});
                       },
                     ),
@@ -144,9 +163,14 @@ class _StatsBar extends StatelessWidget {
 
 class _ClientCard extends StatelessWidget {
   final Client client;
+  final int pendingCount;
   final VoidCallback onTap;
 
-  const _ClientCard({required this.client, required this.onTap});
+  const _ClientCard({
+    required this.client,
+    required this.pendingCount,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -212,8 +236,24 @@ class _ClientCard extends StatelessWidget {
                     style: TextStyle(
                         color: Colors.green,
                         fontSize: 12,
-                        fontWeight: FontWeight.w600)),
-              const SizedBox(width: 4),
+                        fontWeight: FontWeight.w600))
+              else if (pendingCount > 0)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: Colors.orange,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    '$pendingCount',
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold),
+                  ),
+                ),
+              const SizedBox(width: 6),
               const Icon(Icons.chevron_right, color: Colors.grey),
             ],
           ),
