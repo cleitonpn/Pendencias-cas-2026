@@ -9,13 +9,13 @@ class Client {
   final String totalArea;   // H - mt total
   final String mezanino;    // I - mezanino
 
-  // Colunas O-T: responsáveis por equipe
-  final String produtor;    // O - PRODUTOR
-  final String marceneiro;  // P - marceneiro
-  final String tapeceiro;   // Q - tapeceiro
-  final String eletricista; // R - eletricista
-  final String faxineira;   // S - faxineira
-  final String teto50;      // T - teto 50
+  // Colunas P-T: responsáveis por equipe (range P:T)
+  final String produtor;    // P - PRODUTOR
+  final String marceneiro;  // Q - marceneiro
+  final String tapeceiro;   // R - tapeceiro
+  final String eletricista; // S - eletricista
+  final String faxineira;   // T - faxineira
+  final String teto50;      // (não usado — fora do range P:T)
 
   bool isCompleted;
   DateTime? completedAt;
@@ -57,12 +57,12 @@ class Client {
       deck: _s(bToI, 5),       // G
       totalArea: _s(bToI, 6),  // H
       mezanino: _s(bToI, 7),   // I
-      produtor: _s(oToT, 0),   // O
-      marceneiro: _s(oToT, 1), // P
-      tapeceiro: _s(oToT, 2),  // Q
-      eletricista: _s(oToT, 3),// R
-      faxineira: _s(oToT, 4),  // S
-      teto50: _s(oToT, 5),     // T
+      produtor: _s(oToT, 0),   // P
+      marceneiro: _s(oToT, 1), // Q
+      tapeceiro: _s(oToT, 2),  // R
+      eletricista: _s(oToT, 3),// S
+      faxineira: _s(oToT, 4),  // T
+      teto50: _s(oToT, 5),     // (vazio)
     );
   }
 

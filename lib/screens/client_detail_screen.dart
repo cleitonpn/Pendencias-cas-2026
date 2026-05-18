@@ -164,6 +164,8 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
                           _RespChip('Limpeza', c.faxineira, Colors.cyan.shade700),
                         if (c.teto50.isNotEmpty)
                           _RespChip('Teto 50', c.teto50, Colors.teal),
+                        _RespChip('Vidraceiro', 'Rodrigo', Colors.lightBlue),
+                        _RespChip('Com. Visual', 'Vinícius', Colors.pink),
                       ],
                     ),
                   ),
@@ -264,13 +266,8 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
         ]),
       );
 
-  bool _hasResp(Client c) =>
-      c.produtor.isNotEmpty ||
-      c.marceneiro.isNotEmpty ||
-      c.tapeceiro.isNotEmpty ||
-      c.eletricista.isNotEmpty ||
-      c.faxineira.isNotEmpty ||
-      c.teto50.isNotEmpty;
+  // Vidraceiro (Rodrigo) e Com. Visual (Vinícius) atendem todos — seção sempre visível
+  bool _hasResp(Client c) => true;
 
   String _fmtDate(DateTime dt) =>
       '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year} '
@@ -443,6 +440,11 @@ class _TeamBadge extends StatelessWidget {
       case 'tapeçaria':
       case 'tapecaria':
         return Colors.purple;
+      case 'vidraceiro':
+        return Colors.lightBlue;
+      case 'comunicação visual':
+      case 'comunicacao visual':
+        return Colors.pink;
       default:
         return Colors.grey;
     }
