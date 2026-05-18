@@ -63,7 +63,8 @@ class SheetsService {
     // Busca B:I e O:T em paralelo para ser mais rápido
     final results = await Future.wait([
       _fetchRange('B:I'),
-      _fetchRange('O:T'),
+      _fetchRange('P:T'), // P=PRODUTOR, Q=marceneiro, R=tapeceiro, S=eletricista, T=faxineira
+                          // (coluna O = "aprovado", não é equipe)
     ]);
 
     final bToIRows = results[0];

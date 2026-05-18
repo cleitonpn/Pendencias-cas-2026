@@ -41,7 +41,7 @@ class _AddPendingScreenState extends State<AddPendingScreen> {
       case 'Elétrica':        return c.eletricista;
       case 'Marcenaria':      return c.marceneiro;
       case 'Tapeçaria':       return c.tapeceiro;
-      case 'Comunicação Visual': return c.produtor; // produtor coordena comvis
+      case 'Comunicação Visual': return 'Vinícius';
       default:                return '';
     }
   }
