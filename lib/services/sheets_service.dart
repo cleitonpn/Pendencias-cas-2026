@@ -71,28 +71,23 @@ class SheetsService {
     final oToTRows = results[1];
 
     final clients = <Client>[];
-    String lastHangar = '';
 
     // Linha 0 é o cabeçalho — começa em 1
     for (int i = 1; i < bToIRows.length; i++) {
       final rawRow = bToIRows[i];
       final oToT = i < oToTRows.length ? oToTRows[i] : <dynamic>[];
 
-      // Hangar fica no índice 3 (coluna E dentro do range B:I).
-      // gviz trunca células nulas no fim da linha, e células mescladas
-      // de cabeçalho de seção só retornam valor na primeira linha do merge.
-      // Por isso mantemos o último hangar visto e propagamos quando vazio.
-      final rowHangar = rawRow.length > 3 ? rawRow[3].toString().trim() : '';
-      if (rowHangar.isNotEmpty) lastHangar = rowHangar;
-
       // Ignora linhas sem nome
       final nome = rawRow.isNotEmpty ? rawRow[0].toString().trim() : '';
       if (nome.isEmpty) continue;
 
+      // Normaliza hangar: "EXT 1" → "1", "EXT 3" → "3" etc.
+      // para que externos apareçam junto com o hangar correspondente
       final bToI = List<dynamic>.from(rawRow);
-      if (rowHangar.isEmpty && lastHangar.isNotEmpty) {
-        while (bToI.length <= 3) bToI.add('');
-        bToI[3] = lastHangar;
+      if (bToI.length > 3) {
+        final h = bToI[3].toString().trim();
+        final extMatch = RegExp(r'^(?:EXT|Ext)\.?\s+(\S+)$').firstMatch(h);
+        if (extMatch != null) bToI[3] = extMatch.group(1)!;
       }
 
       clients.add(Client.fromSheetRow(bToI, oToT, i));
