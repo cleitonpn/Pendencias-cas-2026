@@ -90,6 +90,27 @@ class DatabaseService {
     return maps.map(PendingItem.fromMap).toList();
   }
 
+  static Future<List<String>> getProducers() async {
+    final database = await db;
+    final result = await database.rawQuery(
+        "SELECT DISTINCT produtor FROM clients WHERE produtor != '' ORDER BY produtor");
+    return result.map((r) => r['produtor'] as String).toList();
+  }
+
+  static Future<List<PendingItem>> getPendingItemsByProdutor(
+      String produtor) async {
+    final database = await db;
+    final clients = await database.query('clients',
+        columns: ['row_id'], where: 'produtor = ?', whereArgs: [produtor]);
+    if (clients.isEmpty) return [];
+    final ids = clients.map((c) => "'${c['row_id']}'").join(',');
+    final maps = await database.rawQuery(
+      'SELECT * FROM pending_items WHERE client_id IN ($ids) AND is_resolved = 0 '
+      'ORDER BY hangar, local, created_at',
+    );
+    return maps.map(PendingItem.fromMap).toList();
+  }
+
   static Future<int> insertPendingItem(PendingItem item) async {
     final database = await db;
     return database.insert('pending_items', item.toMap());
