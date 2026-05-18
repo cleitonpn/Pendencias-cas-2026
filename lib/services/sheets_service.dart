@@ -10,7 +10,7 @@ class SheetsService {
   // A planilha precisa estar como "qualquer pessoa com o link pode visualizar"
   static String _gvizUrl(String range) =>
       'https://docs.google.com/spreadsheets/d/$_spreadsheetId/gviz/tq'
-      '?tqx=out:json&range=${Uri.encodeComponent(range)}';
+      '?tqx=out:json&sheet=projetos&range=${Uri.encodeComponent(range)}';
 
   static Future<List<List<dynamic>>> _fetchRange(String range) async {
     final response = await http
