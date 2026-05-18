@@ -52,6 +52,27 @@ class DatabaseService {
           conflictAlgorithm: ConflictAlgorithm.replace);
     }
     await batch.commit(noResult: true);
+    await _syncPendingResponsibles(database);
+  }
+
+  // Após sync, atualiza o responsável das pendências abertas com os dados atuais
+  static Future<void> _syncPendingResponsibles(Database database) async {
+    await database.rawUpdate('''
+      UPDATE pending_items
+      SET responsible = (
+        SELECT CASE pending_items.team
+          WHEN 'Elétrica'          THEN COALESCE(NULLIF(c.eletricista, ''), pending_items.responsible)
+          WHEN 'Limpeza'           THEN COALESCE(NULLIF(c.faxineira,   ''), pending_items.responsible)
+          WHEN 'Marcenaria'        THEN COALESCE(NULLIF(c.marceneiro,  ''), pending_items.responsible)
+          WHEN 'Tapeçaria'         THEN COALESCE(NULLIF(c.tapeceiro,   ''), pending_items.responsible)
+          WHEN 'Vidraceiro'        THEN 'Rodrigo'
+          WHEN 'Comunicação Visual' THEN 'Vinícius'
+          ELSE pending_items.responsible
+        END
+        FROM clients c WHERE c.row_id = pending_items.client_id
+      )
+      WHERE is_resolved = 0
+    ''');
   }
 
   static Future<void> updateClientStatus(String rowId, bool completed) async {
