@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../providers/app_provider.dart';
 import '../models/client.dart';
 import '../models/pending_item.dart';
 import '../services/database_service.dart';
+import '../services/firestore_service.dart';
 import 'add_pending_screen.dart';
 
 class ClientDetailScreen extends StatefulWidget {
@@ -17,6 +19,7 @@ class ClientDetailScreen extends StatefulWidget {
 
 class _ClientDetailScreenState extends State<ClientDetailScreen> {
   List<PendingItem> _items = [];
+  List<PendingItem> _awaitingFirestoreItems = [];
   bool _loading = false;
 
   @override
@@ -27,9 +30,20 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
 
   Future<void> _load() async {
     setState(() => _loading = true);
-    _items =
+    final sqliteItems =
         await DatabaseService.getPendingItemsByClient(widget.client.rowId);
-    setState(() => _loading = false);
+    List<PendingItem> awaitingItems = [];
+    try {
+      awaitingItems = await FirestoreService.getAwaitingItemsByClientId(
+          widget.client.rowId);
+    } catch (_) {}
+    if (mounted) {
+      setState(() {
+        _items = sqliteItems;
+        _awaitingFirestoreItems = awaitingItems;
+        _loading = false;
+      });
+    }
   }
 
   Future<void> _toggle() async {
@@ -55,8 +69,21 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
   }
 
   Future<void> _resolve(PendingItem item) async {
-    await context.read<AppProvider>().resolveItem(item.id!);
+    await context.read<AppProvider>().resolveItem(item.id!, firestoreId: item.firestoreId);
     await _load();
+  }
+
+  Future<void> _validateByFirestoreId(String firestoreId) async {
+    await context.read<AppProvider>().validateItemByFirestoreId(firestoreId);
+    await _load();
+  }
+
+  Future<void> _launchUrl(String url) async {
+    final uri = Uri.tryParse(url);
+    if (uri == null) return;
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
   }
 
   void _copyWhatsApp(PendingItem item) {
@@ -70,7 +97,18 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final c = widget.client;
-    final open = _items.where((p) => !p.isResolved).toList();
+    // Build set of awaiting firestoreIds for quick lookup
+    final awaitingIds = {
+      for (final a in _awaitingFirestoreItems)
+        if (a.firestoreId != null) a.firestoreId!
+    };
+    // Open items: unresolved SQLite items NOT in awaiting set
+    final open = _items.where((p) =>
+        !p.isResolved &&
+        (p.firestoreId == null || !awaitingIds.contains(p.firestoreId))).toList();
+    // Awaiting: firestoreItems from Firestore that are awaiting validation
+    // merged with SQLite items that match (to get sqliteId for resolution)
+    final awaitingItems = _awaitingFirestoreItems;
     final resolved = _items.where((p) => p.isResolved).toList();
     final headerColor =
         c.isCompleted ? Colors.green.shade700 : const Color(0xFF1E3A5F);
@@ -174,6 +212,41 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
               ),
             ],
 
+            // Project link
+            if (c.projectLink.isNotEmpty)
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                child: InkWell(
+                  onTap: () => _launchUrl(c.projectLink),
+                  borderRadius: BorderRadius.circular(10),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.shade50,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.blue.shade200),
+                    ),
+                    child: Row(children: [
+                      Icon(Icons.link, color: Colors.blue.shade700, size: 20),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'Ver projeto no Drive',
+                          style: TextStyle(
+                              color: Colors.blue.shade700,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14),
+                        ),
+                      ),
+                      Icon(Icons.open_in_new,
+                          color: Colors.blue.shade400, size: 16),
+                    ]),
+                  ),
+                ),
+              ),
+
             // Botões de ação
             Padding(
               padding: const EdgeInsets.all(16),
@@ -228,6 +301,27 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
                     onResolve: () => _resolve(item),
                     onCopy: () => _copyWhatsApp(item))),
               ],
+              if (awaitingItems.isNotEmpty) ...[
+                _SectionTitle(
+                    text: 'AGUARDANDO VALIDAÇÃO (${awaitingItems.length})',
+                    color: Colors.blue),
+                ...awaitingItems.map((item) {
+                  // Find matching SQLite item for this firestoreId (if exists)
+                  final sqliteMatch = item.firestoreId != null
+                      ? _items.where((i) =>
+                              i.firestoreId == item.firestoreId &&
+                              !i.isResolved)
+                          .firstOrNull
+                      : null;
+                  return _AwaitingCard(
+                    item: item,
+                    onValidate: () => sqliteMatch != null
+                        ? _resolve(sqliteMatch)
+                        : _validateByFirestoreId(item.firestoreId!),
+                    onCopy: () => _copyWhatsApp(item),
+                  );
+                }),
+              ],
               if (resolved.isNotEmpty) ...[
                 _SectionTitle(
                     text: 'RESOLVIDAS (${resolved.length})',
@@ -237,7 +331,7 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
                     onResolve: null,
                     onCopy: () => _copyWhatsApp(item))),
               ],
-              if (_items.isEmpty)
+              if (_items.isEmpty && awaitingItems.isEmpty)
                 const Padding(
                   padding: EdgeInsets.all(24),
                   child: Center(
@@ -413,6 +507,105 @@ class _PendingCard extends StatelessWidget {
                   ),
                 ),
               ],
+            ]),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _fmt(DateTime dt) =>
+      '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')} '
+      '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+}
+
+class _AwaitingCard extends StatelessWidget {
+  final PendingItem item;
+  final VoidCallback onValidate;
+  final VoidCallback onCopy;
+
+  const _AwaitingCard(
+      {required this.item, required this.onValidate, required this.onCopy});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+      decoration: BoxDecoration(
+        color: Colors.blue.shade50,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.blue.shade200),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 4,
+              offset: const Offset(0, 2))
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              _TeamBadge(team: item.team),
+              if (item.responsible.isNotEmpty) ...[
+                const SizedBox(width: 8),
+                Text(item.responsible,
+                    style: const TextStyle(
+                        color: Colors.grey, fontSize: 12)),
+              ],
+              const Spacer(),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade100,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text('Aguardando validação',
+                    style: TextStyle(
+                        color: Colors.blue.shade700,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold)),
+              ),
+            ]),
+            const SizedBox(height: 8),
+            Text(item.description, style: const TextStyle(fontSize: 14)),
+            const SizedBox(height: 6),
+            Text(
+              _fmt(item.createdAt),
+              style: const TextStyle(color: Colors.grey, fontSize: 11),
+            ),
+            const SizedBox(height: 10),
+            Row(children: [
+              OutlinedButton.icon(
+                onPressed: onCopy,
+                icon: const Icon(Icons.copy, size: 14),
+                label: const Text('WhatsApp',
+                    style: TextStyle(fontSize: 12)),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF25D366),
+                  side: const BorderSide(color: Color(0xFF25D366)),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  minimumSize: Size.zero,
+                ),
+              ),
+              const SizedBox(width: 8),
+              ElevatedButton.icon(
+                onPressed: onValidate,
+                icon: const Icon(Icons.verified, size: 14),
+                label: const Text('Validar',
+                    style: TextStyle(fontSize: 12)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue,
+                  foregroundColor: Colors.white,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  minimumSize: Size.zero,
+                ),
+              ),
             ]),
           ],
         ),

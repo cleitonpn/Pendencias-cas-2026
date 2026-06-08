@@ -139,6 +139,7 @@ class SheetsService {
         eletricista: s(eletrIdx),
         faxineira: s(faxiIdx),
         teto50: '',
+        projectLink: s(linkIdx),
       ));
     }
 

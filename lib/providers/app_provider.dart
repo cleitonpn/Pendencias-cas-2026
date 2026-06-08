@@ -141,6 +141,34 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> markItemAwaitingValidation(int sqliteId, {String? firestoreId}) async {
+    await DatabaseService.markItemAwaitingValidation(sqliteId);
+    if (firestoreId != null) {
+      try {
+        await FirestoreService.markAwaitingValidation(firestoreId);
+      } catch (_) {}
+    }
+    notifyListeners();
+  }
+
+  Future<void> validateItem(int sqliteId, {String? firestoreId}) async {
+    await DatabaseService.resolvePendingItem(sqliteId);
+    if (firestoreId != null) {
+      try {
+        await FirestoreService.resolveItem(firestoreId);
+      } catch (_) {}
+    }
+    notifyListeners();
+  }
+
+  Future<void> validateItemByFirestoreId(String firestoreId) async {
+    try {
+      await FirestoreService.resolveItem(firestoreId);
+      await DatabaseService.resolvePendingItemByFirestoreId(firestoreId);
+    } catch (_) {}
+    notifyListeners();
+  }
+
   Future<Fair> addFair(
       String name, String spreadsheetId, String sheetName) async {
     final fair = Fair(
