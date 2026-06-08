@@ -14,7 +14,7 @@ class DatabaseService {
 
   static Future<Database> _initDb() async {
     final path = join(await getDatabasesPath(), 'cas2026.db');
-    return openDatabase(path, version: 4, onCreate: _onCreate, onUpgrade: _onUpgrade);
+    return openDatabase(path, version: 5, onCreate: _onCreate, onUpgrade: _onUpgrade);
   }
 
   static Future<void> _onCreate(Database db, int version) async {
@@ -39,6 +39,7 @@ class DatabaseService {
         area TEXT, deck TEXT, total_area TEXT, mezanino TEXT,
         produtor TEXT, marceneiro TEXT, tapeceiro TEXT,
         eletricista TEXT, faxineira TEXT, teto50 TEXT,
+        project_link TEXT DEFAULT '',
         is_completed INTEGER DEFAULT 0, completed_at TEXT
       )
     ''');
@@ -50,7 +51,9 @@ class DatabaseService {
         producer_name TEXT DEFAULT '',
         client_id TEXT, client_name TEXT, local TEXT, hangar TEXT,
         team TEXT, responsible TEXT, description TEXT,
-        is_resolved INTEGER DEFAULT 0, created_at TEXT, resolved_at TEXT,
+        is_resolved INTEGER DEFAULT 0,
+        awaiting_validation INTEGER DEFAULT 0,
+        created_at TEXT, resolved_at TEXT,
         FOREIGN KEY (client_id) REFERENCES clients(row_id)
       )
     ''');
@@ -102,6 +105,14 @@ class DatabaseService {
       } catch (_) {}
       try {
         await db.execute("ALTER TABLE pending_items ADD COLUMN producer_name TEXT DEFAULT ''");
+      } catch (_) {}
+    }
+    if (oldV < 5) {
+      try {
+        await db.execute('ALTER TABLE pending_items ADD COLUMN awaiting_validation INTEGER DEFAULT 0');
+      } catch (_) {}
+      try {
+        await db.execute("ALTER TABLE clients ADD COLUMN project_link TEXT DEFAULT ''");
       } catch (_) {}
     }
   }
@@ -273,6 +284,26 @@ class DatabaseService {
       {'is_resolved': 1, 'resolved_at': DateTime.now().toIso8601String()},
       where: 'id = ?',
       whereArgs: [id],
+    );
+  }
+
+  static Future<void> markItemAwaitingValidation(int id) async {
+    final database = await db;
+    await database.update(
+      'pending_items',
+      {'awaiting_validation': 1},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  static Future<void> resolvePendingItemByFirestoreId(String firestoreId) async {
+    final database = await db;
+    await database.update(
+      'pending_items',
+      {'is_resolved': 1, 'resolved_at': DateTime.now().toIso8601String()},
+      where: 'firestore_id = ?',
+      whereArgs: [firestoreId],
     );
   }
 

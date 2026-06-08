@@ -4,12 +4,14 @@ class PendingItem {
   final String clientId;
   final String clientName;
   final String producerName;   // producer of this client (for Firestore queries)
+  final String fairName;       // fair name (Firestore items); empty for SQLite
   final String local;
   final String hangar;
   final String team;
   final String responsible;
   final String description;
   bool isResolved;
+  bool awaitingValidation;     // producer marked as done, admin needs to validate
   final DateTime createdAt;
   DateTime? resolvedAt;
 
@@ -19,12 +21,14 @@ class PendingItem {
     required this.clientId,
     required this.clientName,
     this.producerName = '',
+    this.fairName = '',
     required this.local,
     required this.hangar,
     required this.team,
     this.responsible = '',
     required this.description,
     this.isResolved = false,
+    this.awaitingValidation = false,
     required this.createdAt,
     this.resolvedAt,
   });
@@ -41,6 +45,7 @@ class PendingItem {
         'responsible': responsible,
         'description': description,
         'is_resolved': isResolved ? 1 : 0,
+        'awaiting_validation': awaitingValidation ? 1 : 0,
         'created_at': createdAt.toIso8601String(),
         'resolved_at': resolvedAt?.toIso8601String(),
       };
@@ -51,12 +56,14 @@ class PendingItem {
         clientId: map['client_id'] as String,
         clientName: map['client_name'] ?? '',
         producerName: map['producer_name'] ?? '',
+        fairName: '',
         local: map['local'] ?? map['stand'] ?? '',
         hangar: map['hangar'] ?? '',
         team: map['team'] as String,
         responsible: map['responsible'] ?? '',
         description: map['description'] as String,
         isResolved: (map['is_resolved'] as int? ?? 0) == 1,
+        awaitingValidation: (map['awaiting_validation'] as int? ?? 0) == 1,
         createdAt: DateTime.parse(map['created_at'] as String),
         resolvedAt: map['resolved_at'] != null
             ? DateTime.tryParse(map['resolved_at'] as String)
@@ -70,12 +77,14 @@ class PendingItem {
         clientId: data['clientId'] ?? '',
         clientName: data['clientName'] ?? '',
         producerName: data['producerName'] ?? '',
+        fairName: data['fairName'] ?? '',
         local: data['local'] ?? '',
         hangar: data['hangar'] ?? '',
         team: data['team'] ?? '',
         responsible: data['responsible'] ?? '',
         description: data['description'] ?? '',
         isResolved: data['isResolved'] as bool? ?? false,
+        awaitingValidation: data['awaitingValidation'] as bool? ?? false,
         createdAt: DateTime.tryParse(data['createdAt'] as String? ?? '') ??
             DateTime.now(),
         resolvedAt: data['resolvedAt'] != null

@@ -94,6 +94,7 @@ class SheetsService {
     final tapecIdx    = findCol(['tapeceiro']);
     final eletrIdx    = findCol(['eletricista']);
     final faxiIdx     = findCol(['faxineira']);
+    final linkIdx     = findCol(['link', 'projeto link', 'link projeto']);
 
     if (nomeIdx < 0) {
       throw Exception(

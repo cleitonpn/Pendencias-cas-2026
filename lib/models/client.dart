@@ -16,6 +16,7 @@ class Client {
   final String eletricista;
   final String faxineira;
   final String teto50;
+  final String projectLink;   // Drive/project link from Google Sheets
 
   bool isCompleted;
   DateTime? completedAt;
@@ -37,6 +38,7 @@ class Client {
     required this.eletricista,
     required this.faxineira,
     required this.teto50,
+    this.projectLink = '',
     this.isCompleted = false,
     this.completedAt,
   });
@@ -85,6 +87,7 @@ class Client {
         'eletricista': eletricista,
         'faxineira': faxineira,
         'teto50': teto50,
+        'project_link': projectLink,
         'is_completed': isCompleted ? 1 : 0,
         'completed_at': completedAt?.toIso8601String(),
       };
@@ -106,6 +109,7 @@ class Client {
         eletricista: map['eletricista'] ?? '',
         faxineira: map['faxineira'] ?? '',
         teto50: map['teto50'] ?? '',
+        projectLink: map['project_link'] ?? '',
         isCompleted: (map['is_completed'] as int? ?? 0) == 1,
         completedAt: map['completed_at'] != null
             ? DateTime.tryParse(map['completed_at'] as String)

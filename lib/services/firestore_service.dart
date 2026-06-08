@@ -20,6 +20,7 @@ class FirestoreService {
       'responsible': item.responsible,
       'description': item.description,
       'isResolved': false,
+      'awaitingValidation': false,
       'createdAt': item.createdAt.toIso8601String(),
       'resolvedAt': null,
     });
@@ -30,6 +31,12 @@ class FirestoreService {
     await _db.collection('pending_items').doc(firestoreId).update({
       'isResolved': true,
       'resolvedAt': DateTime.now().toIso8601String(),
+    });
+  }
+
+  static Future<void> markAwaitingValidation(String firestoreId) async {
+    await _db.collection('pending_items').doc(firestoreId).update({
+      'awaitingValidation': true,
     });
   }
 
@@ -49,6 +56,18 @@ class FirestoreService {
       return a.local.compareTo(b.local);
     });
     return items;
+  }
+
+  static Future<List<PendingItem>> getAwaitingItemsByClientId(
+      String clientId) async {
+    final snapshot = await _db
+        .collection('pending_items')
+        .where('clientId', isEqualTo: clientId)
+        .get();
+    return snapshot.docs
+        .map((d) => PendingItem.fromFirestore(d.id, d.data()))
+        .where((item) => item.awaitingValidation && !item.isResolved)
+        .toList();
   }
 
   // ─── Producer PINs ──────────────────────────────────────────────────────────
