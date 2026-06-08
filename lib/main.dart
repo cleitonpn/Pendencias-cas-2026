@@ -19,7 +19,7 @@ class CasApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'CAS 2026 — Pendências',
+      title: 'Montagem USET',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
