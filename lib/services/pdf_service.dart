@@ -42,9 +42,11 @@ class PdfService {
     final dir = await getTemporaryDirectory();
     final file = File('${dir.path}/$filename');
     await file.writeAsBytes(bytes);
-    await Share.shareXFiles(
-      [XFile(file.path, mimeType: 'application/pdf')],
-      subject: filename.replaceAll('_', ' ').replaceAll('.pdf', ''),
+    await SharePlus.instance.share(
+      ShareParams(
+        files: [XFile(file.path, mimeType: 'application/pdf')],
+        subject: filename.replaceAll('_', ' ').replaceAll('.pdf', ''),
+      ),
     );
   }
 
