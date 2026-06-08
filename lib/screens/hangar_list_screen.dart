@@ -7,7 +7,6 @@ import 'client_list_screen.dart';
 import 'settings_screen.dart';
 import 'reports_screen.dart';
 import 'producer_pending_screen.dart';
-import 'producer_login_screen.dart';
 
 class HangarListScreen extends StatelessWidget {
   const HangarListScreen({super.key});
@@ -27,13 +26,6 @@ class HangarListScreen extends StatelessWidget {
                 fontWeight: FontWeight.bold,
                 fontSize: 20)),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.badge_outlined, color: Colors.white),
-            tooltip: 'Acesso Produtor',
-            onPressed: () => Navigator.push(context,
-                MaterialPageRoute(
-                    builder: (_) => const ProducerLoginScreen())),
-          ),
           IconButton(
             icon: const Icon(Icons.person_search, color: Colors.white),
             tooltip: 'Pendências por Produtor',
