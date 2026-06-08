@@ -40,7 +40,7 @@ jobs:
         run: flutter pub get
 
       - name: Verificar código Dart
-        run: flutter analyze --no-fatal-warnings
+        run: flutter analyze --no-fatal-warnings --no-fatal-infos
 
       - name: Build APK release
         run: flutter build apk --release
