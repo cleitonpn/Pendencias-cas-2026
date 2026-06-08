@@ -2,10 +2,11 @@ plugins {
     id "com.android.application"
     id "kotlin-android"
     id "dev.flutter.flutter-gradle-plugin"
+    id "com.google.gms.google-services"
 }
 
 android {
-    namespace "com.cas.pendencias2026"
+    namespace "com.example.montagem_uset"
     compileSdk 34
     ndkVersion flutter.ndkVersion
 
@@ -28,7 +29,7 @@ android {
     }
 
     defaultConfig {
-        applicationId "com.cas.pendencias2026"
+        applicationId "com.example.montagem_uset"
         minSdk 21
         targetSdk 34
         versionCode flutter.versionCode

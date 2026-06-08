@@ -4,6 +4,7 @@ import '../models/fair.dart';
 import '../models/pending_item.dart';
 import '../services/sheets_service.dart';
 import '../services/database_service.dart';
+import '../services/firestore_service.dart';
 
 class AppProvider extends ChangeNotifier {
   List<Fair> _fairs = [];
@@ -55,7 +56,6 @@ class AppProvider extends ChangeNotifier {
         fairId: _currentFair!.id!,
       );
 
-      // Preserve local completion status
       final localMap = {for (final c in _clients) c.rowId: c};
       for (final c in sheetClients) {
         final local = localMap[c.rowId];
@@ -103,11 +103,25 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<PendingItem> addPendingItem(PendingItem item) async {
-    final id = await DatabaseService.insertPendingItem(item);
+    // 1. Save to local SQLite
+    final sqliteId = await DatabaseService.insertPendingItem(item);
+
+    // 2. Save to Firestore (shared cloud)
+    String? firestoreId;
+    try {
+      firestoreId = await FirestoreService.savePendingItem(
+          item, _currentFair?.name ?? 'Desconhecida');
+      await DatabaseService.updatePendingFirestoreId(sqliteId, firestoreId);
+    } catch (_) {
+      // Firestore save failed — item is still saved locally
+    }
+
     return PendingItem(
-      id: id,
+      id: sqliteId,
+      firestoreId: firestoreId,
       clientId: item.clientId,
       clientName: item.clientName,
+      producerName: item.producerName,
       local: item.local,
       hangar: item.hangar,
       team: item.team,
@@ -117,8 +131,13 @@ class AppProvider extends ChangeNotifier {
     );
   }
 
-  Future<void> resolveItem(int id) async {
-    await DatabaseService.resolvePendingItem(id);
+  Future<void> resolveItem(int sqliteId, {String? firestoreId}) async {
+    await DatabaseService.resolvePendingItem(sqliteId);
+    if (firestoreId != null) {
+      try {
+        await FirestoreService.resolveItem(firestoreId);
+      } catch (_) {}
+    }
     notifyListeners();
   }
 

@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_provider.dart';
 import '../models/fair.dart';
+import '../utils/admin_pin.dart';
 import 'hangar_list_screen.dart';
 import 'add_fair_screen.dart';
+import 'producer_login_screen.dart';
 
 class FairSelectionScreen extends StatelessWidget {
   const FairSelectionScreen({super.key});
@@ -20,6 +22,15 @@ class FairSelectionScreen extends StatelessWidget {
         title: const Text('Selecionar Feira',
             style: TextStyle(
                 color: Colors.white, fontWeight: FontWeight.bold)),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.badge_outlined, color: Colors.white),
+            tooltip: 'Acesso Produtor',
+            onPressed: () => Navigator.push(context,
+                MaterialPageRoute(
+                    builder: (_) => const ProducerLoginScreen())),
+          ),
+        ],
       ),
       body: fairs.isEmpty
           ? const _EmptyState()
@@ -29,8 +40,13 @@ class FairSelectionScreen extends StatelessWidget {
               itemBuilder: (context, i) => _FairCard(fair: fairs[i]),
             ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => Navigator.push(context,
-            MaterialPageRoute(builder: (_) => const AddFairScreen())),
+        onPressed: () async {
+          final ok = await requireAdminPin(context);
+          if (ok && context.mounted) {
+            Navigator.push(context,
+                MaterialPageRoute(builder: (_) => const AddFairScreen()));
+          }
+        },
         backgroundColor: const Color(0xFF1E3A5F),
         icon: const Icon(Icons.add, color: Colors.white),
         label: const Text('Nova Feira',
@@ -100,6 +116,9 @@ class _FairCard extends StatelessWidget {
   }
 
   Future<void> _confirmDelete(BuildContext context) async {
+    final ok = await requireAdminPin(context);
+    if (!ok || !context.mounted) return;
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(

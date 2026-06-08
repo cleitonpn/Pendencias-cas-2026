@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../providers/app_provider.dart';
+import '../utils/admin_pin.dart';
 import 'client_list_screen.dart';
 import 'settings_screen.dart';
 import 'reports_screen.dart';
@@ -61,8 +62,13 @@ class HangarListScreen extends StatelessWidget {
           ),
           IconButton(
             icon: const Icon(Icons.settings_outlined, color: Colors.white),
-            onPressed: () => Navigator.push(context,
-                MaterialPageRoute(builder: (_) => const SettingsScreen())),
+            onPressed: () async {
+              final ok = await requireAdminPin(context);
+              if (ok && context.mounted) {
+                Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => const SettingsScreen()));
+              }
+            },
           ),
         ],
       ),

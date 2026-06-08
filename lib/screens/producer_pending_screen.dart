@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../models/pending_item.dart';
 import '../providers/app_provider.dart';
 import '../services/database_service.dart';
+import '../services/firestore_service.dart';
 
 class ProducerPendingScreen extends StatefulWidget {
   final String? lockedProducer;
@@ -24,40 +25,58 @@ class _ProducerPendingScreenState extends State<ProducerPendingScreen> {
   String? _selected;
   List<PendingItem> _items = [];
   bool _loading = false;
-  late int _fairId;
+  int? _fairId;
+
+  bool get _isProducerMode => widget.lockedProducer != null;
 
   @override
   void initState() {
     super.initState();
-    _fairId = context.read<AppProvider>().currentFair?.id ?? 1;
-    _loadProducers();
-    if (widget.lockedProducer != null) {
+    _fairId = context.read<AppProvider>().currentFair?.id;
+    if (_isProducerMode) {
       _selectProducer(widget.lockedProducer!);
+    } else {
+      _loadProducers();
     }
   }
 
   Future<void> _loadProducers() async {
-    final producers = await DatabaseService.getProducers(fairId: _fairId);
+    if (_fairId == null) return;
+    final producers = await DatabaseService.getProducers(fairId: _fairId!);
     if (mounted) setState(() => _producers = producers);
   }
 
   Future<void> _selectProducer(String produtor) async {
-    setState(() {
-      _selected = produtor;
-      _loading = true;
-    });
-    final items =
-        await DatabaseService.getPendingItemsByProdutor(produtor, fairId: _fairId);
-    if (mounted) {
-      setState(() {
-        _items = items;
-        _loading = false;
-      });
+    setState(() { _selected = produtor; _loading = true; });
+
+    List<PendingItem> items;
+    if (_isProducerMode) {
+      // Producer mode: read from Firestore
+      items = await FirestoreService.getItemsByProducer(produtor);
+    } else {
+      // Admin mode: read from local SQLite
+      items = _fairId != null
+          ? await DatabaseService.getPendingItemsByProdutor(produtor,
+              fairId: _fairId!)
+          : [];
     }
+
+    if (mounted) setState(() { _items = items; _loading = false; });
   }
 
   Future<void> _resolveItem(PendingItem item) async {
-    await DatabaseService.resolvePendingItem(item.id!);
+    if (_isProducerMode) {
+      // Producer mode: resolve in Firestore only
+      if (item.firestoreId == null) return;
+      await FirestoreService.resolveItem(item.firestoreId!);
+    } else {
+      // Admin mode: resolve in both SQLite and Firestore
+      if (item.id != null) {
+        await context
+            .read<AppProvider>()
+            .resolveItem(item.id!, firestoreId: item.firestoreId);
+      }
+    }
     if (_selected != null) await _selectProducer(_selected!);
   }
 
@@ -74,7 +93,12 @@ class _ProducerPendingScreenState extends State<ProducerPendingScreen> {
   }
 
   String _buildWhatsAppText() {
-    final fairName = context.read<AppProvider>().currentFairName;
+    final fairName = _isProducerMode
+        ? (_items.isNotEmpty
+            ? (_items.first as dynamic).fairName ?? 'Montagem USET'
+            : 'Montagem USET')
+        : context.read<AppProvider>().currentFairName;
+
     final now = DateTime.now();
     final date =
         '${now.day.toString().padLeft(2, '0')}/${now.month.toString().padLeft(2, '0')}/${now.year}';
@@ -117,14 +141,12 @@ class _ProducerPendingScreenState extends State<ProducerPendingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isLocked = widget.lockedProducer != null;
-
     return Scaffold(
       backgroundColor: const Color(0xFFF0F2F5),
       appBar: AppBar(
         backgroundColor: const Color(0xFF1E3A5F),
         title: Text(
-            isLocked
+            _isProducerMode
                 ? widget.lockedProducer!
                 : 'Pendências por Produtor',
             style: const TextStyle(
@@ -142,8 +164,7 @@ class _ProducerPendingScreenState extends State<ProducerPendingScreen> {
       ),
       body: Column(
         children: [
-          // Producer selector — hidden when locked
-          if (!isLocked)
+          if (!_isProducerMode)
             Container(
               color: Colors.white,
               padding: const EdgeInsets.all(16),
@@ -183,16 +204,13 @@ class _ProducerPendingScreenState extends State<ProducerPendingScreen> {
                                         : Colors.grey.shade300,
                                   ),
                                 ),
-                                child: Text(
-                                  p,
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    color: sel
-                                        ? Colors.white
-                                        : Colors.black87,
-                                    fontSize: 14,
-                                  ),
-                                ),
+                                child: Text(p,
+                                    style: TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        color: sel
+                                            ? Colors.white
+                                            : Colors.black87,
+                                        fontSize: 14)),
                               ),
                             );
                           }).toList(),
@@ -207,8 +225,7 @@ class _ProducerPendingScreenState extends State<ProducerPendingScreen> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.person_search,
-                            size: 64, color: Colors.grey),
+                        Icon(Icons.person_search, size: 64, color: Colors.grey),
                         SizedBox(height: 12),
                         Text('Selecione um produtor acima',
                             style:
@@ -287,12 +304,10 @@ class _PendingList extends StatelessWidget {
       children: [
         Container(
           color: Colors.orange.shade50,
-          padding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           child: Row(
             children: [
-              const Icon(Icons.warning_amber,
-                  color: Colors.orange, size: 18),
+              const Icon(Icons.warning_amber, color: Colors.orange, size: 18),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -318,8 +333,8 @@ class _PendingList extends StatelessWidget {
                 children: [
                   Container(
                     margin: const EdgeInsets.only(top: 8, bottom: 6),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 8),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     decoration: BoxDecoration(
                       color: const Color(0xFF1E3A5F),
                       borderRadius: BorderRadius.circular(8),
@@ -338,8 +353,7 @@ class _PendingList extends StatelessWidget {
                   ...clientKeys.map((clientKey) {
                     final items = clients[clientKey]!;
                     return Card(
-                      margin:
-                          const EdgeInsets.only(bottom: 8, left: 4),
+                      margin: const EdgeInsets.only(bottom: 8, left: 4),
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10)),
                       child: Padding(
@@ -353,8 +367,7 @@ class _PendingList extends StatelessWidget {
                                     fontSize: 14)),
                             const Divider(height: 12),
                             ...items.map((item) => Padding(
-                                  padding:
-                                      const EdgeInsets.only(bottom: 8),
+                                  padding: const EdgeInsets.only(bottom: 8),
                                   child: Column(
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
@@ -368,8 +381,7 @@ class _PendingList extends StatelessWidget {
                                           Expanded(
                                             child: Column(
                                               crossAxisAlignment:
-                                                  CrossAxisAlignment
-                                                      .start,
+                                                  CrossAxisAlignment.start,
                                               children: [
                                                 Text(
                                                   item.team +
@@ -397,19 +409,15 @@ class _PendingList extends StatelessWidget {
                                         Align(
                                           alignment: Alignment.centerRight,
                                           child: ElevatedButton.icon(
-                                            onPressed: () =>
-                                                onResolve(item),
+                                            onPressed: () => onResolve(item),
                                             icon: const Icon(Icons.check,
                                                 size: 14),
                                             label: const Text('Resolver',
-                                                style: TextStyle(
-                                                    fontSize: 12)),
-                                            style:
-                                                ElevatedButton.styleFrom(
-                                              backgroundColor:
-                                                  Colors.green,
-                                              foregroundColor:
-                                                  Colors.white,
+                                                style:
+                                                    TextStyle(fontSize: 12)),
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor: Colors.green,
+                                              foregroundColor: Colors.white,
                                               padding:
                                                   const EdgeInsets.symmetric(
                                                       horizontal: 12,

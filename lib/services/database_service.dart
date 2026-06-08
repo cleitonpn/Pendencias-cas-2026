@@ -14,7 +14,7 @@ class DatabaseService {
 
   static Future<Database> _initDb() async {
     final path = join(await getDatabasesPath(), 'cas2026.db');
-    return openDatabase(path, version: 3, onCreate: _onCreate, onUpgrade: _onUpgrade);
+    return openDatabase(path, version: 4, onCreate: _onCreate, onUpgrade: _onUpgrade);
   }
 
   static Future<void> _onCreate(Database db, int version) async {
@@ -46,6 +46,8 @@ class DatabaseService {
       CREATE TABLE pending_items (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         fair_id INTEGER DEFAULT 1,
+        firestore_id TEXT,
+        producer_name TEXT DEFAULT '',
         client_id TEXT, client_name TEXT, local TEXT, hangar TEXT,
         team TEXT, responsible TEXT, description TEXT,
         is_resolved INTEGER DEFAULT 0, created_at TEXT, resolved_at TEXT,
@@ -63,21 +65,16 @@ class DatabaseService {
 
   static Future<void> _onUpgrade(Database db, int oldV, int newV) async {
     if (oldV < 3) {
-      // Add fair_id to clients (default 1 = CAS 2026)
       try {
         await db.execute('ALTER TABLE clients ADD COLUMN fair_id INTEGER DEFAULT 1');
       } catch (_) {}
-      // Prefix row_id with "1_": "15" → "1_15" (idempotent — skips already-prefixed rows)
       await db.execute(
           "UPDATE clients SET row_id = '1_' || row_id WHERE instr(row_id, '_') = 0");
-      // Add fair_id to pending_items
       try {
         await db.execute('ALTER TABLE pending_items ADD COLUMN fair_id INTEGER DEFAULT 1');
       } catch (_) {}
-      // Prefix client_id with "1_"
       await db.execute(
           "UPDATE pending_items SET client_id = '1_' || client_id WHERE instr(client_id, '_') = 0");
-      // Create fairs table
       await db.execute('''
         CREATE TABLE IF NOT EXISTS fairs (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -91,7 +88,6 @@ class DatabaseService {
         INSERT OR IGNORE INTO fairs (id, name, spreadsheet_id, sheet_name, created_at)
         VALUES (1, 'CAS 2026', '1Q5jLjT7zQ2zIlf2udS3XIHHLc4o4Qjz9LvZOEIJ3XkE', 'projetos', '2026-01-01T00:00:00.000')
       ''');
-      // Create producer_pins table
       await db.execute('''
         CREATE TABLE IF NOT EXISTS producer_pins (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -99,6 +95,14 @@ class DatabaseService {
           pin TEXT NOT NULL
         )
       ''');
+    }
+    if (oldV < 4) {
+      try {
+        await db.execute('ALTER TABLE pending_items ADD COLUMN firestore_id TEXT');
+      } catch (_) {}
+      try {
+        await db.execute("ALTER TABLE pending_items ADD COLUMN producer_name TEXT DEFAULT ''");
+      } catch (_) {}
     }
   }
 
@@ -116,7 +120,7 @@ class DatabaseService {
   }
 
   static Future<void> deleteFair(int id) async {
-    if (id == 1) return; // CAS 2026 is protected
+    if (id == 1) return;
     final database = await db;
     final clients = await database.query('clients',
         columns: ['row_id'], where: 'fair_id = ?', whereArgs: [id]);
@@ -126,31 +130,6 @@ class DatabaseService {
     }
     await database.delete('clients', where: 'fair_id = ?', whereArgs: [id]);
     await database.delete('fairs', where: 'id = ?', whereArgs: [id]);
-  }
-
-  // ─── Producer PINs ──────────────────────────────────────────────────────────
-
-  static Future<String?> getProducerPin(String producerName) async {
-    final database = await db;
-    final rows = await database.query('producer_pins',
-        where: 'producer_name = ?', whereArgs: [producerName]);
-    if (rows.isEmpty) return null;
-    return rows.first['pin'] as String?;
-  }
-
-  static Future<void> setProducerPin(String producerName, String pin) async {
-    final database = await db;
-    await database.insert(
-      'producer_pins',
-      {'producer_name': producerName, 'pin': pin},
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
-  }
-
-  static Future<void> deleteProducerPin(String producerName) async {
-    final database = await db;
-    await database.delete('producer_pins',
-        where: 'producer_name = ?', whereArgs: [producerName]);
   }
 
   // ─── Clients ────────────────────────────────────────────────────────────────
@@ -230,7 +209,6 @@ class DatabaseService {
             [fairId])) ??
         0;
     if (orphans > 0) {
-      // If no named hangars exist (e.g. Forum/PetVet), use a single bucket
       hangars.add(hangars.isEmpty ? 'Todos os Stands' : 'Externos');
     }
     return hangars;
@@ -272,10 +250,20 @@ class DatabaseService {
 
   static Future<int> insertPendingItem(PendingItem item) async {
     final database = await db;
-    // Derive fair_id from client_id prefix ("1_15" → fairId=1)
     final fairId = int.tryParse(item.clientId.split('_').first) ?? 1;
     return database.insert(
         'pending_items', {...item.toMap(), 'fair_id': fairId});
+  }
+
+  static Future<void> updatePendingFirestoreId(
+      int sqliteId, String firestoreId) async {
+    final database = await db;
+    await database.update(
+      'pending_items',
+      {'firestore_id': firestoreId},
+      where: 'id = ?',
+      whereArgs: [sqliteId],
+    );
   }
 
   static Future<void> resolvePendingItem(int id) async {

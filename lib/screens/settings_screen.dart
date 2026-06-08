@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_provider.dart';
 import '../services/database_service.dart';
+import '../services/firestore_service.dart';
+import '../utils/admin_pin.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -23,17 +26,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _loadPins() async {
     final fairId = context.read<AppProvider>().currentFair?.id ?? 1;
-    final producers = await DatabaseService.getProducers(fairId: fairId);
+    // Load producer names from local DB (if synced) and from Firestore (if PINs set)
+    final localProducers = await DatabaseService.getProducers(fairId: fairId);
+    final firestoreProducers = await FirestoreService.getProducersWithPins();
+    final allProducers = {...localProducers, ...firestoreProducers}.toList()..sort();
+
     final pins = <String, String?>{};
-    for (final p in producers) {
-      pins[p] = await DatabaseService.getProducerPin(p);
+    for (final p in allProducers) {
+      pins[p] = await FirestoreService.getProducerPin(p);
     }
-    if (mounted) {
-      setState(() {
-        _producers = producers;
-        _pins = pins;
-      });
-    }
+    if (mounted) setState(() { _producers = allProducers; _pins = pins; });
   }
 
   Future<void> _sync() async {
@@ -75,6 +77,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         content: TextField(
           controller: ctrl,
           keyboardType: TextInputType.number,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
           maxLength: 6,
           autofocus: true,
           decoration: const InputDecoration(
@@ -87,8 +90,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           if (currentPin != null)
             TextButton(
               onPressed: () => Navigator.pop(ctx, ''),
-              child: const Text('Remover',
-                  style: TextStyle(color: Colors.red)),
+              child: const Text('Remover', style: TextStyle(color: Colors.red)),
             ),
           TextButton(
               onPressed: () => Navigator.pop(ctx),
@@ -104,13 +106,80 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
     );
 
-    if (result == null) return; // cancelled
+    if (result == null) return;
     if (result.isEmpty) {
-      await DatabaseService.deleteProducerPin(producerName);
+      await FirestoreService.deleteProducerPin(producerName);
     } else {
-      await DatabaseService.setProducerPin(producerName, result);
+      await FirestoreService.setProducerPin(producerName, result);
     }
     await _loadPins();
+  }
+
+  Future<void> _changeAdminPin() async {
+    final currentPin = await getAdminPin();
+    final currentCtrl = TextEditingController();
+    final newCtrl = TextEditingController();
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        title: const Row(children: [
+          Icon(Icons.admin_panel_settings, color: Color(0xFF1E3A5F)),
+          SizedBox(width: 8),
+          Text('Alterar PIN Admin'),
+        ]),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: currentCtrl,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              maxLength: 6,
+              obscureText: true,
+              decoration: const InputDecoration(
+                  labelText: 'PIN atual', prefixIcon: Icon(Icons.lock)),
+            ),
+            TextField(
+              controller: newCtrl,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              maxLength: 6,
+              obscureText: true,
+              decoration: const InputDecoration(
+                  labelText: 'Novo PIN', prefixIcon: Icon(Icons.lock_open)),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancelar')),
+          ElevatedButton(
+            onPressed: () async {
+              if (currentCtrl.text != currentPin) {
+                Navigator.pop(ctx);
+                _snack('PIN atual incorreto.', isError: true);
+                return;
+              }
+              if (newCtrl.text.length < 4) {
+                _snack('O novo PIN deve ter ao menos 4 dígitos.',
+                    isError: true);
+                return;
+              }
+              await saveAdminPin(newCtrl.text);
+              Navigator.pop(ctx);
+              _snack('PIN de administrador alterado!');
+            },
+            style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1E3A5F),
+                foregroundColor: Colors.white),
+            child: const Text('Alterar'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -122,15 +191,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
       appBar: AppBar(
         backgroundColor: const Color(0xFF1E3A5F),
         title: const Text('Configurações',
-            style: TextStyle(
-                color: Colors.white, fontWeight: FontWeight.bold)),
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Current fair info
             if (fair != null) ...[
               const Text('FEIRA ATUAL',
                   style: TextStyle(
@@ -148,18 +215,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(children: [
-                        const Icon(Icons.event,
-                            color: Color(0xFF1E3A5F), size: 20),
+                        const Icon(Icons.event, color: Color(0xFF1E3A5F), size: 20),
                         const SizedBox(width: 8),
                         Text(fair.name,
                             style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold)),
+                                fontSize: 16, fontWeight: FontWeight.bold)),
                       ]),
                       const SizedBox(height: 6),
                       Text('Aba: ${fair.sheetName}',
-                          style: const TextStyle(
-                              color: Colors.grey, fontSize: 13)),
+                          style: const TextStyle(color: Colors.grey, fontSize: 13)),
                     ],
                   ),
                 ),
@@ -202,9 +266,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                     color: Colors.white, strokeWidth: 2))
                             : const Icon(Icons.sync, color: Colors.white),
                         label: Text(
-                            _isBusy
-                                ? 'Sincronizando...'
-                                : 'Sincronizar Planilha',
+                            _isBusy ? 'Sincronizando...' : 'Sincronizar Planilha',
                             style: const TextStyle(
                                 fontSize: 15,
                                 fontWeight: FontWeight.bold,
@@ -223,7 +285,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
             const SizedBox(height: 24),
 
-            // PIN management
+            // Producer PINs
             const Text('PINs DOS PRODUTORES',
                 style: TextStyle(
                     fontSize: 11,
@@ -257,8 +319,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         final hasPin = pin != null;
                         return Column(
                           children: [
-                            if (i > 0)
-                              const Divider(height: 1, indent: 16),
+                            if (i > 0) const Divider(height: 1, indent: 16),
                             ListTile(
                               leading: CircleAvatar(
                                 backgroundColor: hasPin
@@ -266,9 +327,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                     : Colors.grey.shade100,
                                 child: Icon(
                                     hasPin ? Icons.lock : Icons.lock_open,
-                                    color: hasPin
-                                        ? Colors.green
-                                        : Colors.grey,
+                                    color: hasPin ? Colors.green : Colors.grey,
                                     size: 20),
                               ),
                               title: Text(p,
@@ -278,13 +337,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   hasPin ? 'PIN configurado' : 'Sem PIN',
                                   style: TextStyle(
                                       fontSize: 12,
-                                      color: hasPin
-                                          ? Colors.green
-                                          : Colors.grey)),
+                                      color: hasPin ? Colors.green : Colors.grey)),
                               trailing: TextButton(
                                 onPressed: () => _editPin(p),
-                                child: Text(
-                                    hasPin ? 'Alterar' : 'Definir PIN',
+                                child: Text(hasPin ? 'Alterar' : 'Definir PIN',
                                     style: const TextStyle(
                                         color: Color(0xFF1E3A5F))),
                               ),
@@ -294,6 +350,37 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       }).toList(),
                     ),
                   ),
+
+            const SizedBox(height: 24),
+
+            // Admin PIN management
+            const Text('ADMINISTRADOR',
+                style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey,
+                    letterSpacing: 1)),
+            const SizedBox(height: 8),
+            Card(
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+              child: ListTile(
+                leading: const CircleAvatar(
+                  backgroundColor: Color(0xFF1E3A5F),
+                  child: Icon(Icons.admin_panel_settings,
+                      color: Colors.white, size: 20),
+                ),
+                title: const Text('PIN de Administrador',
+                    style: TextStyle(fontWeight: FontWeight.w600)),
+                subtitle: const Text('Altere o PIN de acesso admin',
+                    style: TextStyle(fontSize: 12, color: Colors.grey)),
+                trailing: TextButton(
+                  onPressed: _changeAdminPin,
+                  child: const Text('Alterar',
+                      style: TextStyle(color: Color(0xFF1E3A5F))),
+                ),
+              ),
+            ),
 
             const SizedBox(height: 24),
           ],
@@ -323,8 +410,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const SizedBox(width: 10),
             Expanded(
                 child: Text(text,
-                    style: const TextStyle(
-                        color: Colors.black87, fontSize: 13))),
+                    style: const TextStyle(color: Colors.black87, fontSize: 13))),
           ],
         ),
       );

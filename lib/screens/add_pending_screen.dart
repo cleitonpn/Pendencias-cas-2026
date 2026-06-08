@@ -64,6 +64,7 @@ class _AddPendingScreenState extends State<AddPendingScreen> {
     final newItem = PendingItem(
       clientId: widget.client.rowId,
       clientName: widget.client.displayName,
+      producerName: widget.client.produtor,
       local: widget.client.local,
       hangar: widget.client.hangar,
       team: _selectedTeam!,

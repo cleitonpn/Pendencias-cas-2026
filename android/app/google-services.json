@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "154690975923",
+    "project_id": "montagem-uset",
+    "storage_bucket": "montagem-uset.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:154690975923:android:088b42eb7d47c36b5258c6",
+        "android_client_info": {
+          "package_name": "com.example.montagem_uset"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCnNKGHqpa59_FbDeXFNrADk6yYBiiUU0o"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
