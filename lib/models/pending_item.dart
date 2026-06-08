@@ -61,8 +61,11 @@ class PendingItem {
         '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year} '
         '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
     final respLine = responsible.isNotEmpty ? '\nResponsável: $responsible' : '';
-    return '*PENDÊNCIA — CAS 2026*\n'
-        'Hangar: $hangar | Stand: $local\n'
+    final location = hangar.isNotEmpty
+        ? 'Hangar: $hangar | Stand: $local'
+        : 'Stand: $local';
+    return '*PENDÊNCIA*\n'
+        '$location\n'
         'Cliente: $clientName\n'
         'Equipe: $team$respLine\n'
         'Pendência: $description\n'

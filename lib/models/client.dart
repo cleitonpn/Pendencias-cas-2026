@@ -1,26 +1,27 @@
 class Client {
+  final int fairId;          // which fair this client belongs to
   final String rowId;
-  final String nome;        // B - nome do cliente
-  final String montagem;    // C - empresa de montagem (USET, D44...)
-  final String local;       // D - código do stand (I74, I76, I02...)
-  final String hangar;      // E - hangar (1, 3, 4, EXT 1, EXT 3...)
-  final String area;        // F - m²
-  final String deck;        // G - Deck
-  final String totalArea;   // H - mt total
-  final String mezanino;    // I - mezanino
+  final String nome;
+  final String montagem;
+  final String local;
+  final String hangar;
+  final String area;
+  final String deck;
+  final String totalArea;
+  final String mezanino;
 
-  // Colunas P-T: responsáveis por equipe (range P:T)
-  final String produtor;    // P - PRODUTOR
-  final String marceneiro;  // Q - marceneiro
-  final String tapeceiro;   // R - tapeceiro
-  final String eletricista; // S - eletricista
-  final String faxineira;   // T - faxineira
-  final String teto50;      // (não usado — fora do range P:T)
+  final String produtor;
+  final String marceneiro;
+  final String tapeceiro;
+  final String eletricista;
+  final String faxineira;
+  final String teto50;
 
   bool isCompleted;
   DateTime? completedAt;
 
   Client({
+    this.fairId = 1,
     required this.rowId,
     required this.nome,
     required this.montagem,
@@ -46,27 +47,29 @@ class Client {
   }
 
   factory Client.fromSheetRow(
-      List<dynamic> bToI, List<dynamic> oToT, int rowIndex) {
+      List<dynamic> bToI, List<dynamic> oToT, int rowIndex, {int fairId = 1}) {
     return Client(
-      rowId: rowIndex.toString(),
-      nome: _s(bToI, 0),       // B
-      montagem: _s(bToI, 1),   // C
-      local: _s(bToI, 2),      // D
-      hangar: _s(bToI, 3),     // E  ← hangar está na coluna E (índice 3)
-      area: _s(bToI, 4),       // F
-      deck: _s(bToI, 5),       // G
-      totalArea: _s(bToI, 6),  // H
-      mezanino: _s(bToI, 7),   // I
-      produtor: _s(oToT, 0),   // P
-      marceneiro: _s(oToT, 1), // Q
-      tapeceiro: _s(oToT, 2),  // R
-      eletricista: _s(oToT, 3),// S
-      faxineira: _s(oToT, 4),  // T
-      teto50: _s(oToT, 5),     // (vazio)
+      fairId: fairId,
+      rowId: '${fairId}_$rowIndex',
+      nome: _s(bToI, 0),
+      montagem: _s(bToI, 1),
+      local: _s(bToI, 2),
+      hangar: _s(bToI, 3),
+      area: _s(bToI, 4),
+      deck: _s(bToI, 5),
+      totalArea: _s(bToI, 6),
+      mezanino: _s(bToI, 7),
+      produtor: _s(oToT, 0),
+      marceneiro: _s(oToT, 1),
+      tapeceiro: _s(oToT, 2),
+      eletricista: _s(oToT, 3),
+      faxineira: _s(oToT, 4),
+      teto50: _s(oToT, 5),
     );
   }
 
   Map<String, dynamic> toMap() => {
+        'fair_id': fairId,
         'row_id': rowId,
         'nome': nome,
         'montagem': montagem,
@@ -87,6 +90,7 @@ class Client {
       };
 
   factory Client.fromMap(Map<String, dynamic> map) => Client(
+        fairId: map['fair_id'] as int? ?? 1,
         rowId: map['row_id'] as String,
         nome: map['nome'] ?? '',
         montagem: map['montagem'] ?? '',

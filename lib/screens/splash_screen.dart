@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_provider.dart';
-import 'hangar_list_screen.dart';
+import 'fair_selection_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -21,12 +21,11 @@ class _SplashScreenState extends State<SplashScreen> {
     await Future.delayed(const Duration(milliseconds: 800));
     if (!mounted) return;
 
-    // Carrega dados locais salvos; sincroniza em background se necessário
-    await context.read<AppProvider>().loadFromLocal();
+    await context.read<AppProvider>().init();
     if (!mounted) return;
 
     Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const HangarListScreen()));
+        MaterialPageRoute(builder: (_) => const FairSelectionScreen()));
   }
 
   @override
@@ -39,13 +38,13 @@ class _SplashScreenState extends State<SplashScreen> {
           children: [
             Icon(Icons.construction, size: 80, color: Colors.white),
             SizedBox(height: 16),
-            Text('CAS 2026',
+            Text('Pendências',
                 style: TextStyle(
                     color: Colors.white,
                     fontSize: 32,
                     fontWeight: FontWeight.bold)),
             SizedBox(height: 6),
-            Text('Gestão de Pendências',
+            Text('Gestão de Feiras',
                 style: TextStyle(color: Colors.white70, fontSize: 16)),
             SizedBox(height: 32),
             CircularProgressIndicator(color: Colors.white),

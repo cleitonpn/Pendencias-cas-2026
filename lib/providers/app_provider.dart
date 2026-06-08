@@ -1,35 +1,61 @@
 import 'package:flutter/material.dart';
 import '../models/client.dart';
+import '../models/fair.dart';
 import '../models/pending_item.dart';
 import '../services/sheets_service.dart';
 import '../services/database_service.dart';
 
 class AppProvider extends ChangeNotifier {
+  List<Fair> _fairs = [];
+  Fair? _currentFair;
   List<Client> _clients = [];
   List<String> _hangars = [];
   bool _isLoading = false;
   String? _error;
   DateTime? _lastSync;
 
+  List<Fair> get fairs => _fairs;
+  Fair? get currentFair => _currentFair;
+  String get currentFairName => _currentFair?.name ?? 'Pendências';
   List<Client> get clients => _clients;
   List<String> get hangars => _hangars;
   bool get isLoading => _isLoading;
   String? get error => _error;
   DateTime? get lastSync => _lastSync;
 
+  Future<void> init() async {
+    _fairs = await DatabaseService.getFairs();
+    notifyListeners();
+  }
+
+  Future<void> selectFair(Fair fair) async {
+    _currentFair = fair;
+    _lastSync = null;
+    _error = null;
+    _setLoading(true);
+    await _loadLocal();
+    _setLoading(false);
+  }
+
   Future<void> loadFromLocal() async {
+    if (_currentFair == null) return;
     _setLoading(true);
     await _loadLocal();
     _setLoading(false);
   }
 
   Future<void> syncFromSheets() async {
+    if (_currentFair == null) return;
     _error = null;
     _setLoading(true);
     try {
-      final sheetClients = await SheetsService.fetchClients();
+      final sheetClients = await SheetsService.fetchClients(
+        spreadsheetId: _currentFair!.spreadsheetId,
+        sheetName: _currentFair!.sheetName,
+        fairId: _currentFair!.id!,
+      );
 
-      // Preserva status de conclusão local
+      // Preserve local completion status
       final localMap = {for (final c in _clients) c.rowId: c};
       for (final c in sheetClients) {
         final local = localMap[c.rowId];
@@ -50,8 +76,9 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<void> _loadLocal() async {
-    _clients = await DatabaseService.getClients();
-    _hangars = await DatabaseService.getHangars();
+    if (_currentFair == null) return;
+    _clients = await DatabaseService.getClients(fairId: _currentFair!.id!);
+    _hangars = await DatabaseService.getHangars(fairId: _currentFair!.id!);
     notifyListeners();
   }
 
@@ -91,6 +118,36 @@ class AppProvider extends ChangeNotifier {
 
   Future<void> resolveItem(int id) async {
     await DatabaseService.resolvePendingItem(id);
+    notifyListeners();
+  }
+
+  Future<Fair> addFair(
+      String name, String spreadsheetId, String sheetName) async {
+    final fair = Fair(
+      name: name,
+      spreadsheetId: spreadsheetId,
+      sheetName: sheetName,
+      createdAt: DateTime.now(),
+    );
+    final id = await DatabaseService.insertFair(fair);
+    _fairs = await DatabaseService.getFairs();
+    notifyListeners();
+    return Fair(
+        id: id,
+        name: fair.name,
+        spreadsheetId: fair.spreadsheetId,
+        sheetName: fair.sheetName,
+        createdAt: fair.createdAt);
+  }
+
+  Future<void> deleteFair(int id) async {
+    await DatabaseService.deleteFair(id);
+    if (_currentFair?.id == id) {
+      _currentFair = null;
+      _clients = [];
+      _hangars = [];
+    }
+    _fairs = await DatabaseService.getFairs();
     notifyListeners();
   }
 }

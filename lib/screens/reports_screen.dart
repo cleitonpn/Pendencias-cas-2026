@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../models/pending_item.dart';
+import '../providers/app_provider.dart';
 import '../services/database_service.dart';
 import '../services/pdf_service.dart';
 
@@ -13,15 +15,19 @@ class ReportsScreen extends StatefulWidget {
 class _ReportsScreenState extends State<ReportsScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tab;
+  late int _fairId;
   List<PendingItem> _open = [];
   List<PendingItem> _resolved = [];
   Map<String, int> _stats = {};
+  List<Map<String, dynamic>> _teamRankings = [];
+  List<Map<String, dynamic>> _producerRankings = [];
   bool _loading = true;
 
   @override
   void initState() {
     super.initState();
-    _tab = TabController(length: 3, vsync: this);
+    _fairId = context.read<AppProvider>().currentFair?.id ?? 1;
+    _tab = TabController(length: 5, vsync: this);
     _load();
   }
 
@@ -33,9 +39,15 @@ class _ReportsScreenState extends State<ReportsScreen>
 
   Future<void> _load() async {
     setState(() => _loading = true);
-    _open = await DatabaseService.getAllPendingItems(resolved: false);
-    _resolved = await DatabaseService.getAllPendingItems(resolved: true);
-    _stats = await DatabaseService.getStats();
+    _open = await DatabaseService.getAllPendingItems(
+        resolved: false, fairId: _fairId);
+    _resolved = await DatabaseService.getAllPendingItems(
+        resolved: true, fairId: _fairId);
+    _stats = await DatabaseService.getStats(fairId: _fairId);
+    _teamRankings =
+        await DatabaseService.getTeamRankings(fairId: _fairId);
+    _producerRankings =
+        await DatabaseService.getProducerRankings(fairId: _fairId);
     setState(() => _loading = false);
   }
 
@@ -59,10 +71,13 @@ class _ReportsScreenState extends State<ReportsScreen>
           labelColor: Colors.white,
           unselectedLabelColor: Colors.white54,
           indicatorColor: Colors.orange,
+          isScrollable: true,
           tabs: [
             Tab(text: 'Abertas (${_open.length})'),
             Tab(text: 'Resolvidas (${_resolved.length})'),
             const Tab(text: 'Resumo'),
+            const Tab(text: 'Por Equipe'),
+            const Tab(text: 'Por Produtor'),
           ],
         ),
       ),
@@ -96,6 +111,18 @@ class _ReportsScreenState extends State<ReportsScreen>
                   resolved: _resolved,
                   onExport: () => PdfService.generateAndShow(context,
                       () => PdfService.generateSummaryReport(_stats, _resolved)),
+                ),
+                _RankingTab(
+                  data: _teamRankings,
+                  nameKey: 'team',
+                  emptyMsg: 'Nenhuma pendência registrada.',
+                  title: 'RANKING POR EQUIPE',
+                ),
+                _RankingTab(
+                  data: _producerRankings,
+                  nameKey: 'producer',
+                  emptyMsg: 'Nenhuma pendência com produtor registrado.',
+                  title: 'RANKING POR PRODUTOR',
                 ),
               ],
             ),
@@ -172,7 +199,10 @@ class _GroupedList extends StatelessWidget {
   Widget build(BuildContext context) {
     final grouped = <String, List<PendingItem>>{};
     for (final item in items) {
-      grouped.putIfAbsent('Hangar ${item.hangar}', () => []).add(item);
+      final key = item.hangar.isNotEmpty
+          ? 'Hangar ${item.hangar}'
+          : 'Sem Hangar';
+      grouped.putIfAbsent(key, () => []).add(item);
     }
     final keys = grouped.keys.toList()..sort();
 
@@ -247,8 +277,8 @@ class _ItemCard extends StatelessWidget {
                 style: const TextStyle(fontSize: 13)),
             const SizedBox(height: 4),
             Text(_fmt(item.createdAt),
-                style: const TextStyle(
-                    color: Colors.grey, fontSize: 11)),
+                style:
+                    const TextStyle(color: Colors.grey, fontSize: 11)),
             if (item.resolvedAt != null)
               Text(
                 'Resolvido: ${_fmt(item.resolvedAt!)} '
@@ -411,4 +441,135 @@ class _SummaryTab extends StatelessWidget {
     if (d.inHours > 0) return '${d.inHours}h ${d.inMinutes % 60}min';
     return '${d.inMinutes}min';
   }
+}
+
+class _RankingTab extends StatelessWidget {
+  final List<Map<String, dynamic>> data;
+  final String nameKey;
+  final String emptyMsg;
+  final String title;
+
+  const _RankingTab({
+    required this.data,
+    required this.nameKey,
+    required this.emptyMsg,
+    required this.title,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (data.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.bar_chart, size: 64, color: Colors.grey),
+            const SizedBox(height: 12),
+            Text(emptyMsg,
+                style: const TextStyle(color: Colors.grey, fontSize: 16),
+                textAlign: TextAlign.center),
+          ],
+        ),
+      );
+    }
+
+    final maxTotal = data.first['total'] as int;
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(12),
+      itemCount: data.length + 1,
+      itemBuilder: (context, i) {
+        if (i == 0) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Text(title,
+                style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey,
+                    letterSpacing: 1)),
+          );
+        }
+        final item = data[i - 1];
+        final name = item[nameKey] as String;
+        final total = (item['total'] as num?)?.toInt() ?? 0;
+        final open = (item['open'] as num?)?.toInt() ?? 0;
+        final resolved = (item['resolved'] as num?)?.toInt() ?? 0;
+        final progress = maxTotal > 0 ? total / maxTotal : 0.0;
+
+        return Card(
+          margin: const EdgeInsets.only(bottom: 8),
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10)),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(children: [
+                  Container(
+                    width: 28,
+                    height: 28,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1E3A5F).withOpacity(0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Center(
+                      child: Text('$i',
+                          style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                              color: Color(0xFF1E3A5F))),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                      child: Text(name,
+                          style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15))),
+                  Text('$total',
+                      style: const TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF1E3A5F))),
+                ]),
+                const SizedBox(height: 8),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: LinearProgressIndicator(
+                    value: progress,
+                    minHeight: 6,
+                    backgroundColor: Colors.grey.shade200,
+                    valueColor: const AlwaysStoppedAnimation(
+                        Color(0xFF1E3A5F)),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(children: [
+                  _chip('$open abertas', Colors.orange),
+                  const SizedBox(width: 8),
+                  _chip('$resolved resolvidas', Colors.green),
+                ]),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _chip(String text, Color color) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withOpacity(0.3)),
+        ),
+        child: Text(text,
+            style: TextStyle(
+                fontSize: 11,
+                color: color,
+                fontWeight: FontWeight.w600)),
+      );
 }

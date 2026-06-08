@@ -1,10 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 import '../models/pending_item.dart';
+import '../providers/app_provider.dart';
 import '../services/database_service.dart';
 
 class ProducerPendingScreen extends StatefulWidget {
-  const ProducerPendingScreen({super.key});
+  final String? lockedProducer;
+  final bool canResolve;
+
+  const ProducerPendingScreen({
+    super.key,
+    this.lockedProducer,
+    this.canResolve = false,
+  });
 
   @override
   State<ProducerPendingScreen> createState() => _ProducerPendingScreenState();
@@ -15,16 +24,21 @@ class _ProducerPendingScreenState extends State<ProducerPendingScreen> {
   String? _selected;
   List<PendingItem> _items = [];
   bool _loading = false;
+  late int _fairId;
 
   @override
   void initState() {
     super.initState();
+    _fairId = context.read<AppProvider>().currentFair?.id ?? 1;
     _loadProducers();
+    if (widget.lockedProducer != null) {
+      _selectProducer(widget.lockedProducer!);
+    }
   }
 
   Future<void> _loadProducers() async {
-    final producers = await DatabaseService.getProducers();
-    setState(() => _producers = producers);
+    final producers = await DatabaseService.getProducers(fairId: _fairId);
+    if (mounted) setState(() => _producers = producers);
   }
 
   Future<void> _selectProducer(String produtor) async {
@@ -32,19 +46,27 @@ class _ProducerPendingScreenState extends State<ProducerPendingScreen> {
       _selected = produtor;
       _loading = true;
     });
-    final items = await DatabaseService.getPendingItemsByProdutor(produtor);
-    setState(() {
-      _items = items;
-      _loading = false;
-    });
+    final items =
+        await DatabaseService.getPendingItemsByProdutor(produtor, fairId: _fairId);
+    if (mounted) {
+      setState(() {
+        _items = items;
+        _loading = false;
+      });
+    }
   }
 
-  // Agrupa: hangar → cliente → lista de pendências
+  Future<void> _resolveItem(PendingItem item) async {
+    await DatabaseService.resolvePendingItem(item.id!);
+    if (_selected != null) await _selectProducer(_selected!);
+  }
+
   Map<String, Map<String, List<PendingItem>>> get _grouped {
     final result = <String, Map<String, List<PendingItem>>>{};
     for (final item in _items) {
-      final h = 'Hangar ${item.hangar}';
-      final c = '${item.local}${item.clientName.isNotEmpty ? " — ${item.clientName}" : ""}';
+      final h = item.hangar.isNotEmpty ? 'Hangar ${item.hangar}' : 'Sem Hangar';
+      final c =
+          '${item.local}${item.clientName.isNotEmpty ? " — ${item.clientName}" : ""}';
       result.putIfAbsent(h, () => {})[c] ??= [];
       result[h]![c]!.add(item);
     }
@@ -52,13 +74,14 @@ class _ProducerPendingScreenState extends State<ProducerPendingScreen> {
   }
 
   String _buildWhatsAppText() {
+    final fairName = context.read<AppProvider>().currentFairName;
     final now = DateTime.now();
     final date =
         '${now.day.toString().padLeft(2, '0')}/${now.month.toString().padLeft(2, '0')}/${now.year}';
 
     final sb = StringBuffer();
     sb.writeln('*PENDÊNCIAS — $_selected*');
-    sb.writeln('CAS 2026 | $date');
+    sb.writeln('$fairName | $date');
 
     final grouped = _grouped;
     final hangars = grouped.keys.toList()..sort();
@@ -94,13 +117,20 @@ class _ProducerPendingScreenState extends State<ProducerPendingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isLocked = widget.lockedProducer != null;
+
     return Scaffold(
       backgroundColor: const Color(0xFFF0F2F5),
       appBar: AppBar(
         backgroundColor: const Color(0xFF1E3A5F),
-        title: const Text('Pendências por Produtor',
-            style: TextStyle(
-                color: Colors.white, fontWeight: FontWeight.bold, fontSize: 17)),
+        title: Text(
+            isLocked
+                ? widget.lockedProducer!
+                : 'Pendências por Produtor',
+            style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 17)),
         actions: [
           if (_selected != null && _items.isNotEmpty)
             IconButton(
@@ -112,63 +142,65 @@ class _ProducerPendingScreenState extends State<ProducerPendingScreen> {
       ),
       body: Column(
         children: [
-          // Seletor de produtor
-          Container(
-            color: Colors.white,
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('SELECIONE O PRODUTOR',
-                    style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.grey,
-                        letterSpacing: 1)),
-                const SizedBox(height: 10),
-                _producers.isEmpty
-                    ? const Text('Nenhum produtor encontrado.\nSincronize a planilha primeiro.',
-                        style: TextStyle(color: Colors.grey))
-                    : Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: _producers.map((p) {
-                          final sel = _selected == p;
-                          return GestureDetector(
-                            onTap: () => _selectProducer(p),
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 150),
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 16, vertical: 10),
-                              decoration: BoxDecoration(
-                                color: sel
-                                    ? const Color(0xFF1E3A5F)
-                                    : Colors.grey.shade100,
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(
+          // Producer selector — hidden when locked
+          if (!isLocked)
+            Container(
+              color: Colors.white,
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('SELECIONE O PRODUTOR',
+                      style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.grey,
+                          letterSpacing: 1)),
+                  const SizedBox(height: 10),
+                  _producers.isEmpty
+                      ? const Text(
+                          'Nenhum produtor encontrado.\nSincronize a planilha primeiro.',
+                          style: TextStyle(color: Colors.grey))
+                      : Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: _producers.map((p) {
+                            final sel = _selected == p;
+                            return GestureDetector(
+                              onTap: () => _selectProducer(p),
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 150),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 16, vertical: 10),
+                                decoration: BoxDecoration(
                                   color: sel
                                       ? const Color(0xFF1E3A5F)
-                                      : Colors.grey.shade300,
+                                      : Colors.grey.shade100,
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                    color: sel
+                                        ? const Color(0xFF1E3A5F)
+                                        : Colors.grey.shade300,
+                                  ),
+                                ),
+                                child: Text(
+                                  p,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    color: sel
+                                        ? Colors.white
+                                        : Colors.black87,
+                                    fontSize: 14,
+                                  ),
                                 ),
                               ),
-                              child: Text(
-                                p,
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  color:
-                                      sel ? Colors.white : Colors.black87,
-                                  fontSize: 14,
-                                ),
-                              ),
-                            ),
-                          );
-                        }).toList(),
-                      ),
-              ],
+                            );
+                          }).toList(),
+                        ),
+                ],
+              ),
             ),
-          ),
 
-          // Conteúdo
           Expanded(
             child: _selected == null
                 ? const Center(
@@ -179,7 +211,8 @@ class _ProducerPendingScreenState extends State<ProducerPendingScreen> {
                             size: 64, color: Colors.grey),
                         SizedBox(height: 12),
                         Text('Selecione um produtor acima',
-                            style: TextStyle(color: Colors.grey, fontSize: 16)),
+                            style:
+                                TextStyle(color: Colors.grey, fontSize: 16)),
                       ],
                     ),
                   )
@@ -206,13 +239,13 @@ class _ProducerPendingScreenState extends State<ProducerPendingScreen> {
                             grouped: _grouped,
                             totalItems: _items.length,
                             produtor: _selected!,
+                            canResolve: widget.canResolve,
                             onCopy: _copyWhatsApp,
+                            onResolve: _resolveItem,
                           ),
           ),
         ],
       ),
-
-      // Botão flutuante de copiar
       floatingActionButton:
           (_selected != null && _items.isNotEmpty && !_loading)
               ? FloatingActionButton.extended(
@@ -221,7 +254,8 @@ class _ProducerPendingScreenState extends State<ProducerPendingScreen> {
                   icon: const Icon(Icons.copy, color: Colors.white),
                   label: const Text('Copiar para WhatsApp',
                       style: TextStyle(
-                          color: Colors.white, fontWeight: FontWeight.bold)),
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold)),
                 )
               : null,
     );
@@ -232,13 +266,17 @@ class _PendingList extends StatelessWidget {
   final Map<String, Map<String, List<PendingItem>>> grouped;
   final int totalItems;
   final String produtor;
+  final bool canResolve;
   final VoidCallback onCopy;
+  final Future<void> Function(PendingItem) onResolve;
 
   const _PendingList({
     required this.grouped,
     required this.totalItems,
     required this.produtor,
+    required this.canResolve,
     required this.onCopy,
+    required this.onResolve,
   });
 
   @override
@@ -247,13 +285,14 @@ class _PendingList extends StatelessWidget {
 
     return Column(
       children: [
-        // Barra de resumo
         Container(
           color: Colors.orange.shade50,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          padding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           child: Row(
             children: [
-              const Icon(Icons.warning_amber, color: Colors.orange, size: 18),
+              const Icon(Icons.warning_amber,
+                  color: Colors.orange, size: 18),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -265,7 +304,6 @@ class _PendingList extends StatelessWidget {
             ],
           ),
         ),
-
         Expanded(
           child: ListView.builder(
             padding: const EdgeInsets.all(12),
@@ -278,7 +316,6 @@ class _PendingList extends StatelessWidget {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Cabeçalho do hangar
                   Container(
                     margin: const EdgeInsets.only(top: 8, bottom: 6),
                     padding: const EdgeInsets.symmetric(
@@ -298,12 +335,11 @@ class _PendingList extends StatelessWidget {
                               fontSize: 14)),
                     ]),
                   ),
-
-                  // Cards de cliente
                   ...clientKeys.map((clientKey) {
                     final items = clients[clientKey]!;
                     return Card(
-                      margin: const EdgeInsets.only(bottom: 8, left: 4),
+                      margin:
+                          const EdgeInsets.only(bottom: 8, left: 4),
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10)),
                       child: Padding(
@@ -318,37 +354,71 @@ class _PendingList extends StatelessWidget {
                             const Divider(height: 12),
                             ...items.map((item) => Padding(
                                   padding:
-                                      const EdgeInsets.only(bottom: 6),
-                                  child: Row(
+                                      const EdgeInsets.only(bottom: 8),
+                                  child: Column(
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
                                     children: [
-                                      _TeamDot(team: item.team),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              item.team +
-                                                  (item.responsible
-                                                          .isNotEmpty
-                                                      ? ' · ${item.responsible}'
-                                                      : ''),
-                                              style: TextStyle(
-                                                  fontWeight:
-                                                      FontWeight.w600,
-                                                  fontSize: 12,
-                                                  color: Colors
-                                                      .grey.shade700),
+                                      Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          _TeamDot(team: item.team),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment
+                                                      .start,
+                                              children: [
+                                                Text(
+                                                  item.team +
+                                                      (item.responsible
+                                                              .isNotEmpty
+                                                          ? ' · ${item.responsible}'
+                                                          : ''),
+                                                  style: TextStyle(
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                      fontSize: 12,
+                                                      color: Colors
+                                                          .grey.shade700),
+                                                ),
+                                                Text(item.description,
+                                                    style: const TextStyle(
+                                                        fontSize: 13)),
+                                              ],
                                             ),
-                                            Text(item.description,
-                                                style: const TextStyle(
-                                                    fontSize: 13)),
-                                          ],
-                                        ),
+                                          ),
+                                        ],
                                       ),
+                                      if (canResolve) ...[
+                                        const SizedBox(height: 6),
+                                        Align(
+                                          alignment: Alignment.centerRight,
+                                          child: ElevatedButton.icon(
+                                            onPressed: () =>
+                                                onResolve(item),
+                                            icon: const Icon(Icons.check,
+                                                size: 14),
+                                            label: const Text('Resolver',
+                                                style: TextStyle(
+                                                    fontSize: 12)),
+                                            style:
+                                                ElevatedButton.styleFrom(
+                                              backgroundColor:
+                                                  Colors.green,
+                                              foregroundColor:
+                                                  Colors.white,
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                      horizontal: 12,
+                                                      vertical: 6),
+                                              minimumSize: Size.zero,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     ],
                                   ),
                                 )),
