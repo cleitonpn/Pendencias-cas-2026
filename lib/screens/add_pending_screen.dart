@@ -163,7 +163,7 @@ class _AddPendingScreenState extends State<AddPendingScreen> {
                 title: Text(c.displayName,
                     style: const TextStyle(fontWeight: FontWeight.bold)),
                 subtitle: Text(
-                    'Hangar ${c.hangar}  •  Stand ${c.local}'
+                    '${c.hangar.isNotEmpty ? "Hangar ${c.hangar}  •  " : ""}Stand ${c.local}'
                     '${c.area.isNotEmpty ? "  •  ${c.area} m²" : ""}',
                     style: TextStyle(
                         color: Colors.grey.shade600, fontSize: 12)),

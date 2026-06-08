@@ -88,9 +88,10 @@ class AppProvider extends ChangeNotifier {
   }
 
   List<Client> getClientsByHangar(String hangar) {
-    final list = hangar == 'Externos'
-        ? _clients.where((c) => c.hangar.isEmpty).toList()
-        : _clients.where((c) => c.hangar == hangar).toList();
+    final list =
+        (hangar == 'Externos' || hangar == 'Todos os Stands')
+            ? _clients.where((c) => c.hangar.isEmpty).toList()
+            : _clients.where((c) => c.hangar == hangar).toList();
     return list..sort((a, b) => a.local.compareTo(b.local));
   }
 

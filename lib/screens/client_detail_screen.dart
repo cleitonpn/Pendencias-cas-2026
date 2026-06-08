@@ -114,7 +114,8 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
                           fontWeight: FontWeight.bold)),
                   const SizedBox(height: 8),
                   Wrap(spacing: 8, runSpacing: 4, children: [
-                    _chip(Icons.warehouse, 'Hangar ${c.hangar}'),
+                    if (c.hangar.isNotEmpty)
+                      _chip(Icons.warehouse, 'Hangar ${c.hangar}'),
                     if (c.local.isNotEmpty) _chip(Icons.grid_on, c.local),
                     if (c.area.isNotEmpty) _chip(Icons.square_foot, '${c.area} m²'),
                     if (c.montagem.isNotEmpty)

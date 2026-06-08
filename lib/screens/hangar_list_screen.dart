@@ -250,7 +250,11 @@ class _HangarCard extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Hangar $hangar',
+                        Text(
+                            (hangar == 'Externos' ||
+                                    hangar == 'Todos os Stands')
+                                ? hangar
+                                : 'Hangar $hangar',
                             style: const TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.bold)),

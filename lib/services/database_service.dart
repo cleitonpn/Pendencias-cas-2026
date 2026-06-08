@@ -229,7 +229,10 @@ class DatabaseService {
             "SELECT COUNT(*) FROM clients WHERE hangar = '' AND fair_id = ?",
             [fairId])) ??
         0;
-    if (orphans > 0) hangars.add('Externos');
+    if (orphans > 0) {
+      // If no named hangars exist (e.g. Forum/PetVet), use a single bucket
+      hangars.add(hangars.isEmpty ? 'Todos os Stands' : 'Externos');
+    }
     return hangars;
   }
 

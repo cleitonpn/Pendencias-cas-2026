@@ -3,7 +3,8 @@ import 'package:http/http.dart' as http;
 import '../models/client.dart';
 
 class SheetsService {
-  static String _gvizUrl(String spreadsheetId, String sheetName, String range) =>
+  static String _gvizUrl(
+          String spreadsheetId, String sheetName, String range) =>
       'https://docs.google.com/spreadsheets/d/$spreadsheetId/gviz/tq'
       '?tqx=out:json&headers=0&sheet=${Uri.encodeComponent(sheetName)}&range=${Uri.encodeComponent(range)}';
 
@@ -48,46 +49,96 @@ class SheetsService {
         final v = (cell as Map)['v'];
         if (v == null) return '';
         if (v is double) {
-          return v == v.truncateToDouble() ? v.toInt().toString() : v.toString();
+          return v == v.truncateToDouble()
+              ? v.toInt().toString()
+              : v.toString();
         }
         return v.toString().trim();
       }).toList();
     }).toList();
   }
 
+  /// Reads a wide range (B:T) and auto-detects column positions from the header
+  /// row, so it works for CAS 2026, Forum, PetVet and any future fair layout.
   static Future<List<Client>> fetchClients({
     required String spreadsheetId,
     required String sheetName,
     required int fairId,
   }) async {
-    // Fetch B:I (client info) and P:T (team responsibles) in parallel
-    final results = await Future.wait([
-      _fetchRange(spreadsheetId, sheetName, 'B:I'),
-      _fetchRange(spreadsheetId, sheetName, 'P:T'),
-    ]);
+    final rows = await _fetchRange(spreadsheetId, sheetName, 'B:T');
+    if (rows.isEmpty) {
+      throw Exception(
+          'Planilha vazia ou aba "$sheetName" não encontrada.\n'
+          'Verifique o nome da aba e as permissões de compartilhamento.');
+    }
 
-    final bToIRows = results[0];
-    final oToTRows = results[1];
+    // Row 0 is the header — detect column positions by name (case-insensitive)
+    final header =
+        rows[0].map((v) => v.toString().toLowerCase().trim()).toList();
+
+    int findCol(List<String> variants) {
+      for (final v in variants) {
+        final idx = header.indexOf(v);
+        if (idx >= 0) return idx;
+      }
+      return -1;
+    }
+
+    final nomeIdx     = findCol(['nome']);
+    final montagemIdx = findCol(['montagem']);
+    final localIdx    = findCol(['local']);
+    final hangarIdx   = findCol(['hangar']);
+    final areaIdx     = findCol(['m²', 'm2', 'área', 'area']);
+    final produtorIdx = findCol(['produtor']);
+    final marceIdx    = findCol(['marceneiro']);
+    final tapecIdx    = findCol(['tapeceiro']);
+    final eletrIdx    = findCol(['eletricista']);
+    final faxiIdx     = findCol(['faxineira']);
+
+    if (nomeIdx < 0) {
+      throw Exception(
+          'Coluna "nome" não encontrada na aba "$sheetName".\n'
+          'Verifique se o nome da aba está correto e se a planilha tem cabeçalho.');
+    }
 
     final clients = <Client>[];
 
-    // Row 0 is the header — start at 1
-    for (int i = 1; i < bToIRows.length; i++) {
-      final rawRow = bToIRows[i];
-      final oToT = i < oToTRows.length ? oToTRows[i] : <dynamic>[];
+    for (int i = 1; i < rows.length; i++) {
+      final row = rows[i];
 
-      final nome = rawRow.isNotEmpty ? rawRow[0].toString().trim() : '';
+      String s(int idx) {
+        if (idx < 0 || idx >= row.length) return '';
+        return row[idx]?.toString().trim() ?? '';
+      }
+
+      final nome = s(nomeIdx);
       if (nome.isEmpty) continue;
 
       // Normalize EXT hangars: "EXT 1" → "1", "EXT 3" → "3"
-      final bToI = List<dynamic>.from(rawRow);
-      if (bToI.length > 3) {
-        final h = bToI[3].toString().trim();
-        final extMatch = RegExp(r'^(?:EXT|Ext)\.?\s+(\S+)$').firstMatch(h);
-        if (extMatch != null) bToI[3] = extMatch.group(1)!;
+      String hangar = s(hangarIdx);
+      if (hangar.isNotEmpty) {
+        final m = RegExp(r'^(?:EXT|Ext)\.?\s+(\S+)$').firstMatch(hangar);
+        if (m != null) hangar = m.group(1)!;
       }
 
-      clients.add(Client.fromSheetRow(bToI, oToT, i, fairId: fairId));
+      clients.add(Client(
+        fairId: fairId,
+        rowId: '${fairId}_$i',
+        nome: nome,
+        montagem: s(montagemIdx),
+        local: s(localIdx),
+        hangar: hangar,
+        area: s(areaIdx),
+        deck: '',
+        totalArea: '',
+        mezanino: '',
+        produtor: s(produtorIdx),
+        marceneiro: s(marceIdx),
+        tapeceiro: s(tapecIdx),
+        eletricista: s(eletrIdx),
+        faxineira: s(faxiIdx),
+        teto50: '',
+      ));
     }
 
     return clients;
