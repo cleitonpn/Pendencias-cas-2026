@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_provider.dart';
+import '../services/session_service.dart';
+import 'login_screen.dart';
 import 'producer_hangar_list_screen.dart';
 
 class ProducerHomeScreen extends StatelessWidget {
@@ -20,6 +22,20 @@ class ProducerHomeScreen extends StatelessWidget {
                 color: Colors.white,
                 fontWeight: FontWeight.bold,
                 fontSize: 17)),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout, color: Colors.white),
+            tooltip: 'Sair',
+            onPressed: () async {
+              await SessionService.clear();
+              if (context.mounted) {
+                Navigator.of(context).pushAndRemoveUntil(
+                    MaterialPageRoute(builder: (_) => const LoginScreen()),
+                    (route) => false);
+              }
+            },
+          ),
+        ],
       ),
       body: fairs.isEmpty
           ? const _EmptyState()

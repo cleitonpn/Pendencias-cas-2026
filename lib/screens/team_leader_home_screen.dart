@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_provider.dart';
+import '../services/session_service.dart';
+import 'login_screen.dart';
 import 'team_leader_hangar_list_screen.dart';
 
 class TeamLeaderHomeScreen extends StatelessWidget {
@@ -29,6 +31,20 @@ class TeamLeaderHomeScreen extends StatelessWidget {
                 style: const TextStyle(color: Colors.white70, fontSize: 12)),
           ],
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout, color: Colors.white),
+            tooltip: 'Sair',
+            onPressed: () async {
+              await SessionService.clear();
+              if (context.mounted) {
+                Navigator.of(context).pushAndRemoveUntil(
+                    MaterialPageRoute(builder: (_) => const LoginScreen()),
+                    (route) => false);
+              }
+            },
+          ),
+        ],
       ),
       body: fairs.isEmpty
           ? const _EmptyState()

@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_provider.dart';
 import '../models/fair.dart';
+import '../services/session_service.dart';
 import '../utils/admin_pin.dart';
 import 'hangar_list_screen.dart';
 import 'add_fair_screen.dart';
+import 'login_screen.dart';
 import 'producer_login_screen.dart';
 import 'sticker_generator_screen.dart';
 
@@ -30,6 +32,18 @@ class FairSelectionScreen extends StatelessWidget {
             onPressed: () => Navigator.push(context,
                 MaterialPageRoute(
                     builder: (_) => const ProducerLoginScreen())),
+          ),
+          IconButton(
+            icon: const Icon(Icons.logout, color: Colors.white),
+            tooltip: 'Sair',
+            onPressed: () async {
+              await SessionService.clear();
+              if (context.mounted) {
+                Navigator.of(context).pushAndRemoveUntil(
+                    MaterialPageRoute(builder: (_) => const LoginScreen()),
+                    (route) => false);
+              }
+            },
           ),
         ],
       ),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/firestore_service.dart';
 import '../services/notification_service.dart';
+import '../services/session_service.dart';
 import '../utils/admin_pin.dart';
 import 'fair_selection_screen.dart';
 import 'producer_home_screen.dart';
@@ -119,6 +120,7 @@ class _LoginScreenState extends State<LoginScreen> {
     }
     if (!mounted) return;
     await NotificationService.subscribeAdmin();
+    await SessionService.save(role: 'admin');
     if (!mounted) return;
     Navigator.pushReplacement(context,
         MaterialPageRoute(builder: (_) => const FairSelectionScreen()));
@@ -146,6 +148,7 @@ class _LoginScreenState extends State<LoginScreen> {
     }
     if (!mounted) return;
     await NotificationService.subscribeProducer(_selectedProducer!);
+    await SessionService.save(role: 'producer', name: _selectedProducer!);
     if (!mounted) return;
     Navigator.pushReplacement(context,
         MaterialPageRoute(
@@ -172,6 +175,8 @@ class _LoginScreenState extends State<LoginScreen> {
       _pinCtrl.clear();
       return;
     }
+    if (!mounted) return;
+    await SessionService.save(role: 'consultant', name: _selectedConsultant!);
     if (!mounted) return;
     Navigator.pushReplacement(context,
         MaterialPageRoute(
@@ -204,6 +209,9 @@ class _LoginScreenState extends State<LoginScreen> {
     if ((team ?? '').isNotEmpty) {
       await NotificationService.subscribeTeam(team!);
     }
+    if (!mounted) return;
+    await SessionService.save(
+        role: 'leader', name: _selectedLeader!, team: team ?? '');
     if (!mounted) return;
     Navigator.pushReplacement(context,
         MaterialPageRoute(

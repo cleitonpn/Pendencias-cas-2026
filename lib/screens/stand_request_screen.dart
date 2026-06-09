@@ -93,7 +93,7 @@ class _StandRequestScreenState extends State<StandRequestScreen> {
       }
       _setStep(_Step.pickFair);
     } catch (e) {
-      _fail('Não foi possível carregar. Verifique sua conexão e tente novamente.');
+      _fail('Não foi possível carregar. Verifique sua conexão e tente novamente.\n\nDetalhe: $e');
     }
   }
 

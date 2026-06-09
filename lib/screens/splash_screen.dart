@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_provider.dart';
+import '../services/session_service.dart';
 import 'login_screen.dart';
+import 'fair_selection_screen.dart';
+import 'producer_home_screen.dart';
+import 'consultant_home_screen.dart';
+import 'team_leader_home_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -20,26 +25,46 @@ class _SplashScreenState extends State<SplashScreen> {
   Future<void> _init() async {
     await Future.delayed(const Duration(milliseconds: 1200));
     if (!mounted) return;
+
     await context.read<AppProvider>().init();
     if (!mounted) return;
+
+    final session = await SessionService.get();
+    if (!mounted) return;
+
+    Widget destination = const LoginScreen();
+
+    if (session != null) {
+      final role = session['role']!;
+      final name = session['name']!;
+      final team = session['team']!;
+
+      if (role == 'admin') {
+        destination = const FairSelectionScreen();
+      } else if (role == 'producer' && name.isNotEmpty) {
+        destination = ProducerHomeScreen(producerName: name);
+      } else if (role == 'consultant' && name.isNotEmpty) {
+        destination = ConsultantHomeScreen(consultantName: name);
+      } else if (role == 'leader' && name.isNotEmpty) {
+        destination = TeamLeaderHomeScreen(leaderName: name, team: team);
+      }
+    }
+
     Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const LoginScreen()));
+        MaterialPageRoute(builder: (_) => destination));
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0A0F64), // navy
+      backgroundColor: const Color(0xFF0A0F64),
       body: SafeArea(
         child: Column(
           children: [
             const Spacer(flex: 3),
-
-            // USET logo mark (U circle)
             Center(
               child: Column(
                 children: [
-                  // USET logo
                   ClipRRect(
                     borderRadius: BorderRadius.circular(24),
                     child: Image.asset(
@@ -50,8 +75,6 @@ class _SplashScreenState extends State<SplashScreen> {
                     ),
                   ),
                   const SizedBox(height: 20),
-
-                  // App name
                   const Text(
                     'MONTAGEM USET',
                     style: TextStyle(
@@ -70,7 +93,6 @@ class _SplashScreenState extends State<SplashScreen> {
                       letterSpacing: 1,
                     ),
                   ),
-
                   const SizedBox(height: 40),
                   const SizedBox(
                     width: 28,
@@ -81,10 +103,7 @@ class _SplashScreenState extends State<SplashScreen> {
                 ],
               ),
             ),
-
             const Spacer(flex: 3),
-
-            // Credit line
             const Padding(
               padding: EdgeInsets.only(bottom: 24),
               child: Column(
@@ -107,4 +126,3 @@ class _SplashScreenState extends State<SplashScreen> {
     );
   }
 }
-

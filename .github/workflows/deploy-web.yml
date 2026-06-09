@@ -10,6 +10,7 @@ on:
       - 'pubspec.yaml'
       - 'assets/**'
       - 'firebase.json'
+      - 'firestore.rules'
       - '.github/workflows/deploy-web.yml'
   workflow_dispatch:
 
@@ -43,7 +44,7 @@ jobs:
         env:
           FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
 
-      - name: Deploy Hosting
-        run: npx --yes firebase-tools@latest deploy --only hosting --project montagem-uset --non-interactive
+      - name: Deploy Hosting + Firestore rules
+        run: npx --yes firebase-tools@latest deploy --only hosting,firestore:rules --project montagem-uset --non-interactive
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/sa.json
