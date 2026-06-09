@@ -8,11 +8,13 @@ import 'producer_client_detail_screen.dart';
 class TeamLeaderClientListScreen extends StatefulWidget {
   final String hangar;
   final String team;
+  final String leaderName;
 
   const TeamLeaderClientListScreen({
     super.key,
     required this.hangar,
     required this.team,
+    required this.leaderName,
   });
 
   @override
@@ -38,11 +40,29 @@ class _TeamLeaderClientListScreenState
     if (mounted) setState(() => _pendingCounts = counts);
   }
 
+  bool _matchesLeader(Client c) {
+    final name = widget.leaderName.toLowerCase().trim();
+    switch (widget.team.toLowerCase().trim()) {
+      case 'elétrica':
+      case 'eletrica':
+        return c.eletricista.toLowerCase().trim() == name;
+      case 'limpeza':
+        return c.faxineira.toLowerCase().trim() == name;
+      case 'marcenaria':
+        return c.marceneiro.toLowerCase().trim() == name;
+      case 'tapeçaria':
+      case 'tapecaria':
+        return c.tapeceiro.toLowerCase().trim() == name;
+      default:
+        return true;
+    }
+  }
+
   List<Client> get _filteredClients {
     final all = context.read<AppProvider>().clients;
     var list = all.where((c) {
       final h = c.hangar.isEmpty ? 'Todos os Stands' : c.hangar;
-      return h == widget.hangar;
+      return h == widget.hangar && _matchesLeader(c);
     }).toList()
       ..sort((a, b) => a.local.compareTo(b.local));
 

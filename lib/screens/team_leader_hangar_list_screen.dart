@@ -42,12 +42,30 @@ class _TeamLeaderHangarListScreenState
 
   List<Client> get _allClients {
     final all = context.read<AppProvider>().clients;
-    return all.toList()
+    return all.where((c) => _matchesLeader(c)).toList()
       ..sort((a, b) {
         final h = a.hangar.compareTo(b.hangar);
         if (h != 0) return h;
         return a.local.compareTo(b.local);
       });
+  }
+
+  bool _matchesLeader(Client c) {
+    final name = widget.leaderName.toLowerCase().trim();
+    switch (widget.team.toLowerCase().trim()) {
+      case 'elétrica':
+      case 'eletrica':
+        return c.eletricista.toLowerCase().trim() == name;
+      case 'limpeza':
+        return c.faxineira.toLowerCase().trim() == name;
+      case 'marcenaria':
+        return c.marceneiro.toLowerCase().trim() == name;
+      case 'tapeçaria':
+      case 'tapecaria':
+        return c.tapeceiro.toLowerCase().trim() == name;
+      default:
+        return true; // Vidraceiro / Com. Visual: sem coluna, exibe todos
+    }
   }
 
   List<String> _hangarsFor(List<Client> clients) {
@@ -201,6 +219,7 @@ class _TeamLeaderHangarListScreenState
                           builder: (_) => TeamLeaderClientListScreen(
                             hangar: hangar,
                             team: widget.team,
+                            leaderName: widget.leaderName,
                           ),
                         ),
                       );
