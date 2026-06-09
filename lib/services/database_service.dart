@@ -142,8 +142,15 @@ class DatabaseService {
     return database.insert('fairs', fair.toMap());
   }
 
+  /// Inserts a fair preserving its original ID (used when syncing from Firestore).
+  static Future<void> upsertFairById(Fair fair) async {
+    if (fair.id == null) return;
+    final database = await db;
+    await database.insert('fairs', fair.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.ignore);
+  }
+
   static Future<void> deleteFair(int id) async {
-    if (id == 1) return;
     final database = await db;
     final clients = await database.query('clients',
         columns: ['row_id'], where: 'fair_id = ?', whereArgs: [id]);

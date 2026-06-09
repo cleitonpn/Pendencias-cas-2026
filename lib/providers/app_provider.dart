@@ -25,6 +25,22 @@ class AppProvider extends ChangeNotifier {
   DateTime? get lastSync => _lastSync;
 
   Future<void> init() async {
+    // Sync fairs from Firestore so all devices share the same fair list
+    try {
+      final remote = await FirestoreService.getFairs();
+      for (final m in remote) {
+        final fair = Fair(
+          id: m['id'] as int?,
+          name: m['name'] as String,
+          spreadsheetId: m['spreadsheetId'] as String,
+          sheetName: m['sheetName'] as String,
+          createdAt: DateTime.parse(m['createdAt'] as String),
+        );
+        await DatabaseService.upsertFairById(fair);
+      }
+    } catch (_) {
+      // Firestore unavailable — continue with local fairs only
+    }
     _fairs = await DatabaseService.getFairs();
     notifyListeners();
   }
@@ -178,18 +194,28 @@ class AppProvider extends ChangeNotifier {
       createdAt: DateTime.now(),
     );
     final id = await DatabaseService.insertFair(fair);
-    _fairs = await DatabaseService.getFairs();
-    notifyListeners();
-    return Fair(
+    final newFair = Fair(
         id: id,
         name: fair.name,
         spreadsheetId: fair.spreadsheetId,
         sheetName: fair.sheetName,
         createdAt: fair.createdAt);
+    // Push to Firestore so other devices see it
+    try {
+      await FirestoreService.saveFair(
+          id, fair.name, fair.spreadsheetId, fair.sheetName,
+          fair.createdAt.toIso8601String());
+    } catch (_) {}
+    _fairs = await DatabaseService.getFairs();
+    notifyListeners();
+    return newFair;
   }
 
   Future<void> deleteFair(int id) async {
     await DatabaseService.deleteFair(id);
+    try {
+      await FirestoreService.deleteFairFromCloud(id);
+    } catch (_) {}
     if (_currentFair?.id == id) {
       _currentFair = null;
       _clients = [];

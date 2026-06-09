@@ -158,6 +158,34 @@ class FirestoreService {
     return list;
   }
 
+  // ─── Fairs ──────────────────────────────────────────────────────────────────
+
+  static Future<List<Map<String, dynamic>>> getFairs() async {
+    if (!_available) return [];
+    final snapshot = await _db.collection('fairs').get();
+    return snapshot.docs.map((d) => {'id': int.tryParse(d.id), ...d.data()}).toList();
+  }
+
+  static Future<void> saveFair(int id, String name, String spreadsheetId,
+      String sheetName, String createdAt) async {
+    if (!_available) return;
+    await _db.collection('fairs').doc(id.toString()).set({
+      'name': name,
+      'spreadsheetId': spreadsheetId,
+      'sheetName': sheetName,
+      'createdAt': createdAt,
+    });
+  }
+
+  static Future<void> deleteFairFromCloud(int id) async {
+    if (!_available) return;
+    try {
+      await _db.collection('fairs').doc(id.toString()).delete();
+    } catch (_) {}
+  }
+
+  // ────────────────────────────────────────────────────────────────────────────
+
   static Future<List<PendingItem>> getPendingItemsByTeam(
       String team) async {
     if (!_available) return [];

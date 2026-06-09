@@ -102,11 +102,10 @@ class _FairCard extends StatelessWidget {
                   ],
                 ),
               ),
-              if (fair.id != 1)
-                IconButton(
-                  icon: const Icon(Icons.delete_outline, color: Colors.red),
-                  onPressed: () => _confirmDelete(context),
-                ),
+              IconButton(
+                icon: const Icon(Icons.delete_outline, color: Colors.red),
+                onPressed: () => _confirmDelete(context),
+              ),
               const Icon(Icons.chevron_right, color: Colors.grey),
             ],
           ),
