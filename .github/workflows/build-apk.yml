@@ -83,7 +83,7 @@ jobs:
         run: flutter config --enable-windows-desktop
 
       - name: Gerar pasta windows/
-        run: flutter create --platforms=windows .
+        run: flutter create --platforms=windows --project-name=montagem_uset .
 
       - name: Instalar dependências
         run: flutter pub get
