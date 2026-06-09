@@ -135,6 +135,7 @@ class _ConsultantClientListScreenState
                           MaterialPageRoute(
                             builder: (_) => ConsultantClientDetailScreen(
                               client: clients[i],
+                              consultantName: widget.consultantName,
                             ),
                           ),
                         );

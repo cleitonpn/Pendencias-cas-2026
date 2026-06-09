@@ -10,7 +10,8 @@ import '../services/storage_service.dart';
 
 class AddPendingScreen extends StatefulWidget {
   final Client client;
-  const AddPendingScreen({super.key, required this.client});
+  final String createdBy;
+  const AddPendingScreen({super.key, required this.client, this.createdBy = ''});
 
   @override
   State<AddPendingScreen> createState() => _AddPendingScreenState();
@@ -110,6 +111,7 @@ class _AddPendingScreenState extends State<AddPendingScreen> {
       responsible: responsible,
       description: _descCtrl.text.trim(),
       photoUrls: photoUrls,
+      createdBy: widget.createdBy,
       createdAt: DateTime.now(),
     );
 

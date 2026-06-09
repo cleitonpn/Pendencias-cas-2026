@@ -77,7 +77,8 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
     final item = await Navigator.push<PendingItem>(
         context,
         MaterialPageRoute(
-            builder: (_) => AddPendingScreen(client: widget.client)));
+            builder: (_) => AddPendingScreen(
+                client: widget.client, createdBy: 'Administrador')));
     if (item != null) {
       _items.insert(0, item);
       setState(() {});
@@ -111,7 +112,8 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
     if (!await _confirm('Resolver pendência?',
         'Marcar esta pendência como resolvida? Esta ação não pode ser desfeita.',
         'Resolver')) return;
-    await context.read<AppProvider>().resolveItem(item.id!, firestoreId: item.firestoreId);
+    await context.read<AppProvider>().resolveItem(item.id!,
+        firestoreId: item.firestoreId, by: 'Administrador');
     await _load();
   }
 
@@ -119,7 +121,8 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
     if (!await _confirm('Validar pendência?',
         'Validar e concluir esta pendência? Esta ação não pode ser desfeita.',
         'Validar')) return;
-    await context.read<AppProvider>().validateItemByFirestoreId(firestoreId);
+    await context.read<AppProvider>().validateItemByFirestoreId(firestoreId,
+        by: 'Administrador');
     await _load();
   }
 
@@ -627,10 +630,9 @@ class _PendingCard extends StatelessWidget {
             ],
             const SizedBox(height: 6),
             Text(
-              _fmt(item.createdAt) +
-                  (item.resolvedAt != null
-                      ? '\nResolvido: ${_fmt(item.resolvedAt!)}'
-                      : ''),
+              'Criada em ${_fmt(item.createdAt)}'
+              '${item.createdBy.isNotEmpty ? ' • ${item.createdBy}' : ''}'
+              '${item.resolvedAt != null ? '\nResolvida em ${_fmt(item.resolvedAt!)}${item.resolvedBy.isNotEmpty ? ' • ${item.resolvedBy}' : ''}' : ''}',
               style: const TextStyle(color: Colors.grey, fontSize: 11),
             ),
             const SizedBox(height: 10),

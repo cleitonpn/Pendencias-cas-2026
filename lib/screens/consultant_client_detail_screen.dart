@@ -15,7 +15,9 @@ import 'add_pending_screen.dart';
 /// resolve, validate, or mark anything as complete.
 class ConsultantClientDetailScreen extends StatefulWidget {
   final Client client;
-  const ConsultantClientDetailScreen({super.key, required this.client});
+  final String consultantName;
+  const ConsultantClientDetailScreen(
+      {super.key, required this.client, this.consultantName = ''});
 
   @override
   State<ConsultantClientDetailScreen> createState() =>
@@ -70,7 +72,11 @@ class _ConsultantClientDetailScreenState
     final item = await Navigator.push<PendingItem>(
         context,
         MaterialPageRoute(
-            builder: (_) => AddPendingScreen(client: widget.client)));
+            builder: (_) => AddPendingScreen(
+                client: widget.client,
+                createdBy: widget.consultantName.isNotEmpty
+                    ? 'Consultor: ${widget.consultantName}'
+                    : 'Consultor')));
     if (item != null) {
       _items.insert(0, item);
       setState(() {});

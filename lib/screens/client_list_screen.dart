@@ -13,15 +13,29 @@ class ClientListScreen extends StatefulWidget {
   State<ClientListScreen> createState() => _ClientListScreenState();
 }
 
+enum _Sort { stand, nome, pendencias, status }
+
 class _ClientListScreenState extends State<ClientListScreen> {
   String _search = '';
   Map<String, int> _pendingCounts = {};
+  _Sort _sort = _Sort.stand;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadCounts());
   }
+
+  PopupMenuItem<_Sort> _sortItem(_Sort s, String label) => PopupMenuItem(
+        value: s,
+        child: Row(children: [
+          Icon(_sort == s ? Icons.radio_button_checked : Icons.radio_button_off,
+              size: 18,
+              color: _sort == s ? const Color(0xFF1E3A5F) : Colors.grey),
+          const SizedBox(width: 10),
+          Text(label),
+        ]),
+      );
 
   Future<void> _loadCounts() async {
     final clients =
@@ -46,6 +60,29 @@ class _ClientListScreenState extends State<ClientListScreen> {
           .toList();
     }
 
+    clients = List.of(clients);
+    switch (_sort) {
+      case _Sort.stand:
+        clients.sort((a, b) => a.local.compareTo(b.local));
+        break;
+      case _Sort.nome:
+        clients.sort((a, b) =>
+            a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase()));
+        break;
+      case _Sort.pendencias:
+        clients.sort((a, b) => (_pendingCounts[b.rowId] ?? 0)
+            .compareTo(_pendingCounts[a.rowId] ?? 0));
+        break;
+      case _Sort.status:
+        clients.sort((a, b) {
+          if (a.isCompleted != b.isCompleted) {
+            return a.isCompleted ? 1 : -1; // não concluídos primeiro
+          }
+          return a.local.compareTo(b.local);
+        });
+        break;
+    }
+
     final completed = clients.where((c) => c.isCompleted).length;
 
     return Scaffold(
@@ -55,6 +92,19 @@ class _ClientListScreenState extends State<ClientListScreen> {
         title: Text('Hangar ${widget.hangar}',
             style: const TextStyle(
                 color: Colors.white, fontWeight: FontWeight.bold)),
+        actions: [
+          PopupMenuButton<_Sort>(
+            icon: const Icon(Icons.sort, color: Colors.white),
+            tooltip: 'Ordenar',
+            onSelected: (s) => setState(() => _sort = s),
+            itemBuilder: (_) => [
+              _sortItem(_Sort.stand, 'Stand'),
+              _sortItem(_Sort.nome, 'Nome'),
+              _sortItem(_Sort.pendencias, 'Mais pendências'),
+              _sortItem(_Sort.status, 'Não concluídos primeiro'),
+            ],
+          ),
+        ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(52),
           child: Padding(

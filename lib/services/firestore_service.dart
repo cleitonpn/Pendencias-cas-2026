@@ -9,7 +9,10 @@ class FirestoreService {
   static Future<String> savePendingItem(
       PendingItem item, String fairName) async {
     final doc = _db.collection('pending_items').doc();
-    await doc.set({
+    // Fire-and-forget: the doc id is generated client-side, so we can return it
+    // immediately. Firestore's offline cache queues the write and retries when
+    // the connection returns — so creating a pending works offline in the field.
+    doc.set({
       'fairName': fairName,
       'clientId': item.clientId,
       'clientName': item.clientName,
@@ -21,19 +24,23 @@ class FirestoreService {
       'description': item.description,
       'photoUrls': item.photoUrls,
       'origem': item.origem,
+      'createdBy': item.createdBy,
+      'resolvedBy': '',
       'isResolved': false,
       'awaitingValidation': false,
       'createdAt': item.createdAt.toIso8601String(),
       'resolvedAt': null,
-    });
+    }).catchError((_) {});
     return doc.id;
   }
 
-  static Future<void> resolveItem(String firestoreId) async {
+  static Future<void> resolveItem(String firestoreId,
+      {String? resolvedBy}) async {
     if (firestoreId.isEmpty) return;
     await _db.collection('pending_items').doc(firestoreId).update({
       'isResolved': true,
       'resolvedAt': DateTime.now().toIso8601String(),
+      if (resolvedBy != null && resolvedBy.isNotEmpty) 'resolvedBy': resolvedBy,
     });
   }
 

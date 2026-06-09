@@ -15,7 +15,7 @@ class DatabaseService {
 
   static Future<Database> _initDb() async {
     final path = join(await getDatabasesPath(), 'cas2026.db');
-    return openDatabase(path, version: 10, onCreate: _onCreate, onUpgrade: _onUpgrade);
+    return openDatabase(path, version: 11, onCreate: _onCreate, onUpgrade: _onUpgrade);
   }
 
   static Future<void> _onCreate(Database db, int version) async {
@@ -57,6 +57,8 @@ class DatabaseService {
         team TEXT, responsible TEXT, description TEXT,
         photo_urls TEXT DEFAULT '',
         origem TEXT DEFAULT 'equipe',
+        created_by TEXT DEFAULT '',
+        resolved_by TEXT DEFAULT '',
         is_resolved INTEGER DEFAULT 0,
         awaiting_validation INTEGER DEFAULT 0,
         created_at TEXT, resolved_at TEXT,
@@ -150,6 +152,14 @@ class DatabaseService {
       } catch (_) {}
       try {
         await db.execute("ALTER TABLE pending_items ADD COLUMN origem TEXT DEFAULT 'equipe'");
+      } catch (_) {}
+    }
+    if (oldV < 11) {
+      try {
+        await db.execute("ALTER TABLE pending_items ADD COLUMN created_by TEXT DEFAULT ''");
+      } catch (_) {}
+      try {
+        await db.execute("ALTER TABLE pending_items ADD COLUMN resolved_by TEXT DEFAULT ''");
       } catch (_) {}
     }
   }
@@ -367,6 +377,7 @@ class DatabaseService {
           'is_resolved': item.isResolved ? 1 : 0,
           'awaiting_validation': item.awaitingValidation ? 1 : 0,
           'resolved_at': item.resolvedAt?.toIso8601String(),
+          'resolved_by': item.resolvedBy,
         },
         where: 'firestore_id = ?',
         whereArgs: [item.firestoreId],
@@ -411,11 +422,15 @@ class DatabaseService {
     );
   }
 
-  static Future<void> resolvePendingItem(int id) async {
+  static Future<void> resolvePendingItem(int id, {String? resolvedBy}) async {
     final database = await db;
     await database.update(
       'pending_items',
-      {'is_resolved': 1, 'resolved_at': DateTime.now().toIso8601String()},
+      {
+        'is_resolved': 1,
+        'resolved_at': DateTime.now().toIso8601String(),
+        if (resolvedBy != null && resolvedBy.isNotEmpty) 'resolved_by': resolvedBy,
+      },
       where: 'id = ?',
       whereArgs: [id],
     );
@@ -431,11 +446,16 @@ class DatabaseService {
     );
   }
 
-  static Future<void> resolvePendingItemByFirestoreId(String firestoreId) async {
+  static Future<void> resolvePendingItemByFirestoreId(String firestoreId,
+      {String? resolvedBy}) async {
     final database = await db;
     await database.update(
       'pending_items',
-      {'is_resolved': 1, 'resolved_at': DateTime.now().toIso8601String()},
+      {
+        'is_resolved': 1,
+        'resolved_at': DateTime.now().toIso8601String(),
+        if (resolvedBy != null && resolvedBy.isNotEmpty) 'resolved_by': resolvedBy,
+      },
       where: 'firestore_id = ?',
       whereArgs: [firestoreId],
     );

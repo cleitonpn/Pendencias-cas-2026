@@ -194,6 +194,7 @@ class AppProvider extends ChangeNotifier {
       description: item.description,
       photoUrls: item.photoUrls,
       origem: item.origem,
+      createdBy: item.createdBy,
       createdAt: item.createdAt,
     );
   }
@@ -205,21 +206,19 @@ class AppProvider extends ChangeNotifier {
       required List<String> photoUrls}) async {
     await DatabaseService.updatePendingContent(
         sqliteId, description, photoUrls);
+    // Fire-and-forget: queued offline by Firestore, syncs on reconnect.
     if (firestoreId != null && firestoreId.isNotEmpty) {
-      try {
-        await FirestoreService.updatePendingContent(
-            firestoreId, description, photoUrls);
-      } catch (_) {}
+      FirestoreService.updatePendingContent(firestoreId, description, photoUrls)
+          .catchError((_) {});
     }
     notifyListeners();
   }
 
-  Future<void> resolveItem(int sqliteId, {String? firestoreId}) async {
-    await DatabaseService.resolvePendingItem(sqliteId);
+  Future<void> resolveItem(int sqliteId, {String? firestoreId, String? by}) async {
+    await DatabaseService.resolvePendingItem(sqliteId, resolvedBy: by);
     if (firestoreId != null) {
-      try {
-        await FirestoreService.resolveItem(firestoreId);
-      } catch (_) {}
+      FirestoreService.resolveItem(firestoreId, resolvedBy: by)
+          .catchError((_) {});
     }
     notifyListeners();
   }
@@ -227,9 +226,7 @@ class AppProvider extends ChangeNotifier {
   Future<void> markItemAwaitingValidation(int sqliteId, {String? firestoreId}) async {
     await DatabaseService.markItemAwaitingValidation(sqliteId);
     if (firestoreId != null) {
-      try {
-        await FirestoreService.markAwaitingValidation(firestoreId);
-      } catch (_) {}
+      FirestoreService.markAwaitingValidation(firestoreId).catchError((_) {});
     }
     notifyListeners();
   }
@@ -237,18 +234,15 @@ class AppProvider extends ChangeNotifier {
   Future<void> validateItem(int sqliteId, {String? firestoreId}) async {
     await DatabaseService.resolvePendingItem(sqliteId);
     if (firestoreId != null) {
-      try {
-        await FirestoreService.resolveItem(firestoreId);
-      } catch (_) {}
+      FirestoreService.resolveItem(firestoreId).catchError((_) {});
     }
     notifyListeners();
   }
 
-  Future<void> validateItemByFirestoreId(String firestoreId) async {
-    try {
-      await FirestoreService.resolveItem(firestoreId);
-      await DatabaseService.resolvePendingItemByFirestoreId(firestoreId);
-    } catch (_) {}
+  Future<void> validateItemByFirestoreId(String firestoreId, {String? by}) async {
+    await DatabaseService.resolvePendingItemByFirestoreId(firestoreId,
+        resolvedBy: by);
+    FirestoreService.resolveItem(firestoreId, resolvedBy: by).catchError((_) {});
     notifyListeners();
   }
 

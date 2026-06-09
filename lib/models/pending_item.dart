@@ -14,6 +14,8 @@ class PendingItem {
   final String description;
   final List<String> photoUrls; // download URLs of attached photos
   final String origem;          // 'equipe' (criada pela equipe) | 'cliente' (expositor via QR)
+  final String createdBy;       // quem registrou a pendência
+  String resolvedBy;            // quem resolveu/validou
   bool isResolved;
   bool awaitingValidation;     // producer marked as done, admin needs to validate
   final DateTime createdAt;
@@ -33,6 +35,8 @@ class PendingItem {
     required this.description,
     this.photoUrls = const [],
     this.origem = 'equipe',
+    this.createdBy = '',
+    this.resolvedBy = '',
     this.isResolved = false,
     this.awaitingValidation = false,
     required this.createdAt,
@@ -52,6 +56,8 @@ class PendingItem {
         'description': description,
         'photo_urls': jsonEncode(photoUrls),
         'origem': origem,
+        'created_by': createdBy,
+        'resolved_by': resolvedBy,
         'is_resolved': isResolved ? 1 : 0,
         'awaiting_validation': awaitingValidation ? 1 : 0,
         'created_at': createdAt.toIso8601String(),
@@ -84,6 +90,8 @@ class PendingItem {
         description: map['description'] as String,
         photoUrls: _parsePhotos(map['photo_urls']),
         origem: (map['origem'] as String?) ?? 'equipe',
+        createdBy: (map['created_by'] as String?) ?? '',
+        resolvedBy: (map['resolved_by'] as String?) ?? '',
         isResolved: (map['is_resolved'] as int? ?? 0) == 1,
         awaitingValidation: (map['awaiting_validation'] as int? ?? 0) == 1,
         createdAt: DateTime.parse(map['created_at'] as String),
@@ -107,6 +115,8 @@ class PendingItem {
         description: data['description'] ?? '',
         photoUrls: _parsePhotos(data['photoUrls']),
         origem: (data['origem'] as String?) ?? 'equipe',
+        createdBy: (data['createdBy'] as String?) ?? '',
+        resolvedBy: (data['resolvedBy'] as String?) ?? '',
         isResolved: data['isResolved'] as bool? ?? false,
         awaitingValidation: data['awaitingValidation'] as bool? ?? false,
         createdAt: DateTime.tryParse(data['createdAt'] as String? ?? '') ??

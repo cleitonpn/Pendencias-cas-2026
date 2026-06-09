@@ -65,16 +65,17 @@ class _ProducerPendingScreenState extends State<ProducerPendingScreen> {
   }
 
   Future<void> _resolveItem(PendingItem item) async {
+    final by = _isProducerMode ? (_selected ?? 'Produtor') : 'Administrador';
     if (_isProducerMode) {
       // Producer mode: resolve in Firestore only
       if (item.firestoreId == null) return;
-      await FirestoreService.resolveItem(item.firestoreId!);
+      await FirestoreService.resolveItem(item.firestoreId!, resolvedBy: by);
     } else {
       // Admin mode: resolve in both SQLite and Firestore
       if (item.id != null) {
         await context
             .read<AppProvider>()
-            .resolveItem(item.id!, firestoreId: item.firestoreId);
+            .resolveItem(item.id!, firestoreId: item.firestoreId, by: by);
       }
     }
     if (_selected != null) await _selectProducer(_selected!);

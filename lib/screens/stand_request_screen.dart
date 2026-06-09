@@ -217,6 +217,7 @@ class _StandRequestScreenState extends State<StandRequestScreen> {
         description: _descCtrl.text.trim(),
         photoUrls: urls,
         origem: 'cliente',
+        createdBy: 'Expositor',
         createdAt: DateTime.now(),
       );
       await FirestoreService.savePendingItem(item, _fair!.name);
