@@ -166,11 +166,19 @@ class _ProducerClientDetailScreenState
                         child: InkWell(
                           borderRadius: BorderRadius.circular(10),
                           onTap: () async {
-                            final uri = Uri.tryParse(c.projectLink);
-                            if (uri != null && await canLaunchUrl(uri)) {
-                              await launchUrl(uri,
-                                  mode:
-                                      LaunchMode.externalApplication);
+                            String target = c.projectLink.trim();
+                            if (!target.startsWith('http://') && !target.startsWith('https://')) {
+                              target = 'https://$target';
+                            }
+                            final uri = Uri.tryParse(target);
+                            if (uri == null) return;
+                            try {
+                              await launchUrl(uri, mode: LaunchMode.externalApplication);
+                            } catch (_) {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('Não foi possível abrir o link.')));
+                              }
                             }
                           },
                           child: Padding(

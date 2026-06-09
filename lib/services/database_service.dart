@@ -259,6 +259,18 @@ class DatabaseService {
     return maps.map(PendingItem.fromMap).toList();
   }
 
+  static Future<List<PendingItem>> getPendingItemsByTeam(
+      String team, {required int fairId}) async {
+    final database = await db;
+    final maps = await database.query(
+      'pending_items',
+      where: 'team = ? AND fair_id = ? AND is_resolved = 0',
+      whereArgs: [team, fairId],
+      orderBy: 'hangar, local, created_at',
+    );
+    return maps.map(PendingItem.fromMap).toList();
+  }
+
   static Future<int> insertPendingItem(PendingItem item) async {
     final database = await db;
     final fairId = int.tryParse(item.clientId.split('_').first) ?? 1;

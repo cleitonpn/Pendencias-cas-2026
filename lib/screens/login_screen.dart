@@ -4,6 +4,7 @@ import '../services/firestore_service.dart';
 import '../utils/admin_pin.dart';
 import 'fair_selection_screen.dart';
 import 'producer_home_screen.dart';
+import 'team_leader_home_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -13,11 +14,19 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  bool _isAdmin = false;
+  String _role = 'producer'; // 'producer' | 'leader' | 'admin'
+
+  // Producer
   List<String> _producers = [];
-  String? _selected;
-  final _pinCtrl = TextEditingController();
+  String? _selectedProducer;
   bool _loadingProducers = true;
+
+  // Leader
+  List<Map<String, String>> _leaders = [];
+  String? _selectedLeader;
+  bool _loadingLeaders = true;
+
+  final _pinCtrl = TextEditingController();
   bool _verifying = false;
   String? _error;
 
@@ -25,6 +34,7 @@ class _LoginScreenState extends State<LoginScreen> {
   void initState() {
     super.initState();
     _loadProducers();
+    _loadLeaders();
   }
 
   @override
@@ -42,13 +52,34 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  Future<void> _loadLeaders() async {
+    try {
+      final list = await FirestoreService.getTeamLeadersWithPins();
+      if (mounted) setState(() { _leaders = list; _loadingLeaders = false; });
+    } catch (_) {
+      if (mounted) setState(() => _loadingLeaders = false);
+    }
+  }
+
+  void _setRole(String role) {
+    setState(() {
+      _role = role;
+      _error = null;
+      _pinCtrl.clear();
+      if (role != 'producer') _selectedProducer = null;
+      if (role != 'leader') _selectedLeader = null;
+    });
+  }
+
   Future<void> _enter() async {
     setState(() { _error = null; _verifying = true; });
     try {
-      if (_isAdmin) {
+      if (_role == 'admin') {
         await _enterAdmin();
-      } else {
+      } else if (_role == 'producer') {
         await _enterProducer();
+      } else {
+        await _enterLeader();
       }
     } finally {
       if (mounted) setState(() => _verifying = false);
@@ -72,7 +103,7 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _enterProducer() async {
-    if (_selected == null) {
+    if (_selectedProducer == null) {
       setState(() => _error = 'Selecione seu nome.');
       return;
     }
@@ -80,7 +111,7 @@ class _LoginScreenState extends State<LoginScreen> {
       setState(() => _error = 'Digite seu PIN.');
       return;
     }
-    final savedPin = await FirestoreService.getProducerPin(_selected!);
+    final savedPin = await FirestoreService.getProducerPin(_selectedProducer!);
     if (!mounted) return;
     if (savedPin == null) {
       setState(() => _error = 'PIN não configurado. Contate o administrador.');
@@ -94,7 +125,35 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!mounted) return;
     Navigator.pushReplacement(context,
         MaterialPageRoute(
-            builder: (_) => ProducerHomeScreen(producerName: _selected!)));
+            builder: (_) => ProducerHomeScreen(producerName: _selectedProducer!)));
+  }
+
+  Future<void> _enterLeader() async {
+    if (_selectedLeader == null) {
+      setState(() => _error = 'Selecione seu nome.');
+      return;
+    }
+    if (_pinCtrl.text.isEmpty) {
+      setState(() => _error = 'Digite seu PIN.');
+      return;
+    }
+    final savedPin = await FirestoreService.getTeamLeaderPin(_selectedLeader!);
+    if (!mounted) return;
+    if (savedPin == null) {
+      setState(() => _error = 'PIN não configurado. Contate o administrador.');
+      return;
+    }
+    if (_pinCtrl.text != savedPin) {
+      setState(() => _error = 'PIN incorreto.');
+      _pinCtrl.clear();
+      return;
+    }
+    final team = await FirestoreService.getTeamLeaderTeam(_selectedLeader!);
+    if (!mounted) return;
+    Navigator.pushReplacement(context,
+        MaterialPageRoute(
+            builder: (_) => TeamLeaderHomeScreen(
+                leaderName: _selectedLeader!, team: team ?? '')));
   }
 
   @override
@@ -104,7 +163,6 @@ class _LoginScreenState extends State<LoginScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // ── Logo section ────────────────────────────────────────────
             const Spacer(flex: 2),
             Center(
               child: Column(
@@ -128,8 +186,6 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             ),
             const Spacer(flex: 2),
-
-            // ── Login card ──────────────────────────────────────────────
             Container(
               margin: const EdgeInsets.fromLTRB(20, 0, 20, 24),
               padding: const EdgeInsets.all(24),
@@ -147,7 +203,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // Profile toggle
+                  // Role toggle (3 options)
                   Container(
                     decoration: BoxDecoration(
                       color: Colors.grey.shade100,
@@ -159,30 +215,26 @@ class _LoginScreenState extends State<LoginScreen> {
                         _ToggleBtn(
                             label: 'Produtor',
                             icon: Icons.badge_outlined,
-                            active: !_isAdmin,
-                            onTap: () => setState(() {
-                                  _isAdmin = false;
-                                  _error = null;
-                                  _pinCtrl.clear();
-                                })),
+                            active: _role == 'producer',
+                            onTap: () => _setRole('producer')),
                         _ToggleBtn(
-                            label: 'Administrador',
+                            label: 'Líder',
+                            icon: Icons.groups_outlined,
+                            active: _role == 'leader',
+                            onTap: () => _setRole('leader')),
+                        _ToggleBtn(
+                            label: 'Admin',
                             icon: Icons.admin_panel_settings_outlined,
-                            active: _isAdmin,
-                            onTap: () => setState(() {
-                                  _isAdmin = true;
-                                  _error = null;
-                                  _pinCtrl.clear();
-                                  _selected = null;
-                                })),
+                            active: _role == 'admin',
+                            onTap: () => _setRole('admin')),
                       ],
                     ),
                   ),
 
                   const SizedBox(height: 20),
 
-                  // Producer name selector
-                  if (!_isAdmin) ...[
+                  // Producer name pills
+                  if (_role == 'producer') ...[
                     const Text('SEU NOME',
                         style: TextStyle(
                             fontSize: 11,
@@ -195,42 +247,35 @@ class _LoginScreenState extends State<LoginScreen> {
                             child: Padding(
                               padding: EdgeInsets.all(8),
                               child: CircularProgressIndicator(strokeWidth: 2),
-                            ),
-                          )
+                            ))
                         : _producers.isEmpty
                             ? Container(
                                 padding: const EdgeInsets.all(12),
                                 decoration: BoxDecoration(
                                     color: Colors.orange.shade50,
                                     borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(
-                                        color: Colors.orange.shade200)),
+                                    border: Border.all(color: Colors.orange.shade200)),
                                 child: const Text(
                                     'Nenhum produtor cadastrado.\nContate o administrador.',
-                                    style: TextStyle(
-                                        color: Colors.orange, fontSize: 13)),
+                                    style: TextStyle(color: Colors.orange, fontSize: 13)),
                               )
                             : Wrap(
                                 spacing: 8,
                                 runSpacing: 8,
                                 children: _producers.map((p) {
-                                  final sel = _selected == p;
+                                  final sel = _selectedProducer == p;
                                   return GestureDetector(
                                     onTap: () => setState(() {
-                                      _selected = p;
+                                      _selectedProducer = p;
                                       _error = null;
                                     }),
                                     child: AnimatedContainer(
-                                      duration:
-                                          const Duration(milliseconds: 150),
+                                      duration: const Duration(milliseconds: 150),
                                       padding: const EdgeInsets.symmetric(
                                           horizontal: 14, vertical: 8),
                                       decoration: BoxDecoration(
-                                        color: sel
-                                            ? const Color(0xFF1E3A5F)
-                                            : Colors.white,
-                                        borderRadius:
-                                            BorderRadius.circular(20),
+                                        color: sel ? const Color(0xFF1E3A5F) : Colors.white,
+                                        borderRadius: BorderRadius.circular(20),
                                         border: Border.all(
                                           color: sel
                                               ? const Color(0xFF1E3A5F)
@@ -240,13 +285,62 @@ class _LoginScreenState extends State<LoginScreen> {
                                       child: Text(p,
                                           style: TextStyle(
                                               fontWeight: FontWeight.w600,
-                                              color: sel
-                                                  ? Colors.white
-                                                  : Colors.black87,
+                                              color: sel ? Colors.white : Colors.black87,
                                               fontSize: 13)),
                                     ),
                                   );
                                 }).toList(),
+                              ),
+                    const SizedBox(height: 16),
+                  ],
+
+                  // Leader dropdown
+                  if (_role == 'leader') ...[
+                    const Text('SEU NOME',
+                        style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.grey,
+                            letterSpacing: 1)),
+                    const SizedBox(height: 10),
+                    _loadingLeaders
+                        ? const Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(8),
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ))
+                        : _leaders.isEmpty
+                            ? Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                    color: Colors.orange.shade50,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: Colors.orange.shade200)),
+                                child: const Text(
+                                    'Nenhum líder cadastrado.\nContate o administrador.',
+                                    style: TextStyle(color: Colors.orange, fontSize: 13)),
+                              )
+                            : DropdownButtonFormField<String>(
+                                value: _selectedLeader,
+                                hint: const Text('Selecione seu nome'),
+                                decoration: InputDecoration(
+                                  border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(10)),
+                                  filled: true,
+                                  fillColor: Colors.grey.shade50,
+                                  contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 14, vertical: 12),
+                                ),
+                                items: _leaders.map((l) {
+                                  return DropdownMenuItem<String>(
+                                    value: l['name'],
+                                    child: Text('${l['name']} (${l['team']})'),
+                                  );
+                                }).toList(),
+                                onChanged: (v) => setState(() {
+                                  _selectedLeader = v;
+                                  _error = null;
+                                }),
                               ),
                     const SizedBox(height: 16),
                   ],
@@ -266,7 +360,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                     maxLength: 6,
                     decoration: InputDecoration(
-                      hintText: _isAdmin ? 'PIN de administrador' : 'Seu PIN',
+                      hintText: _role == 'admin' ? 'PIN de administrador' : 'Seu PIN',
                       prefixIcon: const Icon(Icons.lock_outline),
                       border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10)),
@@ -277,7 +371,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     onSubmitted: (_) => _enter(),
                   ),
 
-                  // Error
                   if (_error != null) ...[
                     const SizedBox(height: 10),
                     Container(
@@ -287,20 +380,17 @@ class _LoginScreenState extends State<LoginScreen> {
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(color: Colors.red.shade200)),
                       child: Row(children: [
-                        const Icon(Icons.error_outline,
-                            color: Colors.red, size: 16),
+                        const Icon(Icons.error_outline, color: Colors.red, size: 16),
                         const SizedBox(width: 6),
                         Expanded(
                             child: Text(_error!,
-                                style: const TextStyle(
-                                    color: Colors.red, fontSize: 13))),
+                                style: const TextStyle(color: Colors.red, fontSize: 13))),
                       ]),
                     ),
                   ],
 
                   const SizedBox(height: 20),
 
-                  // Login button
                   SizedBox(
                     height: 50,
                     child: ElevatedButton.icon(

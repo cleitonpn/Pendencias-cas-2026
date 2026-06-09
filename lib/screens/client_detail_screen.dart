@@ -79,10 +79,19 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
   }
 
   Future<void> _launchUrl(String url) async {
-    final uri = Uri.tryParse(url);
+    String target = url.trim();
+    if (!target.startsWith('http://') && !target.startsWith('https://')) {
+      target = 'https://$target';
+    }
+    final uri = Uri.tryParse(target);
     if (uri == null) return;
-    if (await canLaunchUrl(uri)) {
+    try {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Não foi possível abrir o link.')));
+      }
     }
   }
 

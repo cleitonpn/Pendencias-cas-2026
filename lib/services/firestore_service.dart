@@ -95,4 +95,61 @@ class FirestoreService {
     final names = snapshot.docs.map((d) => d.id).toList()..sort();
     return names;
   }
+
+  // ─── Team Leader PINs ───────────────────────────────────────────────────────
+
+  static Future<String?> getTeamLeaderPin(String name) async {
+    final doc = await _db.collection('team_leader_pins').doc(name).get();
+    if (!doc.exists) return null;
+    return doc.data()?['pin'] as String?;
+  }
+
+  static Future<String?> getTeamLeaderTeam(String name) async {
+    final doc = await _db.collection('team_leader_pins').doc(name).get();
+    if (!doc.exists) return null;
+    return doc.data()?['team'] as String?;
+  }
+
+  static Future<void> setTeamLeaderPin(
+      String name, String pin, String team) async {
+    await _db
+        .collection('team_leader_pins')
+        .doc(name)
+        .set({'pin': pin, 'team': team});
+  }
+
+  static Future<void> deleteTeamLeaderPin(String name) async {
+    await _db.collection('team_leader_pins').doc(name).delete();
+  }
+
+  /// Returns list of {name, team} maps, sorted by name.
+  static Future<List<Map<String, String>>> getTeamLeadersWithPins() async {
+    final snapshot = await _db.collection('team_leader_pins').get();
+    final list = snapshot.docs.map((d) {
+      return {
+        'name': d.id,
+        'team': (d.data()['team'] as String?) ?? '',
+      };
+    }).toList();
+    list.sort((a, b) => a['name']!.compareTo(b['name']!));
+    return list;
+  }
+
+  static Future<List<PendingItem>> getPendingItemsByTeam(
+      String team) async {
+    final snapshot = await _db
+        .collection('pending_items')
+        .where('team', isEqualTo: team)
+        .where('isResolved', isEqualTo: false)
+        .get();
+    final items = snapshot.docs
+        .map((d) => PendingItem.fromFirestore(d.id, d.data()))
+        .toList();
+    items.sort((a, b) {
+      final h = a.hangar.compareTo(b.hangar);
+      if (h != 0) return h;
+      return a.local.compareTo(b.local);
+    });
+    return items;
+  }
 }
