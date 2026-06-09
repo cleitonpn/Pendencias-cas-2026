@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_provider.dart';
-import 'team_leader_pending_list_screen.dart';
+import 'team_leader_hangar_list_screen.dart';
 
 class TeamLeaderHomeScreen extends StatelessWidget {
   final String leaderName;
@@ -45,7 +45,7 @@ class TeamLeaderHomeScreen extends StatelessWidget {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => TeamLeaderPendingListScreen(
+                          builder: (_) => TeamLeaderHangarListScreen(
                               leaderName: leaderName, team: team),
                         ),
                       );

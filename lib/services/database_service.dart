@@ -14,7 +14,7 @@ class DatabaseService {
 
   static Future<Database> _initDb() async {
     final path = join(await getDatabasesPath(), 'cas2026.db');
-    return openDatabase(path, version: 6, onCreate: _onCreate, onUpgrade: _onUpgrade);
+    return openDatabase(path, version: 7, onCreate: _onCreate, onUpgrade: _onUpgrade);
   }
 
   static Future<void> _onCreate(Database db, int version) async {
@@ -40,6 +40,7 @@ class DatabaseService {
         produtor TEXT, marceneiro TEXT, tapeceiro TEXT,
         eletricista TEXT, faxineira TEXT, teto50 TEXT,
         project_link TEXT DEFAULT '',
+        link_cv TEXT DEFAULT '',
         mobilario TEXT DEFAULT '',
         is_completed INTEGER DEFAULT 0, completed_at TEXT
       )
@@ -119,6 +120,11 @@ class DatabaseService {
     if (oldV < 6) {
       try {
         await db.execute("ALTER TABLE clients ADD COLUMN mobilario TEXT DEFAULT ''");
+      } catch (_) {}
+    }
+    if (oldV < 7) {
+      try {
+        await db.execute("ALTER TABLE clients ADD COLUMN link_cv TEXT DEFAULT ''");
       } catch (_) {}
     }
   }
@@ -211,6 +217,19 @@ class DatabaseService {
     final rows = await database.rawQuery(
       'SELECT client_id, COUNT(*) as cnt FROM pending_items '
       'WHERE client_id IN ($ids) AND is_resolved = 0 GROUP BY client_id',
+    );
+    return {for (final r in rows) r['client_id'] as String: r['cnt'] as int};
+  }
+
+  static Future<Map<String, int>> getPendingCountsByTeam(
+      List<String> clientIds, String team) async {
+    if (clientIds.isEmpty) return {};
+    final database = await db;
+    final ids = clientIds.map((id) => "'$id'").join(',');
+    final rows = await database.rawQuery(
+      'SELECT client_id, COUNT(*) as cnt FROM pending_items '
+      'WHERE client_id IN ($ids) AND is_resolved = 0 AND team = ? GROUP BY client_id',
+      [team],
     );
     return {for (final r in rows) r['client_id'] as String: r['cnt'] as int};
   }

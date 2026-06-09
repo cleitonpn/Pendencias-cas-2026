@@ -65,7 +65,7 @@ class SheetsService {
     required String sheetName,
     required int fairId,
   }) async {
-    final rows = await _fetchRange(spreadsheetId, sheetName, 'B:V');
+    final rows = await _fetchRange(spreadsheetId, sheetName, 'B:W');
     if (rows.isEmpty) {
       throw Exception(
           'Planilha vazia ou aba "$sheetName" não encontrada.\n'
@@ -95,6 +95,10 @@ class SheetsService {
     final eletrIdx    = findCol(['eletricista']);
     final faxiIdx     = findCol(['faxineira']);
     final linkIdx      = findCol(['link', 'projeto link', 'link projeto', 'link do projeto']);
+    final linkCvIdx    = findCol([
+      'link comunicação visual', 'link comunicacao visual',
+      'link cv', 'link print cv', 'print cv',
+    ]);
     final mobilarioIdx = findCol(['mobiliário locado', 'mobiliario locado', 'mobiliário', 'mobiliario']);
 
     if (nomeIdx < 0) {
@@ -141,6 +145,7 @@ class SheetsService {
         faxineira: s(faxiIdx),
         teto50: '',
         projectLink: s(linkIdx),
+        linkCv: s(linkCvIdx),
         mobilario: s(mobilarioIdx),
       ));
     }

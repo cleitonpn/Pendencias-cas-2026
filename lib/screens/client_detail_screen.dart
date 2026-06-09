@@ -256,6 +256,37 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
                 ),
               ),
 
+            if (c.linkCv.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                child: InkWell(
+                  onTap: () => _launchUrl(c.linkCv),
+                  borderRadius: BorderRadius.circular(10),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: Colors.pink.shade50,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.pink.shade200),
+                    ),
+                    child: Row(children: [
+                      Icon(Icons.image_outlined, color: Colors.pink.shade700, size: 20),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'Ver print Comunicação Visual',
+                          style: TextStyle(
+                              color: Colors.pink.shade700,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14),
+                        ),
+                      ),
+                      Icon(Icons.open_in_new, color: Colors.pink.shade400, size: 16),
+                    ]),
+                  ),
+                ),
+              ),
+
             // Mobiliário locado
             if (c.mobilario.isNotEmpty) ...[
               const _SectionTitle(

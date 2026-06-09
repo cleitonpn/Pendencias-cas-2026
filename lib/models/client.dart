@@ -17,6 +17,7 @@ class Client {
   final String faxineira;
   final String teto50;
   final String projectLink;
+  final String linkCv;
   final String mobilario;
 
   bool isCompleted;
@@ -40,6 +41,7 @@ class Client {
     required this.faxineira,
     required this.teto50,
     this.projectLink = '',
+    this.linkCv = '',
     this.mobilario = '',
     this.isCompleted = false,
     this.completedAt,
@@ -90,6 +92,7 @@ class Client {
         'faxineira': faxineira,
         'teto50': teto50,
         'project_link': projectLink,
+        'link_cv': linkCv,
         'mobilario': mobilario,
         'is_completed': isCompleted ? 1 : 0,
         'completed_at': completedAt?.toIso8601String(),
@@ -113,6 +116,7 @@ class Client {
         faxineira: map['faxineira'] ?? '',
         teto50: map['teto50'] ?? '',
         projectLink: map['project_link'] ?? '',
+        linkCv: map['link_cv'] ?? '',
         mobilario: map['mobilario'] ?? '',
         isCompleted: (map['is_completed'] as int? ?? 0) == 1,
         completedAt: map['completed_at'] != null
