@@ -20,6 +20,7 @@ class FirestoreService {
       'responsible': item.responsible,
       'description': item.description,
       'photoUrls': item.photoUrls,
+      'origem': item.origem,
       'isResolved': false,
       'awaitingValidation': false,
       'createdAt': item.createdAt.toIso8601String(),
@@ -170,13 +171,29 @@ class FirestoreService {
   }
 
   static Future<void> saveFair(int id, String name, String spreadsheetId,
-      String sheetName, String createdAt) async {
+      String sheetName, String createdAt, {String mode = 'producao'}) async {
     await _db.collection('fairs').doc(id.toString()).set({
       'name': name,
       'spreadsheetId': spreadsheetId,
       'sheetName': sheetName,
       'createdAt': createdAt,
+      'mode': mode,
     });
+  }
+
+  /// Reads a single fair document (used by the public stand web page).
+  static Future<Map<String, dynamic>?> getFair(int id) async {
+    final doc = await _db.collection('fairs').doc(id.toString()).get();
+    if (!doc.exists) return null;
+    return {'id': id, ...doc.data()!};
+  }
+
+  /// Updates only the operating mode of a fair (producao / manutencao).
+  static Future<void> setFairMode(int id, String mode) async {
+    await _db.collection('fairs').doc(id.toString()).set(
+      {'mode': mode},
+      SetOptions(merge: true),
+    );
   }
 
   static Future<void> deleteFairFromCloud(int id) async {

@@ -13,6 +13,7 @@ class PendingItem {
   final String responsible;
   final String description;
   final List<String> photoUrls; // download URLs of attached photos
+  final String origem;          // 'equipe' (criada pela equipe) | 'cliente' (expositor via QR)
   bool isResolved;
   bool awaitingValidation;     // producer marked as done, admin needs to validate
   final DateTime createdAt;
@@ -31,6 +32,7 @@ class PendingItem {
     this.responsible = '',
     required this.description,
     this.photoUrls = const [],
+    this.origem = 'equipe',
     this.isResolved = false,
     this.awaitingValidation = false,
     required this.createdAt,
@@ -49,6 +51,7 @@ class PendingItem {
         'responsible': responsible,
         'description': description,
         'photo_urls': jsonEncode(photoUrls),
+        'origem': origem,
         'is_resolved': isResolved ? 1 : 0,
         'awaiting_validation': awaitingValidation ? 1 : 0,
         'created_at': createdAt.toIso8601String(),
@@ -80,6 +83,7 @@ class PendingItem {
         responsible: map['responsible'] ?? '',
         description: map['description'] as String,
         photoUrls: _parsePhotos(map['photo_urls']),
+        origem: (map['origem'] as String?) ?? 'equipe',
         isResolved: (map['is_resolved'] as int? ?? 0) == 1,
         awaitingValidation: (map['awaiting_validation'] as int? ?? 0) == 1,
         createdAt: DateTime.parse(map['created_at'] as String),
@@ -102,6 +106,7 @@ class PendingItem {
         responsible: data['responsible'] ?? '',
         description: data['description'] ?? '',
         photoUrls: _parsePhotos(data['photoUrls']),
+        origem: (data['origem'] as String?) ?? 'equipe',
         isResolved: data['isResolved'] as bool? ?? false,
         awaitingValidation: data['awaitingValidation'] as bool? ?? false,
         createdAt: DateTime.tryParse(data['createdAt'] as String? ?? '') ??
@@ -110,6 +115,8 @@ class PendingItem {
             ? DateTime.tryParse(data['resolvedAt'] as String)
             : null,
       );
+
+  bool get fromClient => origem == 'cliente';
 
   String toWhatsAppText() {
     final d = createdAt;

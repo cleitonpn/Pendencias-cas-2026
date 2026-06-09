@@ -1,14 +1,13 @@
-import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'firebase_options.dart';
 import 'providers/app_provider.dart';
+import 'utils/desktop_db.dart';
 import 'services/notification_service.dart';
-import 'screens/splash_screen.dart';
+import 'app_home.dart';
 
 /// Background/terminated FCM handler. Must be a top-level function.
 /// The system displays the notification automatically; nothing to do here.
@@ -18,18 +17,17 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {}
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  final isDesktop =
-      !kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS);
+  final isMobile = !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.iOS);
 
-  if (isDesktop) {
-    sqfliteFfiInit();
-    databaseFactory = databaseFactoryFfi;
-  }
+  // Initialize FFI SQLite on desktop (no-op on web and mobile).
+  if (!kIsWeb) initDesktopDatabase();
 
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
-  // Push notifications (Android/iOS only — no-op on desktop).
-  if (!isDesktop && !kIsWeb) {
+  // Push notifications (Android/iOS only — no-op on desktop/web).
+  if (isMobile) {
     FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
     await NotificationService.init();
   }
@@ -58,7 +56,7 @@ class CasApp extends StatelessWidget {
         ),
         useMaterial3: true,
       ),
-      home: const SplashScreen(),
+      home: buildHome(),
     );
   }
 }

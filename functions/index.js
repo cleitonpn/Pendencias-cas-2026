@@ -64,14 +64,18 @@ exports.onPendingCreated = onDocumentCreated(
       const client = data.clientName || "";
       const local = data.local || "";
       const desc = data.description || "";
+      const fromClient = (data.origem || "equipe") === "cliente";
 
-      const title = team ? `Nova pendência — ${team}` : "Nova pendência";
+      const prefix = fromClient ? "Pedido do expositor" : "Nova pendência";
+      const title = team ? `${prefix} — ${team}` : prefix;
       const where = local ? ` (Stand ${local})` : "";
       const body = `${client}${where}: ${desc}`;
 
       const topics = [];
       if (team) topics.push(sanitize("team", team));
       if (producer) topics.push(sanitize("producer", producer));
+      // Exhibitor-submitted requests also alert admins, so they stay aware.
+      if (fromClient) topics.push("admins");
       if (topics.length === 0) return;
 
       await sendToTopics(topics, title, body);

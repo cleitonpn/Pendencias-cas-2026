@@ -12,6 +12,7 @@ class Client {
 
   final String produtor;
   final String atendimento;  // consultor responsável pelo cliente
+  final String pin;          // PIN de acesso do stand (adesivo), lido da planilha
   final String marceneiro;
   final String tapeceiro;
   final String eletricista;
@@ -37,6 +38,7 @@ class Client {
     required this.mezanino,
     required this.produtor,
     this.atendimento = '',
+    this.pin = '',
     required this.marceneiro,
     required this.tapeceiro,
     required this.eletricista,
@@ -89,6 +91,7 @@ class Client {
         'mezanino': mezanino,
         'produtor': produtor,
         'atendimento': atendimento,
+        'pin': pin,
         'marceneiro': marceneiro,
         'tapeceiro': tapeceiro,
         'eletricista': eletricista,
@@ -114,6 +117,7 @@ class Client {
         mezanino: map['mezanino'] ?? '',
         produtor: map['produtor'] ?? '',
         atendimento: map['atendimento'] ?? '',
+        pin: map['pin'] ?? '',
         marceneiro: map['marceneiro'] ?? '',
         tapeceiro: map['tapeceiro'] ?? '',
         eletricista: map['eletricista'] ?? '',

@@ -1,15 +1,16 @@
-import 'dart:io';
 import 'package:firebase_core/firebase_core.dart' show FirebaseOptions;
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart'
+    show kIsWeb, defaultTargetPlatform, TargetPlatform;
 
 class DefaultFirebaseOptions {
   static FirebaseOptions get currentPlatform {
-    if (kIsWeb ||
-        (!kIsWeb &&
-            (Platform.isWindows || Platform.isLinux || Platform.isMacOS))) {
-      return web;
+    if (kIsWeb) return web;
+    // Mobile uses the Android app; desktop reuses the Web credentials.
+    if (defaultTargetPlatform == TargetPlatform.android ||
+        defaultTargetPlatform == TargetPlatform.iOS) {
+      return android;
     }
-    return android;
+    return web;
   }
 
   static const FirebaseOptions android = FirebaseOptions(

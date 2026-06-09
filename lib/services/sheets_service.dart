@@ -101,6 +101,7 @@ class SheetsService {
     final areaIdx     = findCol(['m²', 'm2', 'área', 'area']);
     final produtorIdx = findCol(['produtor']);
     final atendIdx    = findCol(['atendimento', 'consultor', 'atendimento responsável', 'atendimento responsavel']);
+    final pinIdx      = findCol(['pin', 'senha', 'código', 'codigo', 'pin stand', 'pin acesso']);
     final marceIdx    = findCol(['marceneiro']);
     final tapecIdx    = findCol(['tapeceiro']);
     final eletrIdx    = findCol(['eletricista']);
@@ -151,6 +152,7 @@ class SheetsService {
         mezanino: '',
         produtor: s(produtorIdx),
         atendimento: s(atendIdx),
+        pin: s(pinIdx),
         marceneiro: s(marceIdx),
         tapeceiro: s(tapecIdx),
         eletricista: s(eletrIdx),

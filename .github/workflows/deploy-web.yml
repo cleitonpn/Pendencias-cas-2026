@@ -1,0 +1,49 @@
+name: Deploy Web (Stand)
+
+on:
+  push:
+    branches:
+      - main
+      - claude/fair-setup-tracker-app-J9EOm
+    paths:
+      - 'lib/**'
+      - 'pubspec.yaml'
+      - 'assets/**'
+      - 'firebase.json'
+      - '.github/workflows/deploy-web.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy-web:
+    name: Build Flutter Web + Deploy Hosting
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Configurar Flutter 3.24.0
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.0'
+          channel: 'stable'
+          cache: true
+
+      - name: Gerar pasta web/
+        run: flutter create --platforms=web --project-name=montagem_uset .
+
+      - name: Instalar dependências
+        run: flutter pub get
+
+      - name: Build Web release
+        run: flutter build web --release
+
+      - name: Gravar credencial de serviço
+        run: printf '%s' "$FIREBASE_SA" > "$RUNNER_TEMP/sa.json"
+        env:
+          FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+
+      - name: Deploy Hosting
+        run: npx --yes firebase-tools@latest deploy --only hosting --project montagem-uset --non-interactive
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/sa.json

@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -13,7 +12,8 @@ class NotificationService {
 
   static bool get _supported {
     if (kIsWeb) return false;
-    return Platform.isAndroid || Platform.isIOS;
+    return defaultTargetPlatform == TargetPlatform.android ||
+        defaultTargetPlatform == TargetPlatform.iOS;
   }
 
   static bool _initialized = false;

@@ -6,6 +6,7 @@ import '../utils/admin_pin.dart';
 import 'hangar_list_screen.dart';
 import 'add_fair_screen.dart';
 import 'producer_login_screen.dart';
+import 'sticker_generator_screen.dart';
 
 class FairSelectionScreen extends StatelessWidget {
   const FairSelectionScreen({super.key});
@@ -77,36 +78,51 @@ class _FairCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         child: Padding(
           padding: const EdgeInsets.all(16),
-          child: Row(
+          child: Column(
             children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1E3A5F).withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(Icons.event,
-                    color: Color(0xFF1E3A5F), size: 28),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1E3A5F).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.event,
+                        color: Color(0xFF1E3A5F), size: 28),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(fair.name,
+                            style: const TextStyle(
+                                fontSize: 18, fontWeight: FontWeight.bold)),
+                        Text('Aba: ${fair.sheetName}',
+                            style: const TextStyle(
+                                color: Colors.grey, fontSize: 13)),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.qr_code_2, color: Color(0xFF1E3A5F)),
+                    tooltip: 'Gerar adesivos',
+                    onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) =>
+                                StickerGeneratorScreen(fair: fair))),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline, color: Colors.red),
+                    onPressed: () => _confirmDelete(context),
+                  ),
+                  const Icon(Icons.chevron_right, color: Colors.grey),
+                ],
               ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(fair.name,
-                        style: const TextStyle(
-                            fontSize: 18, fontWeight: FontWeight.bold)),
-                    Text('Aba: ${fair.sheetName}',
-                        style:
-                            const TextStyle(color: Colors.grey, fontSize: 13)),
-                  ],
-                ),
-              ),
-              IconButton(
-                icon: const Icon(Icons.delete_outline, color: Colors.red),
-                onPressed: () => _confirmDelete(context),
-              ),
-              const Icon(Icons.chevron_right, color: Colors.grey),
+              const Divider(height: 18),
+              _ModeToggle(fair: fair),
             ],
           ),
         ),
@@ -140,6 +156,47 @@ class _FairCard extends StatelessWidget {
     if (confirmed == true && context.mounted) {
       await context.read<AppProvider>().deleteFair(fair.id!);
     }
+  }
+}
+
+class _ModeToggle extends StatelessWidget {
+  final Fair fair;
+  const _ModeToggle({required this.fair});
+
+  @override
+  Widget build(BuildContext context) {
+    final maintenance = fair.isMaintenance;
+    return Row(
+      children: [
+        Icon(maintenance ? Icons.construction : Icons.build_circle_outlined,
+            size: 20, color: maintenance ? Colors.orange : Colors.grey),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(maintenance ? 'Modo manutenção (evento)' : 'Modo produção',
+                  style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: maintenance ? Colors.orange : Colors.black87)),
+              Text(
+                  maintenance
+                      ? 'Expositores podem pedir manutenção pelo QR'
+                      : 'Equipe montando — pedidos do QR bloqueados',
+                  style: const TextStyle(fontSize: 11, color: Colors.grey)),
+            ],
+          ),
+        ),
+        Switch(
+          value: maintenance,
+          activeColor: Colors.orange,
+          onChanged: (v) => context
+              .read<AppProvider>()
+              .setFairMode(fair, v ? 'manutencao' : 'producao'),
+        ),
+      ],
+    );
   }
 }
 

@@ -31,14 +31,19 @@ class AppProvider extends ChangeNotifier {
     try {
       final remote = await FirestoreService.getFairs();
       for (final m in remote) {
+        final id = m['id'] as int?;
+        final mode = (m['mode'] as String?) ?? 'producao';
         final fair = Fair(
-          id: m['id'] as int?,
+          id: id,
           name: m['name'] as String,
           spreadsheetId: m['spreadsheetId'] as String,
           sheetName: m['sheetName'] as String,
           createdAt: DateTime.parse(m['createdAt'] as String),
+          mode: mode,
         );
         await DatabaseService.upsertFairById(fair);
+        // Keep local mode in sync with the cloud (upsert ignores existing rows)
+        if (id != null) await DatabaseService.updateFairMode(id, mode);
       }
     } catch (_) {
       // Firestore unavailable — continue with local fairs only
@@ -164,6 +169,7 @@ class AppProvider extends ChangeNotifier {
       responsible: item.responsible,
       description: item.description,
       photoUrls: item.photoUrls,
+      origem: item.origem,
       createdAt: item.createdAt,
     );
   }
@@ -230,6 +236,20 @@ class AppProvider extends ChangeNotifier {
     _fairs = await DatabaseService.getFairs();
     notifyListeners();
     return newFair;
+  }
+
+  /// Toggles a fair between 'producao' and 'manutencao' (event open to exhibitors).
+  Future<void> setFairMode(Fair fair, String mode) async {
+    if (fair.id == null) return;
+    await DatabaseService.updateFairMode(fair.id!, mode);
+    try {
+      await FirestoreService.setFairMode(fair.id!, mode);
+    } catch (_) {}
+    if (_currentFair?.id == fair.id) {
+      _currentFair = _currentFair!.copyWith(mode: mode);
+    }
+    _fairs = await DatabaseService.getFairs();
+    notifyListeners();
   }
 
   Future<void> deleteFair(int id) async {

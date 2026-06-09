@@ -550,6 +550,27 @@ class _PendingCard extends StatelessWidget {
                 ]),
             ]),
             const SizedBox(height: 8),
+            if (item.fromClient) ...[
+              Container(
+                margin: const EdgeInsets.only(bottom: 6),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: Colors.orange.shade200),
+                ),
+                child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(Icons.storefront, size: 13, color: Colors.orange),
+                  SizedBox(width: 4),
+                  Text('Solicitado pelo expositor',
+                      style: TextStyle(
+                          color: Colors.orange,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600)),
+                ]),
+              ),
+            ],
             Text(item.description, style: const TextStyle(fontSize: 14)),
             if (item.photoUrls.isNotEmpty) ...[
               const SizedBox(height: 8),
@@ -658,6 +679,27 @@ class _AwaitingCard extends StatelessWidget {
               ),
             ]),
             const SizedBox(height: 8),
+            if (item.fromClient) ...[
+              Container(
+                margin: const EdgeInsets.only(bottom: 6),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: Colors.orange.shade200),
+                ),
+                child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(Icons.storefront, size: 13, color: Colors.orange),
+                  SizedBox(width: 4),
+                  Text('Solicitado pelo expositor',
+                      style: TextStyle(
+                          color: Colors.orange,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600)),
+                ]),
+              ),
+            ],
             Text(item.description, style: const TextStyle(fontSize: 14)),
             if (item.photoUrls.isNotEmpty) ...[
               const SizedBox(height: 8),

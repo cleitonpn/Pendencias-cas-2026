@@ -14,7 +14,7 @@ class DatabaseService {
 
   static Future<Database> _initDb() async {
     final path = join(await getDatabasesPath(), 'cas2026.db');
-    return openDatabase(path, version: 9, onCreate: _onCreate, onUpgrade: _onUpgrade);
+    return openDatabase(path, version: 10, onCreate: _onCreate, onUpgrade: _onUpgrade);
   }
 
   static Future<void> _onCreate(Database db, int version) async {
@@ -24,7 +24,8 @@ class DatabaseService {
         name TEXT NOT NULL,
         spreadsheet_id TEXT NOT NULL,
         sheet_name TEXT NOT NULL,
-        created_at TEXT NOT NULL
+        created_at TEXT NOT NULL,
+        mode TEXT DEFAULT 'producao'
       )
     ''');
     await db.execute('''
@@ -37,7 +38,7 @@ class DatabaseService {
         fair_id INTEGER DEFAULT 1,
         nome TEXT, montagem TEXT, local TEXT, hangar TEXT,
         area TEXT, deck TEXT, total_area TEXT, mezanino TEXT,
-        produtor TEXT, atendimento TEXT DEFAULT '', marceneiro TEXT, tapeceiro TEXT,
+        produtor TEXT, atendimento TEXT DEFAULT '', pin TEXT DEFAULT '', marceneiro TEXT, tapeceiro TEXT,
         eletricista TEXT, faxineira TEXT, teto50 TEXT,
         project_link TEXT DEFAULT '',
         link_cv TEXT DEFAULT '',
@@ -54,6 +55,7 @@ class DatabaseService {
         client_id TEXT, client_name TEXT, local TEXT, hangar TEXT,
         team TEXT, responsible TEXT, description TEXT,
         photo_urls TEXT DEFAULT '',
+        origem TEXT DEFAULT 'equipe',
         is_resolved INTEGER DEFAULT 0,
         awaiting_validation INTEGER DEFAULT 0,
         created_at TEXT, resolved_at TEXT,
@@ -138,6 +140,17 @@ class DatabaseService {
         await db.execute("ALTER TABLE clients ADD COLUMN atendimento TEXT DEFAULT ''");
       } catch (_) {}
     }
+    if (oldV < 10) {
+      try {
+        await db.execute("ALTER TABLE clients ADD COLUMN pin TEXT DEFAULT ''");
+      } catch (_) {}
+      try {
+        await db.execute("ALTER TABLE fairs ADD COLUMN mode TEXT DEFAULT 'producao'");
+      } catch (_) {}
+      try {
+        await db.execute("ALTER TABLE pending_items ADD COLUMN origem TEXT DEFAULT 'equipe'");
+      } catch (_) {}
+    }
   }
 
   // ─── Fairs ──────────────────────────────────────────────────────────────────
@@ -159,6 +172,12 @@ class DatabaseService {
     final database = await db;
     await database.insert('fairs', fair.toMap(),
         conflictAlgorithm: ConflictAlgorithm.ignore);
+  }
+
+  static Future<void> updateFairMode(int id, String mode) async {
+    final database = await db;
+    await database.update('fairs', {'mode': mode},
+        where: 'id = ?', whereArgs: [id]);
   }
 
   static Future<void> deleteFair(int id) async {

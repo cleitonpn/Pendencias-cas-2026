@@ -4,6 +4,7 @@ class Fair {
   final String spreadsheetId;
   final String sheetName;
   final DateTime createdAt;
+  final String mode; // 'producao' (equipe monta) | 'manutencao' (evento aberto ao expositor)
 
   const Fair({
     this.id,
@@ -11,7 +12,19 @@ class Fair {
     required this.spreadsheetId,
     required this.sheetName,
     required this.createdAt,
+    this.mode = 'producao',
   });
+
+  bool get isMaintenance => mode == 'manutencao';
+
+  Fair copyWith({String? mode}) => Fair(
+        id: id,
+        name: name,
+        spreadsheetId: spreadsheetId,
+        sheetName: sheetName,
+        createdAt: createdAt,
+        mode: mode ?? this.mode,
+      );
 
   Map<String, dynamic> toMap() => {
     if (id != null) 'id': id,
@@ -19,6 +32,7 @@ class Fair {
     'spreadsheet_id': spreadsheetId,
     'sheet_name': sheetName,
     'created_at': createdAt.toIso8601String(),
+    'mode': mode,
   };
 
   factory Fair.fromMap(Map<String, dynamic> map) => Fair(
@@ -27,5 +41,6 @@ class Fair {
     spreadsheetId: map['spreadsheet_id'] as String,
     sheetName: map['sheet_name'] as String,
     createdAt: DateTime.parse(map['created_at'] as String),
+    mode: (map['mode'] as String?) ?? 'producao',
   );
 }
