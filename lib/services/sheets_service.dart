@@ -46,7 +46,17 @@ class SheetsService {
       final cells = (row['c'] as List?) ?? [];
       return cells.map((cell) {
         if (cell == null) return '';
-        final v = (cell as Map)['v'];
+        final cellMap = cell as Map;
+        final f = cellMap['f'] as String?;
+        // If the cell has a HYPERLINK formula, extract the URL (first quoted arg)
+        if (f != null) {
+          final upper = f.trim().toUpperCase();
+          if (upper.startsWith('HYPERLINK(') || upper.startsWith('=HYPERLINK(')) {
+            final match = RegExp(r'"([^"]+)"').firstMatch(f);
+            if (match != null) return match.group(1)!;
+          }
+        }
+        final v = cellMap['v'];
         if (v == null) return '';
         if (v is double) {
           return v == v.truncateToDouble()
