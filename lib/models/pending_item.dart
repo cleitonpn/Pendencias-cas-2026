@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 class PendingItem {
   final int? id;               // SQLite local ID
   final String? firestoreId;   // Firestore document ID
@@ -10,6 +12,7 @@ class PendingItem {
   final String team;
   final String responsible;
   final String description;
+  final List<String> photoUrls; // download URLs of attached photos
   bool isResolved;
   bool awaitingValidation;     // producer marked as done, admin needs to validate
   final DateTime createdAt;
@@ -27,6 +30,7 @@ class PendingItem {
     required this.team,
     this.responsible = '',
     required this.description,
+    this.photoUrls = const [],
     this.isResolved = false,
     this.awaitingValidation = false,
     required this.createdAt,
@@ -44,11 +48,24 @@ class PendingItem {
         'team': team,
         'responsible': responsible,
         'description': description,
+        'photo_urls': jsonEncode(photoUrls),
         'is_resolved': isResolved ? 1 : 0,
         'awaiting_validation': awaitingValidation ? 1 : 0,
         'created_at': createdAt.toIso8601String(),
         'resolved_at': resolvedAt?.toIso8601String(),
       };
+
+  static List<String> _parsePhotos(dynamic raw) {
+    if (raw == null) return const [];
+    if (raw is List) return raw.map((e) => e.toString()).toList();
+    final s = raw.toString().trim();
+    if (s.isEmpty) return const [];
+    try {
+      final decoded = jsonDecode(s);
+      if (decoded is List) return decoded.map((e) => e.toString()).toList();
+    } catch (_) {}
+    return const [];
+  }
 
   factory PendingItem.fromMap(Map<String, dynamic> map) => PendingItem(
         id: map['id'] as int?,
@@ -62,6 +79,7 @@ class PendingItem {
         team: map['team'] as String,
         responsible: map['responsible'] ?? '',
         description: map['description'] as String,
+        photoUrls: _parsePhotos(map['photo_urls']),
         isResolved: (map['is_resolved'] as int? ?? 0) == 1,
         awaitingValidation: (map['awaiting_validation'] as int? ?? 0) == 1,
         createdAt: DateTime.parse(map['created_at'] as String),
@@ -83,6 +101,7 @@ class PendingItem {
         team: data['team'] ?? '',
         responsible: data['responsible'] ?? '',
         description: data['description'] ?? '',
+        photoUrls: _parsePhotos(data['photoUrls']),
         isResolved: data['isResolved'] as bool? ?? false,
         awaitingValidation: data['awaitingValidation'] as bool? ?? false,
         createdAt: DateTime.tryParse(data['createdAt'] as String? ?? '') ??

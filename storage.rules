@@ -1,0 +1,14 @@
+rules_version = '2';
+
+// O app não usa autenticação (acesso por PIN interno), então liberamos
+// leitura/escrita apenas na pasta de fotos das pendências.
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /pending_photos/{allPaths=**} {
+      allow read, write: if true;
+    }
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

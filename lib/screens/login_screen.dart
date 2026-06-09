@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/firestore_service.dart';
+import '../services/notification_service.dart';
 import '../utils/admin_pin.dart';
 import 'fair_selection_screen.dart';
 import 'producer_home_screen.dart';
@@ -98,6 +99,8 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
     if (!mounted) return;
+    await NotificationService.subscribeAdmin();
+    if (!mounted) return;
     Navigator.pushReplacement(context,
         MaterialPageRoute(builder: (_) => const FairSelectionScreen()));
   }
@@ -122,6 +125,8 @@ class _LoginScreenState extends State<LoginScreen> {
       _pinCtrl.clear();
       return;
     }
+    if (!mounted) return;
+    await NotificationService.subscribeProducer(_selectedProducer!);
     if (!mounted) return;
     Navigator.pushReplacement(context,
         MaterialPageRoute(
@@ -149,6 +154,10 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
     final team = await FirestoreService.getTeamLeaderTeam(_selectedLeader!);
+    if (!mounted) return;
+    if ((team ?? '').isNotEmpty) {
+      await NotificationService.subscribeTeam(team!);
+    }
     if (!mounted) return;
     Navigator.pushReplacement(context,
         MaterialPageRoute(

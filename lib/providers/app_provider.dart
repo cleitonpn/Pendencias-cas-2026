@@ -163,6 +163,7 @@ class AppProvider extends ChangeNotifier {
       team: item.team,
       responsible: item.responsible,
       description: item.description,
+      photoUrls: item.photoUrls,
       createdAt: item.createdAt,
     );
   }

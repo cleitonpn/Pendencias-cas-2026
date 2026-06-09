@@ -7,6 +7,7 @@ import '../models/client.dart';
 import '../models/pending_item.dart';
 import '../services/database_service.dart';
 import '../services/firestore_service.dart';
+import '../widgets/photo_gallery.dart';
 import 'add_pending_screen.dart';
 
 class ClientDetailScreen extends StatefulWidget {
@@ -21,15 +22,29 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
   List<PendingItem> _items = [];
   List<PendingItem> _awaitingFirestoreItems = [];
   bool _loading = false;
+  AppProvider? _provider;
 
   @override
   void initState() {
     super.initState();
     _load();
+    _provider = context.read<AppProvider>();
+    _provider!.addListener(_onProviderChanged);
   }
 
-  Future<void> _load() async {
-    setState(() => _loading = true);
+  @override
+  void dispose() {
+    _provider?.removeListener(_onProviderChanged);
+    super.dispose();
+  }
+
+  // Real-time: when the Firestore stream updates the provider, reload quietly.
+  void _onProviderChanged() {
+    if (mounted) _load(silent: true);
+  }
+
+  Future<void> _load({bool silent = false}) async {
+    if (!silent) setState(() => _loading = true);
     final sqliteItems =
         await DatabaseService.getPendingItemsByClient(widget.client.rowId);
     List<PendingItem> awaitingItems = [];
@@ -536,6 +551,10 @@ class _PendingCard extends StatelessWidget {
             ]),
             const SizedBox(height: 8),
             Text(item.description, style: const TextStyle(fontSize: 14)),
+            if (item.photoUrls.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              PhotoStrip(urls: item.photoUrls),
+            ],
             const SizedBox(height: 6),
             Text(
               _fmt(item.createdAt) +
@@ -640,6 +659,10 @@ class _AwaitingCard extends StatelessWidget {
             ]),
             const SizedBox(height: 8),
             Text(item.description, style: const TextStyle(fontSize: 14)),
+            if (item.photoUrls.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              PhotoStrip(urls: item.photoUrls),
+            ],
             const SizedBox(height: 6),
             Text(
               _fmt(item.createdAt),

@@ -19,6 +19,7 @@ class FirestoreService {
       'team': item.team,
       'responsible': item.responsible,
       'description': item.description,
+      'photoUrls': item.photoUrls,
       'isResolved': false,
       'awaitingValidation': false,
       'createdAt': item.createdAt.toIso8601String(),

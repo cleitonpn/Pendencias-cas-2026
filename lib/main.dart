@@ -3,20 +3,36 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'firebase_options.dart';
 import 'providers/app_provider.dart';
+import 'services/notification_service.dart';
 import 'screens/splash_screen.dart';
+
+/// Background/terminated FCM handler. Must be a top-level function.
+/// The system displays the notification automatically; nothing to do here.
+@pragma('vm:entry-point')
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+  final isDesktop =
+      !kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS);
+
+  if (isDesktop) {
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
   }
 
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
+  // Push notifications (Android/iOS only — no-op on desktop).
+  if (!isDesktop && !kIsWeb) {
+    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+    await NotificationService.init();
+  }
 
   runApp(
     ChangeNotifierProvider(
@@ -34,6 +50,7 @@ class CasApp extends StatelessWidget {
     return MaterialApp(
       title: 'Montagem USET',
       debugShowCheckedModeBanner: false,
+      scaffoldMessengerKey: NotificationService.messengerKey,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
           seedColor: const Color(0xFF1E3A5F),

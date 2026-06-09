@@ -14,7 +14,7 @@ class DatabaseService {
 
   static Future<Database> _initDb() async {
     final path = join(await getDatabasesPath(), 'cas2026.db');
-    return openDatabase(path, version: 7, onCreate: _onCreate, onUpgrade: _onUpgrade);
+    return openDatabase(path, version: 8, onCreate: _onCreate, onUpgrade: _onUpgrade);
   }
 
   static Future<void> _onCreate(Database db, int version) async {
@@ -53,6 +53,7 @@ class DatabaseService {
         producer_name TEXT DEFAULT '',
         client_id TEXT, client_name TEXT, local TEXT, hangar TEXT,
         team TEXT, responsible TEXT, description TEXT,
+        photo_urls TEXT DEFAULT '',
         is_resolved INTEGER DEFAULT 0,
         awaiting_validation INTEGER DEFAULT 0,
         created_at TEXT, resolved_at TEXT,
@@ -125,6 +126,11 @@ class DatabaseService {
     if (oldV < 7) {
       try {
         await db.execute("ALTER TABLE clients ADD COLUMN link_cv TEXT DEFAULT ''");
+      } catch (_) {}
+    }
+    if (oldV < 8) {
+      try {
+        await db.execute("ALTER TABLE pending_items ADD COLUMN photo_urls TEXT DEFAULT ''");
       } catch (_) {}
     }
   }

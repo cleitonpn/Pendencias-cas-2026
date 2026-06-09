@@ -7,6 +7,7 @@ import '../models/pending_item.dart';
 import '../providers/app_provider.dart';
 import '../services/database_service.dart';
 import '../services/firestore_service.dart';
+import '../widgets/photo_gallery.dart';
 
 class ProducerClientDetailScreen extends StatefulWidget {
   final Client client;
@@ -22,15 +23,29 @@ class _ProducerClientDetailScreenState
   List<PendingItem> _items = [];
   Set<String> _awaitingFirestoreIds = {};
   bool _loading = false;
+  AppProvider? _provider;
 
   @override
   void initState() {
     super.initState();
     _load();
+    _provider = context.read<AppProvider>();
+    _provider!.addListener(_onProviderChanged);
   }
 
-  Future<void> _load() async {
-    setState(() => _loading = true);
+  @override
+  void dispose() {
+    _provider?.removeListener(_onProviderChanged);
+    super.dispose();
+  }
+
+  // Real-time: reload quietly when the Firestore stream updates the provider.
+  void _onProviderChanged() {
+    if (mounted) _load(silent: true);
+  }
+
+  Future<void> _load({bool silent = false}) async {
+    if (!silent) setState(() => _loading = true);
     final items = await DatabaseService.getPendingItemsByClient(
         widget.client.rowId);
     final awaitingItems = await FirestoreService.getAwaitingItemsByClientId(
@@ -452,6 +467,10 @@ class _PendingCard extends StatelessWidget {
             const SizedBox(height: 8),
             Text(item.description,
                 style: const TextStyle(fontSize: 14)),
+            if (item.photoUrls.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              PhotoStrip(urls: item.photoUrls),
+            ],
             const SizedBox(height: 6),
             Text(
               _fmt(item.createdAt),

@@ -1,9 +1,12 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:image_picker/image_picker.dart';
 import '../providers/app_provider.dart';
 import '../models/client.dart';
 import '../models/pending_item.dart';
+import '../services/storage_service.dart';
 
 class AddPendingScreen extends StatefulWidget {
   final Client client;
@@ -27,11 +30,29 @@ class _AddPendingScreenState extends State<AddPendingScreen> {
   String? _selectedTeam;
   final _descCtrl = TextEditingController();
   bool _saving = false;
+  final List<XFile> _photos = [];
+  final _picker = ImagePicker();
 
   @override
   void dispose() {
     _descCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickPhoto(ImageSource source) async {
+    try {
+      if (source == ImageSource.gallery) {
+        final picked =
+            await _picker.pickMultiImage(imageQuality: 70, maxWidth: 1600);
+        if (picked.isNotEmpty) setState(() => _photos.addAll(picked));
+      } else {
+        final picked = await _picker.pickImage(
+            source: source, imageQuality: 70, maxWidth: 1600);
+        if (picked != null) setState(() => _photos.add(picked));
+      }
+    } catch (_) {
+      _snack('Não foi possível selecionar a foto.', isError: true);
+    }
   }
 
   // Retorna o responsável da equipe a partir dos dados do cliente (colunas O-T)
@@ -61,6 +82,24 @@ class _AddPendingScreenState extends State<AddPendingScreen> {
 
     final responsible = _getResponsible(_selectedTeam!);
 
+    // Upload photos to Firebase Storage first (if any)
+    List<String> photoUrls = [];
+    if (_photos.isNotEmpty) {
+      try {
+        photoUrls = await StorageService.uploadPendingPhotos(
+          fairId: widget.client.fairId,
+          files: _photos.map((x) => File(x.path)).toList(),
+        );
+      } catch (_) {
+        if (mounted) {
+          setState(() => _saving = false);
+          _snack('Falha ao enviar as fotos. Verifique a conexão e tente novamente.',
+              isError: true);
+        }
+        return;
+      }
+    }
+
     final newItem = PendingItem(
       clientId: widget.client.rowId,
       clientName: widget.client.displayName,
@@ -70,6 +109,7 @@ class _AddPendingScreenState extends State<AddPendingScreen> {
       team: _selectedTeam!,
       responsible: responsible,
       description: _descCtrl.text.trim(),
+      photoUrls: photoUrls,
       createdAt: DateTime.now(),
     );
 
@@ -271,6 +311,85 @@ class _AddPendingScreenState extends State<AddPendingScreen> {
                 fillColor: Colors.white,
               ),
             ),
+
+            const SizedBox(height: 20),
+            const Text('FOTOS (OPCIONAL)',
+                style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey,
+                    letterSpacing: 1)),
+            const SizedBox(height: 10),
+            Row(children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _saving
+                      ? null
+                      : () => _pickPhoto(ImageSource.camera),
+                  icon: const Icon(Icons.photo_camera_outlined, size: 18),
+                  label: const Text('Câmera'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF1E3A5F),
+                    side: const BorderSide(color: Color(0xFF1E3A5F)),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _saving
+                      ? null
+                      : () => _pickPhoto(ImageSource.gallery),
+                  icon: const Icon(Icons.photo_library_outlined, size: 18),
+                  label: const Text('Galeria'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF1E3A5F),
+                    side: const BorderSide(color: Color(0xFF1E3A5F)),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
+              ),
+            ]),
+            if (_photos.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              SizedBox(
+                height: 84,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: _photos.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 8),
+                  itemBuilder: (context, i) => Stack(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.file(
+                          File(_photos[i].path),
+                          width: 84,
+                          height: 84,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                      Positioned(
+                        top: 2,
+                        right: 2,
+                        child: GestureDetector(
+                          onTap: () => setState(() => _photos.removeAt(i)),
+                          child: Container(
+                            decoration: const BoxDecoration(
+                                color: Colors.black54,
+                                shape: BoxShape.circle),
+                            padding: const EdgeInsets.all(2),
+                            child: const Icon(Icons.close,
+                                color: Colors.white, size: 16),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
 
             const SizedBox(height: 28),
             SizedBox(

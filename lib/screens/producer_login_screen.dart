@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/firestore_service.dart';
+import '../services/notification_service.dart';
 import 'producer_pending_screen.dart';
 
 class ProducerLoginScreen extends StatefulWidget {
@@ -68,6 +69,8 @@ class _ProducerLoginScreenState extends State<ProducerLoginScreen> {
       }
 
       setState(() => _verifying = false);
+      await NotificationService.subscribeProducer(_selected!);
+      if (!mounted) return;
       Navigator.push(
           context,
           MaterialPageRoute(
