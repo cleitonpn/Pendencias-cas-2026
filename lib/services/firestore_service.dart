@@ -1,13 +1,23 @@
+import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import '../models/pending_item.dart';
 
 class FirestoreService {
-  static final _db = FirebaseFirestore.instance;
+  // Firestore is only available on mobile/web — not on Windows/Linux/macOS
+  // desktop builds (which skip Firebase initialization).
+  static bool get _available {
+    if (kIsWeb) return true;
+    return Platform.isAndroid || Platform.isIOS;
+  }
+
+  static FirebaseFirestore get _db => FirebaseFirestore.instance;
 
   // ─── Pending Items ───────────────────────────────────────────────────────────
 
   static Future<String> savePendingItem(
       PendingItem item, String fairName) async {
+    if (!_available) return '';
     final doc = _db.collection('pending_items').doc();
     await doc.set({
       'fairName': fairName,
@@ -28,6 +38,7 @@ class FirestoreService {
   }
 
   static Future<void> resolveItem(String firestoreId) async {
+    if (!_available || firestoreId.isEmpty) return;
     await _db.collection('pending_items').doc(firestoreId).update({
       'isResolved': true,
       'resolvedAt': DateTime.now().toIso8601String(),
@@ -35,6 +46,7 @@ class FirestoreService {
   }
 
   static Future<void> markAwaitingValidation(String firestoreId) async {
+    if (!_available || firestoreId.isEmpty) return;
     await _db.collection('pending_items').doc(firestoreId).update({
       'awaitingValidation': true,
     });
@@ -42,6 +54,7 @@ class FirestoreService {
 
   static Future<List<PendingItem>> getItemsByProducer(
       String producerName) async {
+    if (!_available) return [];
     final snapshot = await _db
         .collection('pending_items')
         .where('producerName', isEqualTo: producerName)
@@ -60,6 +73,7 @@ class FirestoreService {
 
   static Future<List<PendingItem>> getAwaitingItemsByClientId(
       String clientId) async {
+    if (!_available) return [];
     final snapshot = await _db
         .collection('pending_items')
         .where('clientId', isEqualTo: clientId)
@@ -73,6 +87,7 @@ class FirestoreService {
   // ─── Producer PINs ──────────────────────────────────────────────────────────
 
   static Future<String?> getProducerPin(String producerName) async {
+    if (!_available) return null;
     final doc =
         await _db.collection('producer_pins').doc(producerName).get();
     if (!doc.exists) return null;
@@ -80,6 +95,7 @@ class FirestoreService {
   }
 
   static Future<void> setProducerPin(String producerName, String pin) async {
+    if (!_available) return;
     await _db
         .collection('producer_pins')
         .doc(producerName)
@@ -87,10 +103,12 @@ class FirestoreService {
   }
 
   static Future<void> deleteProducerPin(String producerName) async {
+    if (!_available) return;
     await _db.collection('producer_pins').doc(producerName).delete();
   }
 
   static Future<List<String>> getProducersWithPins() async {
+    if (!_available) return [];
     final snapshot = await _db.collection('producer_pins').get();
     final names = snapshot.docs.map((d) => d.id).toList()..sort();
     return names;
@@ -99,12 +117,14 @@ class FirestoreService {
   // ─── Team Leader PINs ───────────────────────────────────────────────────────
 
   static Future<String?> getTeamLeaderPin(String name) async {
+    if (!_available) return null;
     final doc = await _db.collection('team_leader_pins').doc(name).get();
     if (!doc.exists) return null;
     return doc.data()?['pin'] as String?;
   }
 
   static Future<String?> getTeamLeaderTeam(String name) async {
+    if (!_available) return null;
     final doc = await _db.collection('team_leader_pins').doc(name).get();
     if (!doc.exists) return null;
     return doc.data()?['team'] as String?;
@@ -112,6 +132,7 @@ class FirestoreService {
 
   static Future<void> setTeamLeaderPin(
       String name, String pin, String team) async {
+    if (!_available) return;
     await _db
         .collection('team_leader_pins')
         .doc(name)
@@ -119,11 +140,13 @@ class FirestoreService {
   }
 
   static Future<void> deleteTeamLeaderPin(String name) async {
+    if (!_available) return;
     await _db.collection('team_leader_pins').doc(name).delete();
   }
 
   /// Returns list of {name, team} maps, sorted by name.
   static Future<List<Map<String, String>>> getTeamLeadersWithPins() async {
+    if (!_available) return [];
     final snapshot = await _db.collection('team_leader_pins').get();
     final list = snapshot.docs.map((d) {
       return {
@@ -137,6 +160,7 @@ class FirestoreService {
 
   static Future<List<PendingItem>> getPendingItemsByTeam(
       String team) async {
+    if (!_available) return [];
     final snapshot = await _db
         .collection('pending_items')
         .where('team', isEqualTo: team)

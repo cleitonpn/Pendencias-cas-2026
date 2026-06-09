@@ -63,3 +63,37 @@ jobs:
           name: CAS2026-Pendencias-APK-debug
           path: build/app/outputs/flutter-apk/app-debug.apk
           retention-days: 30
+
+  build-windows:
+    name: Build Windows
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Configurar Flutter 3.24.0
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.0'
+          channel: 'stable'
+          cache: true
+
+      - name: Habilitar suporte Windows desktop
+        run: flutter config --enable-windows-desktop
+
+      - name: Gerar pasta windows/
+        run: flutter create --platforms=windows .
+
+      - name: Instalar dependências
+        run: flutter pub get
+
+      - name: Build Windows release
+        run: flutter build windows --release
+
+      - name: Upload executável Windows
+        uses: actions/upload-artifact@v4
+        with:
+          name: USET-Pendencias-Windows
+          path: build/windows/x64/runner/Release/
+          retention-days: 30
