@@ -1,0 +1,40 @@
+name: Deploy Firebase
+
+on:
+  push:
+    branches:
+      - main
+      - claude/fair-setup-tracker-app-J9EOm
+    paths:
+      - 'functions/**'
+      - 'storage.rules'
+      - 'firebase.json'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy Functions + Storage Rules
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Configurar Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Instalar dependências da function
+        run: npm install
+        working-directory: functions
+
+      - name: Gravar credencial de serviço
+        run: printf '%s' "$FIREBASE_SA" > "$RUNNER_TEMP/sa.json"
+        env:
+          FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+
+      - name: Deploy (functions + storage)
+        run: npx --yes firebase-tools@latest deploy --only functions,storage --project montagem-uset --non-interactive --force
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/sa.json
