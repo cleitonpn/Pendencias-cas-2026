@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/client.dart';
 import '../models/fair.dart';
@@ -14,6 +15,7 @@ class AppProvider extends ChangeNotifier {
   bool _isLoading = false;
   String? _error;
   DateTime? _lastSync;
+  StreamSubscription? _pendingSubscription;
 
   List<Fair> get fairs => _fairs;
   Fair? get currentFair => _currentFair;
@@ -51,7 +53,25 @@ class AppProvider extends ChangeNotifier {
     _error = null;
     _setLoading(true);
     await _loadLocal();
+    _startPendingStream(fair.name);
     _setLoading(false);
+  }
+
+  void _startPendingStream(String fairName) {
+    _pendingSubscription?.cancel();
+    _pendingSubscription = FirestoreService.streamPendingByFair(fairName)
+        .listen((items) async {
+      for (final item in items) {
+        await DatabaseService.upsertPendingFromFirestore(item);
+      }
+      notifyListeners();
+    }, onError: (_) {});
+  }
+
+  @override
+  void dispose() {
+    _pendingSubscription?.cancel();
+    super.dispose();
   }
 
   Future<void> loadFromLocal() async {

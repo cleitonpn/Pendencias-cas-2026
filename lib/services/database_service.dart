@@ -303,6 +303,34 @@ class DatabaseService {
     return maps.map(PendingItem.fromMap).toList();
   }
 
+  /// Inserts or updates a pending item that came from Firestore.
+  /// Uses firestore_id as the stable key to avoid duplicates.
+  static Future<void> upsertPendingFromFirestore(PendingItem item) async {
+    if (item.firestoreId == null) return;
+    final database = await db;
+    final existing = await database.query('pending_items',
+        where: 'firestore_id = ?', whereArgs: [item.firestoreId], limit: 1);
+    if (existing.isNotEmpty) {
+      await database.update(
+        'pending_items',
+        {
+          'is_resolved': item.isResolved ? 1 : 0,
+          'awaiting_validation': item.awaitingValidation ? 1 : 0,
+          'resolved_at': item.resolvedAt?.toIso8601String(),
+        },
+        where: 'firestore_id = ?',
+        whereArgs: [item.firestoreId],
+      );
+    } else {
+      final fairId = int.tryParse(item.clientId.split('_').first) ?? 1;
+      await database.insert(
+        'pending_items',
+        {...item.toMap(), 'fair_id': fairId},
+        conflictAlgorithm: ConflictAlgorithm.ignore,
+      );
+    }
+  }
+
   static Future<int> insertPendingItem(PendingItem item) async {
     final database = await db;
     final fairId = int.tryParse(item.clientId.split('_').first) ?? 1;

@@ -162,6 +162,17 @@ class FirestoreService {
     } catch (_) {}
   }
 
+  /// Real-time stream of all pending items for a given fair name.
+  static Stream<List<PendingItem>> streamPendingByFair(String fairName) {
+    return _db
+        .collection('pending_items')
+        .where('fairName', isEqualTo: fairName)
+        .snapshots()
+        .map((snap) => snap.docs
+            .map((d) => PendingItem.fromFirestore(d.id, d.data()))
+            .toList());
+  }
+
   // ─── Team ────────────────────────────────────────────────────────────────────
 
   static Future<List<PendingItem>> getPendingItemsByTeam(
