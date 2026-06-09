@@ -17,6 +17,7 @@ class Client {
   final String faxineira;
   final String teto50;
   final String projectLink;
+  final String mobilario;
 
   bool isCompleted;
   DateTime? completedAt;
@@ -39,6 +40,7 @@ class Client {
     required this.faxineira,
     required this.teto50,
     this.projectLink = '',
+    this.mobilario = '',
     this.isCompleted = false,
     this.completedAt,
   });
@@ -88,6 +90,7 @@ class Client {
         'faxineira': faxineira,
         'teto50': teto50,
         'project_link': projectLink,
+        'mobilario': mobilario,
         'is_completed': isCompleted ? 1 : 0,
         'completed_at': completedAt?.toIso8601String(),
       };
@@ -110,6 +113,7 @@ class Client {
         faxineira: map['faxineira'] ?? '',
         teto50: map['teto50'] ?? '',
         projectLink: map['project_link'] ?? '',
+        mobilario: map['mobilario'] ?? '',
         isCompleted: (map['is_completed'] as int? ?? 0) == 1,
         completedAt: map['completed_at'] != null
             ? DateTime.tryParse(map['completed_at'] as String)

@@ -14,7 +14,7 @@ class DatabaseService {
 
   static Future<Database> _initDb() async {
     final path = join(await getDatabasesPath(), 'cas2026.db');
-    return openDatabase(path, version: 5, onCreate: _onCreate, onUpgrade: _onUpgrade);
+    return openDatabase(path, version: 6, onCreate: _onCreate, onUpgrade: _onUpgrade);
   }
 
   static Future<void> _onCreate(Database db, int version) async {
@@ -40,6 +40,7 @@ class DatabaseService {
         produtor TEXT, marceneiro TEXT, tapeceiro TEXT,
         eletricista TEXT, faxineira TEXT, teto50 TEXT,
         project_link TEXT DEFAULT '',
+        mobilario TEXT DEFAULT '',
         is_completed INTEGER DEFAULT 0, completed_at TEXT
       )
     ''');
@@ -113,6 +114,11 @@ class DatabaseService {
       } catch (_) {}
       try {
         await db.execute("ALTER TABLE clients ADD COLUMN project_link TEXT DEFAULT ''");
+      } catch (_) {}
+    }
+    if (oldV < 6) {
+      try {
+        await db.execute("ALTER TABLE clients ADD COLUMN mobilario TEXT DEFAULT ''");
       } catch (_) {}
     }
   }

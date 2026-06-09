@@ -204,6 +204,34 @@ class _ProducerClientDetailScreenState
                     ),
                   ],
 
+                  // Mobiliário locado
+                  if (c.mobilario.isNotEmpty) ...[
+                    const _SectionTitle(
+                        text: 'MOBILIÁRIO LOCADO', color: Colors.teal),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Card(
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10)),
+                        child: Padding(
+                          padding: const EdgeInsets.all(14),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Icon(Icons.chair_outlined,
+                                  color: Colors.teal, size: 20),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(c.mobilario,
+                                    style: const TextStyle(fontSize: 14)),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+
                   // Open pending items
                   if (open.isNotEmpty) ...[
                     _SectionTitle(
