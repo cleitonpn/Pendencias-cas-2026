@@ -176,10 +176,14 @@ class _LoginScreenState extends State<LoginScreen> {
             Center(
               child: Column(
                 children: [
-                  SizedBox(
-                    width: 88,
-                    height: 88,
-                    child: CustomPaint(painter: _USetLogoPainter()),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(20),
+                    child: Image.asset(
+                      'assets/logo.png',
+                      width: 96,
+                      height: 96,
+                      fit: BoxFit.cover,
+                    ),
                   ),
                   const SizedBox(height: 16),
                   const Text('MONTAGEM USET',
@@ -474,32 +478,3 @@ class _ToggleBtn extends StatelessWidget {
   }
 }
 
-class _USetLogoPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final double w = size.width;
-    final double h = size.height;
-    final bgPaint = Paint()..color = Colors.white;
-    canvas.drawCircle(Offset(w / 2, h / 2), w / 2, bgPaint);
-    final navyPaint = Paint()..color = const Color(0xFF0A0F64);
-    final double sw = w * 0.18;
-    final double ux0 = w * 0.15;
-    final double ux1 = w * 0.85;
-    final double uy0 = h * 0.15;
-    final double uy1 = h * 0.88;
-    final double midY = uy0 + (uy1 - uy0) * 0.45;
-    canvas.drawRect(Rect.fromLTRB(ux0, uy0, ux0 + sw, midY), navyPaint);
-    canvas.drawRect(Rect.fromLTRB(ux1 - sw, uy0, ux1, midY), navyPaint);
-    final rrect = RRect.fromRectAndRadius(
-        Rect.fromLTRB(ux0, midY - sw * 0.5, ux1, uy1),
-        Radius.circular(w * 0.35));
-    canvas.drawRRect(rrect, navyPaint);
-    final innerRRect = RRect.fromRectAndRadius(
-        Rect.fromLTRB(ux0 + sw, midY + sw * 0.5, ux1 - sw, uy1 - sw * 0.5),
-        Radius.circular(w * 0.28));
-    canvas.drawRRect(innerRRect, bgPaint);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
