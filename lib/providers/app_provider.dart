@@ -277,7 +277,17 @@ class AppProvider extends ChangeNotifier {
     if (fair.id == null) return;
     await DatabaseService.updateFairMode(fair.id!, mode);
     try {
-      await FirestoreService.setFairMode(fair.id!, mode);
+      // Write the FULL fair document (not just the mode), so the public stand
+      // page always finds name/spreadsheetId/sheetName. A merge-only update
+      // could leave a partial doc that crashes the exhibitor page.
+      await FirestoreService.saveFair(
+        fair.id!,
+        fair.name,
+        fair.spreadsheetId,
+        fair.sheetName,
+        fair.createdAt.toIso8601String(),
+        mode: mode,
+      );
     } catch (_) {}
     if (_currentFair?.id == fair.id) {
       _currentFair = _currentFair!.copyWith(mode: mode);

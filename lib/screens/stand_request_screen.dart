@@ -73,6 +73,11 @@ class _StandRequestScreenState extends State<StandRequestScreen> {
           return;
         }
         final fair = _fairFromData(data);
+        if (fair.spreadsheetId.isEmpty || fair.sheetName.isEmpty) {
+          _fail('Esta feira ainda não está configurada para atendimento. '
+              'Peça ao administrador para abrir o app e ativar o modo manutenção desta feira novamente.');
+          return;
+        }
         if (!fair.isMaintenance) {
           _setStep(_Step.closed);
           return;
@@ -85,7 +90,10 @@ class _StandRequestScreenState extends State<StandRequestScreen> {
       final all = await FirestoreService.getFairs();
       _maintenanceFairs = all
           .map(_fairFromData)
-          .where((f) => f.isMaintenance)
+          .where((f) =>
+              f.isMaintenance &&
+              f.spreadsheetId.isNotEmpty &&
+              f.sheetName.isNotEmpty)
           .toList();
       if (_maintenanceFairs.isEmpty) {
         _setStep(_Step.closed);
@@ -99,9 +107,9 @@ class _StandRequestScreenState extends State<StandRequestScreen> {
 
   Fair _fairFromData(Map<String, dynamic> m) => Fair(
         id: m['id'] as int?,
-        name: m['name'] as String,
-        spreadsheetId: m['spreadsheetId'] as String,
-        sheetName: m['sheetName'] as String,
+        name: (m['name'] as String?) ?? '',
+        spreadsheetId: (m['spreadsheetId'] as String?) ?? '',
+        sheetName: (m['sheetName'] as String?) ?? '',
         createdAt: DateTime.tryParse(m['createdAt'] as String? ?? '') ??
             DateTime.now(),
         mode: (m['mode'] as String?) ?? 'producao',
