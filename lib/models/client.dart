@@ -16,7 +16,7 @@ class Client {
   final String eletricista;
   final String faxineira;
   final String teto50;
-  final String projectLink;   // Drive/project link from Google Sheets
+  final String projectLink;
 
   bool isCompleted;
   DateTime? completedAt;
