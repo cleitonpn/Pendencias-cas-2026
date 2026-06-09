@@ -18,6 +18,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   List<String> _producers = [];
   Map<String, String?> _pins = {};
 
+  // Consultants
+  List<String> _consultants = [];
+  Map<String, String?> _consultantPins = {};
+
   // Team leaders
   List<String> _leaderNames = [];
   Map<String, String> _leaderTeams = {};
@@ -50,6 +54,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
       pins[p] = await FirestoreService.getProducerPin(p);
     }
 
+    // Consultants: from the spreadsheet column "atendimento" + Firestore pins
+    final localConsultants = await DatabaseService.getConsultants(fairId: fairId);
+    final firestoreConsultants = await FirestoreService.getConsultantsWithPins();
+    final allConsultants =
+        {...localConsultants, ...firestoreConsultants}.toList()..sort();
+    final consultantPins = <String, String?>{};
+    for (final c in allConsultants) {
+      consultantPins[c] = await FirestoreService.getConsultantPin(c);
+    }
+
     final leaderList = await FirestoreService.getTeamLeadersWithPins();
     final lNames = leaderList.map((l) => l['name']!).toList();
     final lTeams = { for (final l in leaderList) l['name']!: l['team']! };
@@ -62,6 +76,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       setState(() {
         _producers = allProducers;
         _pins = pins;
+        _consultants = allConsultants;
+        _consultantPins = consultantPins;
         _leaderNames = lNames;
         _leaderTeams = lTeams;
         _leaderPins = lPins;
@@ -142,6 +158,56 @@ class _SettingsScreenState extends State<SettingsScreen> {
       await FirestoreService.deleteProducerPin(producerName);
     } else {
       await FirestoreService.setProducerPin(producerName, result);
+    }
+    await _loadPins();
+  }
+
+  Future<void> _editConsultantPin(String name) async {
+    final currentPin = _consultantPins[name];
+    final ctrl = TextEditingController(text: currentPin ?? '');
+
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        title: Text('PIN — $name'),
+        content: TextField(
+          controller: ctrl,
+          keyboardType: TextInputType.number,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          maxLength: 6,
+          autofocus: true,
+          decoration: const InputDecoration(
+            hintText: 'Digite o PIN (4–6 dígitos)',
+            prefixIcon: Icon(Icons.lock_outline),
+          ),
+          onSubmitted: (_) => Navigator.pop(ctx, ctrl.text),
+        ),
+        actions: [
+          if (currentPin != null)
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, ''),
+              child: const Text('Remover', style: TextStyle(color: Colors.red)),
+            ),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancelar')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, ctrl.text),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1E3A5F),
+                foregroundColor: Colors.white),
+            child: const Text('Salvar'),
+          ),
+        ],
+      ),
+    );
+
+    if (result == null) return;
+    if (result.isEmpty) {
+      await FirestoreService.deleteConsultantPin(name);
+    } else {
+      await FirestoreService.setConsultantPin(name, result);
     }
     await _loadPins();
   }
@@ -536,6 +602,74 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                       color: hasPin ? Colors.green : Colors.grey)),
                               trailing: TextButton(
                                 onPressed: () => _editPin(p),
+                                child: Text(hasPin ? 'Alterar' : 'Definir PIN',
+                                    style: const TextStyle(
+                                        color: Color(0xFF1E3A5F))),
+                              ),
+                            ),
+                          ],
+                        );
+                      }).toList(),
+                    ),
+                  ),
+
+            const SizedBox(height: 24),
+
+            // Consultant PINs
+            const Text('PINs DOS CONSULTORES',
+                style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey,
+                    letterSpacing: 1)),
+            const SizedBox(height: 4),
+            const Text(
+                'Configure um PIN para cada consultor (coluna "atendimento") acessar seus clientes e criar pendências.',
+                style: TextStyle(fontSize: 12, color: Colors.grey)),
+            const SizedBox(height: 10),
+            _consultants.isEmpty
+                ? Card(
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                    child: const Padding(
+                      padding: EdgeInsets.all(16),
+                      child: Text(
+                          'Nenhum consultor encontrado. Sincronize a planilha primeiro.',
+                          style: TextStyle(color: Colors.grey)),
+                    ),
+                  )
+                : Card(
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                    child: Column(
+                      children: _consultants.asMap().entries.map((entry) {
+                        final i = entry.key;
+                        final p = entry.value;
+                        final pin = _consultantPins[p];
+                        final hasPin = pin != null;
+                        return Column(
+                          children: [
+                            if (i > 0) const Divider(height: 1, indent: 16),
+                            ListTile(
+                              leading: CircleAvatar(
+                                backgroundColor: hasPin
+                                    ? Colors.green.shade100
+                                    : Colors.grey.shade100,
+                                child: Icon(
+                                    hasPin ? Icons.lock : Icons.lock_open,
+                                    color: hasPin ? Colors.green : Colors.grey,
+                                    size: 20),
+                              ),
+                              title: Text(p,
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w600)),
+                              subtitle: Text(
+                                  hasPin ? 'PIN configurado' : 'Sem PIN',
+                                  style: TextStyle(
+                                      fontSize: 12,
+                                      color: hasPin ? Colors.green : Colors.grey)),
+                              trailing: TextButton(
+                                onPressed: () => _editConsultantPin(p),
                                 child: Text(hasPin ? 'Alterar' : 'Definir PIN',
                                     style: const TextStyle(
                                         color: Color(0xFF1E3A5F))),

@@ -11,6 +11,7 @@ class Client {
   final String mezanino;
 
   final String produtor;
+  final String atendimento;  // consultor responsável pelo cliente
   final String marceneiro;
   final String tapeceiro;
   final String eletricista;
@@ -35,6 +36,7 @@ class Client {
     required this.totalArea,
     required this.mezanino,
     required this.produtor,
+    this.atendimento = '',
     required this.marceneiro,
     required this.tapeceiro,
     required this.eletricista,
@@ -86,6 +88,7 @@ class Client {
         'total_area': totalArea,
         'mezanino': mezanino,
         'produtor': produtor,
+        'atendimento': atendimento,
         'marceneiro': marceneiro,
         'tapeceiro': tapeceiro,
         'eletricista': eletricista,
@@ -110,6 +113,7 @@ class Client {
         totalArea: map['total_area'] ?? '',
         mezanino: map['mezanino'] ?? '',
         produtor: map['produtor'] ?? '',
+        atendimento: map['atendimento'] ?? '',
         marceneiro: map['marceneiro'] ?? '',
         tapeceiro: map['tapeceiro'] ?? '',
         eletricista: map['eletricista'] ?? '',

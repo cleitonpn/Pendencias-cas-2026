@@ -14,7 +14,7 @@ class DatabaseService {
 
   static Future<Database> _initDb() async {
     final path = join(await getDatabasesPath(), 'cas2026.db');
-    return openDatabase(path, version: 8, onCreate: _onCreate, onUpgrade: _onUpgrade);
+    return openDatabase(path, version: 9, onCreate: _onCreate, onUpgrade: _onUpgrade);
   }
 
   static Future<void> _onCreate(Database db, int version) async {
@@ -37,7 +37,7 @@ class DatabaseService {
         fair_id INTEGER DEFAULT 1,
         nome TEXT, montagem TEXT, local TEXT, hangar TEXT,
         area TEXT, deck TEXT, total_area TEXT, mezanino TEXT,
-        produtor TEXT, marceneiro TEXT, tapeceiro TEXT,
+        produtor TEXT, atendimento TEXT DEFAULT '', marceneiro TEXT, tapeceiro TEXT,
         eletricista TEXT, faxineira TEXT, teto50 TEXT,
         project_link TEXT DEFAULT '',
         link_cv TEXT DEFAULT '',
@@ -131,6 +131,11 @@ class DatabaseService {
     if (oldV < 8) {
       try {
         await db.execute("ALTER TABLE pending_items ADD COLUMN photo_urls TEXT DEFAULT ''");
+      } catch (_) {}
+    }
+    if (oldV < 9) {
+      try {
+        await db.execute("ALTER TABLE clients ADD COLUMN atendimento TEXT DEFAULT ''");
       } catch (_) {}
     }
   }
@@ -279,6 +284,14 @@ class DatabaseService {
         "SELECT DISTINCT produtor FROM clients WHERE produtor != '' AND fair_id = ? ORDER BY produtor",
         [fairId]);
     return result.map((r) => r['produtor'] as String).toList();
+  }
+
+  static Future<List<String>> getConsultants({required int fairId}) async {
+    final database = await db;
+    final result = await database.rawQuery(
+        "SELECT DISTINCT atendimento FROM clients WHERE atendimento != '' AND fair_id = ? ORDER BY atendimento",
+        [fairId]);
+    return result.map((r) => r['atendimento'] as String).toList();
   }
 
   static Future<List<PendingItem>> getPendingItemsByProdutor(

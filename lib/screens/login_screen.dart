@@ -6,6 +6,7 @@ import '../utils/admin_pin.dart';
 import 'fair_selection_screen.dart';
 import 'producer_home_screen.dart';
 import 'team_leader_home_screen.dart';
+import 'consultant_home_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -15,12 +16,17 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  String _role = 'producer'; // 'producer' | 'leader' | 'admin'
+  String _role = 'producer'; // 'producer' | 'consultant' | 'leader' | 'admin'
 
   // Producer
   List<String> _producers = [];
   String? _selectedProducer;
   bool _loadingProducers = true;
+
+  // Consultant
+  List<String> _consultants = [];
+  String? _selectedConsultant;
+  bool _loadingConsultants = true;
 
   // Leader
   List<Map<String, String>> _leaders = [];
@@ -35,6 +41,7 @@ class _LoginScreenState extends State<LoginScreen> {
   void initState() {
     super.initState();
     _loadProducers();
+    _loadConsultants();
     _loadLeaders();
   }
 
@@ -53,6 +60,15 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  Future<void> _loadConsultants() async {
+    try {
+      final list = await FirestoreService.getConsultantsWithPins();
+      if (mounted) setState(() { _consultants = list; _loadingConsultants = false; });
+    } catch (_) {
+      if (mounted) setState(() => _loadingConsultants = false);
+    }
+  }
+
   Future<void> _loadLeaders() async {
     try {
       final list = await FirestoreService.getTeamLeadersWithPins();
@@ -68,6 +84,7 @@ class _LoginScreenState extends State<LoginScreen> {
       _error = null;
       _pinCtrl.clear();
       if (role != 'producer') _selectedProducer = null;
+      if (role != 'consultant') _selectedConsultant = null;
       if (role != 'leader') _selectedLeader = null;
     });
   }
@@ -79,6 +96,8 @@ class _LoginScreenState extends State<LoginScreen> {
         await _enterAdmin();
       } else if (_role == 'producer') {
         await _enterProducer();
+      } else if (_role == 'consultant') {
+        await _enterConsultant();
       } else {
         await _enterLeader();
       }
@@ -131,6 +150,33 @@ class _LoginScreenState extends State<LoginScreen> {
     Navigator.pushReplacement(context,
         MaterialPageRoute(
             builder: (_) => ProducerHomeScreen(producerName: _selectedProducer!)));
+  }
+
+  Future<void> _enterConsultant() async {
+    if (_selectedConsultant == null) {
+      setState(() => _error = 'Selecione seu nome.');
+      return;
+    }
+    if (_pinCtrl.text.isEmpty) {
+      setState(() => _error = 'Digite seu PIN.');
+      return;
+    }
+    final savedPin = await FirestoreService.getConsultantPin(_selectedConsultant!);
+    if (!mounted) return;
+    if (savedPin == null) {
+      setState(() => _error = 'PIN não configurado. Contate o administrador.');
+      return;
+    }
+    if (_pinCtrl.text != savedPin) {
+      setState(() => _error = 'PIN incorreto.');
+      _pinCtrl.clear();
+      return;
+    }
+    if (!mounted) return;
+    Navigator.pushReplacement(context,
+        MaterialPageRoute(
+            builder: (_) =>
+                ConsultantHomeScreen(consultantName: _selectedConsultant!)));
   }
 
   Future<void> _enterLeader() async {
@@ -231,6 +277,11 @@ class _LoginScreenState extends State<LoginScreen> {
                             active: _role == 'producer',
                             onTap: () => _setRole('producer')),
                         _ToggleBtn(
+                            label: 'Consultor',
+                            icon: Icons.support_agent_outlined,
+                            active: _role == 'consultant',
+                            onTap: () => _setRole('consultant')),
+                        _ToggleBtn(
                             label: 'Líder',
                             icon: Icons.groups_outlined,
                             active: _role == 'leader',
@@ -280,6 +331,67 @@ class _LoginScreenState extends State<LoginScreen> {
                                   return GestureDetector(
                                     onTap: () => setState(() {
                                       _selectedProducer = p;
+                                      _error = null;
+                                    }),
+                                    child: AnimatedContainer(
+                                      duration: const Duration(milliseconds: 150),
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 14, vertical: 8),
+                                      decoration: BoxDecoration(
+                                        color: sel ? const Color(0xFF1E3A5F) : Colors.white,
+                                        borderRadius: BorderRadius.circular(20),
+                                        border: Border.all(
+                                          color: sel
+                                              ? const Color(0xFF1E3A5F)
+                                              : Colors.grey.shade300,
+                                        ),
+                                      ),
+                                      child: Text(p,
+                                          style: TextStyle(
+                                              fontWeight: FontWeight.w600,
+                                              color: sel ? Colors.white : Colors.black87,
+                                              fontSize: 13)),
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
+                    const SizedBox(height: 16),
+                  ],
+
+                  // Consultant name pills
+                  if (_role == 'consultant') ...[
+                    const Text('SEU NOME',
+                        style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.grey,
+                            letterSpacing: 1)),
+                    const SizedBox(height: 10),
+                    _loadingConsultants
+                        ? const Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(8),
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ))
+                        : _consultants.isEmpty
+                            ? Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                    color: Colors.orange.shade50,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: Colors.orange.shade200)),
+                                child: const Text(
+                                    'Nenhum consultor cadastrado.\nContate o administrador.',
+                                    style: TextStyle(color: Colors.orange, fontSize: 13)),
+                              )
+                            : Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: _consultants.map((p) {
+                                  final sel = _selectedConsultant == p;
+                                  return GestureDetector(
+                                    onTap: () => setState(() {
+                                      _selectedConsultant = p;
                                       _error = null;
                                     }),
                                     child: AnimatedContainer(
@@ -454,7 +566,7 @@ class _ToggleBtn extends StatelessWidget {
         onTap: onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(vertical: 10),
+          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 2),
           decoration: BoxDecoration(
             color: active ? const Color(0xFF1E3A5F) : Colors.transparent,
             borderRadius: BorderRadius.circular(10),
@@ -465,11 +577,15 @@ class _ToggleBtn extends StatelessWidget {
               Icon(icon,
                   color: active ? Colors.white : Colors.grey, size: 20),
               const SizedBox(height: 4),
-              Text(label,
-                  style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: active ? Colors.white : Colors.grey)),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(label,
+                    maxLines: 1,
+                    style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w600,
+                        color: active ? Colors.white : Colors.grey)),
+              ),
             ],
           ),
         ),

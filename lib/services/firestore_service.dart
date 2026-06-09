@@ -99,6 +99,28 @@ class FirestoreService {
     return names;
   }
 
+  // ─── Consultant PINs ──────────────────────────────────────────────────────────
+
+  static Future<String?> getConsultantPin(String name) async {
+    final doc = await _db.collection('consultant_pins').doc(name).get();
+    if (!doc.exists) return null;
+    return doc.data()?['pin'] as String?;
+  }
+
+  static Future<void> setConsultantPin(String name, String pin) async {
+    await _db.collection('consultant_pins').doc(name).set({'pin': pin});
+  }
+
+  static Future<void> deleteConsultantPin(String name) async {
+    await _db.collection('consultant_pins').doc(name).delete();
+  }
+
+  static Future<List<String>> getConsultantsWithPins() async {
+    final snapshot = await _db.collection('consultant_pins').get();
+    final names = snapshot.docs.map((d) => d.id).toList()..sort();
+    return names;
+  }
+
   // ─── Team Leader PINs ───────────────────────────────────────────────────────
 
   static Future<String?> getTeamLeaderPin(String name) async {
