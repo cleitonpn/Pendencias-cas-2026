@@ -37,6 +37,15 @@ class FirestoreService {
     });
   }
 
+  static Future<void> updatePendingContent(
+      String firestoreId, String description, List<String> photoUrls) async {
+    if (firestoreId.isEmpty) return;
+    await _db.collection('pending_items').doc(firestoreId).update({
+      'description': description,
+      'photoUrls': photoUrls,
+    });
+  }
+
   static Future<void> markAwaitingValidation(String firestoreId) async {
     if (firestoreId.isEmpty) return;
     await _db.collection('pending_items').doc(firestoreId).update({

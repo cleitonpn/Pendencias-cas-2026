@@ -7,6 +7,7 @@ import 'client_list_screen.dart';
 import 'settings_screen.dart';
 import 'reports_screen.dart';
 import 'producer_pending_screen.dart';
+import 'pending_board_screen.dart';
 
 class HangarListScreen extends StatelessWidget {
   const HangarListScreen({super.key});
@@ -26,6 +27,12 @@ class HangarListScreen extends StatelessWidget {
                 fontWeight: FontWeight.bold,
                 fontSize: 20)),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.checklist, color: Colors.white),
+            tooltip: 'Todas as Pendências',
+            onPressed: () => Navigator.push(context,
+                MaterialPageRoute(builder: (_) => const PendingBoardScreen())),
+          ),
           IconButton(
             icon: const Icon(Icons.person_search, color: Colors.white),
             tooltip: 'Pendências por Produtor',
@@ -188,6 +195,7 @@ class _Body extends StatelessWidget {
           hangar: hangar,
           total: clients.length,
           completed: completed,
+          pending: provider.openPendingForHangar(hangar),
           progress: progress,
           onTap: () => Navigator.push(
               context,
@@ -203,6 +211,7 @@ class _HangarCard extends StatelessWidget {
   final String hangar;
   final int total;
   final int completed;
+  final int pending;
   final double progress;
   final VoidCallback onTap;
 
@@ -210,6 +219,7 @@ class _HangarCard extends StatelessWidget {
     required this.hangar,
     required this.total,
     required this.completed,
+    required this.pending,
     required this.progress,
     required this.onTap,
   });
@@ -248,14 +258,34 @@ class _HangarCard extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                            (hangar == 'Externos' ||
-                                    hangar == 'Todos os Stands')
-                                ? hangar
-                                : 'Hangar $hangar',
-                            style: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold)),
+                        Row(children: [
+                          Flexible(
+                            child: Text(
+                                (hangar == 'Externos' ||
+                                        hangar == 'Todos os Stands')
+                                    ? hangar
+                                    : 'Hangar $hangar',
+                                style: const TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold)),
+                          ),
+                          if (pending > 0) ...[
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.orange,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text('$pending pend.',
+                                  style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold)),
+                            ),
+                          ],
+                        ]),
                         Text('$total stands',
                             style: const TextStyle(
                                 color: Colors.grey, fontSize: 13)),

@@ -16,6 +16,7 @@ class AppProvider extends ChangeNotifier {
   String? _error;
   DateTime? _lastSync;
   StreamSubscription? _pendingSubscription;
+  Map<String, int> _pendingCounts = {}; // clientId → open pending count
 
   List<Fair> get fairs => _fairs;
   Fair? get currentFair => _currentFair;
@@ -25,6 +26,23 @@ class AppProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get error => _error;
   DateTime? get lastSync => _lastSync;
+  Map<String, int> get pendingCounts => _pendingCounts;
+
+  /// Total open pending items across all stands of a hangar (reactive).
+  int openPendingForHangar(String hangar) {
+    var sum = 0;
+    for (final c in getClientsByHangar(hangar)) {
+      sum += _pendingCounts[c.rowId] ?? 0;
+    }
+    return sum;
+  }
+
+  Client? clientById(String rowId) {
+    for (final c in _clients) {
+      if (c.rowId == rowId) return c;
+    }
+    return null;
+  }
 
   Future<void> init() async {
     // Sync fairs from Firestore so all devices share the same fair list
@@ -68,6 +86,10 @@ class AppProvider extends ChangeNotifier {
         .listen((items) async {
       for (final item in items) {
         await DatabaseService.upsertPendingFromFirestore(item);
+      }
+      if (_currentFair != null) {
+        _pendingCounts =
+            await DatabaseService.getAllPendingCounts(_currentFair!.id!);
       }
       notifyListeners();
     }, onError: (_) {});
@@ -120,6 +142,8 @@ class AppProvider extends ChangeNotifier {
     if (_currentFair == null) return;
     _clients = await DatabaseService.getClients(fairId: _currentFair!.id!);
     _hangars = await DatabaseService.getHangars(fairId: _currentFair!.id!);
+    _pendingCounts =
+        await DatabaseService.getAllPendingCounts(_currentFair!.id!);
     notifyListeners();
   }
 
@@ -172,6 +196,22 @@ class AppProvider extends ChangeNotifier {
       origem: item.origem,
       createdAt: item.createdAt,
     );
+  }
+
+  /// Edits the description and photos of a pending item (local + cloud).
+  Future<void> editPendingItem(int sqliteId,
+      {String? firestoreId,
+      required String description,
+      required List<String> photoUrls}) async {
+    await DatabaseService.updatePendingContent(
+        sqliteId, description, photoUrls);
+    if (firestoreId != null && firestoreId.isNotEmpty) {
+      try {
+        await FirestoreService.updatePendingContent(
+            firestoreId, description, photoUrls);
+      } catch (_) {}
+    }
+    notifyListeners();
   }
 
   Future<void> resolveItem(int sqliteId, {String? firestoreId}) async {

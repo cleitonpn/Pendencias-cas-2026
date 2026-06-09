@@ -66,6 +66,27 @@ class _ProducerClientDetailScreenState
       _awaitingFirestoreIds.contains(item.firestoreId);
 
   Future<void> _markAwaiting(PendingItem item) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        title: const Text('Marcar como concluída?'),
+        content: const Text(
+            'A pendência irá para validação do administrador. Confirmar?'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancelar')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green, foregroundColor: Colors.white),
+            child: const Text('Confirmar'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
     await context
         .read<AppProvider>()
         .markItemAwaitingValidation(item.id!, firestoreId: item.firestoreId);

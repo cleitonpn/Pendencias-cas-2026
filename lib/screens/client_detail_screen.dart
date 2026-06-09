@@ -9,6 +9,7 @@ import '../services/database_service.dart';
 import '../services/firestore_service.dart';
 import '../widgets/photo_gallery.dart';
 import 'add_pending_screen.dart';
+import 'edit_pending_screen.dart';
 
 class ClientDetailScreen extends StatefulWidget {
   final Client client;
@@ -83,14 +84,51 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
     }
   }
 
+  Future<bool> _confirm(String title, String message, String confirmLabel) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancelar')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green, foregroundColor: Colors.white),
+            child: Text(confirmLabel),
+          ),
+        ],
+      ),
+    );
+    return ok ?? false;
+  }
+
   Future<void> _resolve(PendingItem item) async {
+    if (!await _confirm('Resolver pendência?',
+        'Marcar esta pendência como resolvida? Esta ação não pode ser desfeita.',
+        'Resolver')) return;
     await context.read<AppProvider>().resolveItem(item.id!, firestoreId: item.firestoreId);
     await _load();
   }
 
   Future<void> _validateByFirestoreId(String firestoreId) async {
+    if (!await _confirm('Validar pendência?',
+        'Validar e concluir esta pendência? Esta ação não pode ser desfeita.',
+        'Validar')) return;
     await context.read<AppProvider>().validateItemByFirestoreId(firestoreId);
     await _load();
+  }
+
+  Future<void> _edit(PendingItem item) async {
+    final changed = await Navigator.push<bool>(
+        context,
+        MaterialPageRoute(
+            builder: (_) => EditPendingScreen(item: item, client: widget.client)));
+    if (changed == true) await _load();
   }
 
   Future<void> _launchUrl(String url) async {
@@ -382,6 +420,7 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
                 ...open.map((item) => _PendingCard(
                     item: item,
                     onResolve: () => _resolve(item),
+                    onEdit: () => _edit(item),
                     onCopy: () => _copyWhatsApp(item))),
               ],
               if (awaitingItems.isNotEmpty) ...[
@@ -412,6 +451,7 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
                 ...resolved.map((item) => _PendingCard(
                     item: item,
                     onResolve: null,
+                    onEdit: null,
                     onCopy: () => _copyWhatsApp(item))),
               ],
               if (_items.isEmpty && awaitingItems.isEmpty)
@@ -500,10 +540,14 @@ class _RespChip extends StatelessWidget {
 class _PendingCard extends StatelessWidget {
   final PendingItem item;
   final VoidCallback? onResolve;
+  final VoidCallback? onEdit;
   final VoidCallback onCopy;
 
   const _PendingCard(
-      {required this.item, required this.onResolve, required this.onCopy});
+      {required this.item,
+      required this.onResolve,
+      this.onEdit,
+      required this.onCopy});
 
   @override
   Widget build(BuildContext context) {
@@ -530,12 +574,17 @@ class _PendingCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(children: [
+              _StatusDot(color: resolved ? Colors.green : Colors.deepOrange),
+              const SizedBox(width: 8),
               _TeamBadge(team: item.team),
               if (item.responsible.isNotEmpty) ...[
                 const SizedBox(width: 8),
-                Text(item.responsible,
-                    style: const TextStyle(
-                        color: Colors.grey, fontSize: 12)),
+                Flexible(
+                  child: Text(item.responsible,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          color: Colors.grey, fontSize: 12)),
+                ),
               ],
               const Spacer(),
               if (resolved)
@@ -585,7 +634,7 @@ class _PendingCard extends StatelessWidget {
               style: const TextStyle(color: Colors.grey, fontSize: 11),
             ),
             const SizedBox(height: 10),
-            Row(children: [
+            Wrap(spacing: 8, runSpacing: 8, children: [
               OutlinedButton.icon(
                 onPressed: onCopy,
                 icon: const Icon(Icons.copy, size: 14),
@@ -599,8 +648,22 @@ class _PendingCard extends StatelessWidget {
                   minimumSize: Size.zero,
                 ),
               ),
-              if (onResolve != null) ...[
-                const SizedBox(width: 8),
+              if (onEdit != null) ...[
+                OutlinedButton.icon(
+                  onPressed: onEdit,
+                  icon: const Icon(Icons.edit_outlined, size: 14),
+                  label: const Text('Editar',
+                      style: TextStyle(fontSize: 12)),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF1E3A5F),
+                    side: const BorderSide(color: Color(0xFF1E3A5F)),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    minimumSize: Size.zero,
+                  ),
+                ),
+              ],
+              if (onResolve != null)
                 ElevatedButton.icon(
                   onPressed: onResolve,
                   icon: const Icon(Icons.check, size: 14),
@@ -614,7 +677,6 @@ class _PendingCard extends StatelessWidget {
                     minimumSize: Size.zero,
                   ),
                 ),
-              ],
             ]),
           ],
         ),
@@ -656,12 +718,17 @@ class _AwaitingCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(children: [
+              const _StatusDot(color: Colors.amber),
+              const SizedBox(width: 8),
               _TeamBadge(team: item.team),
               if (item.responsible.isNotEmpty) ...[
                 const SizedBox(width: 8),
-                Text(item.responsible,
-                    style: const TextStyle(
-                        color: Colors.grey, fontSize: 12)),
+                Flexible(
+                  child: Text(item.responsible,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          color: Colors.grey, fontSize: 12)),
+                ),
               ],
               const Spacer(),
               Container(
@@ -749,6 +816,18 @@ class _AwaitingCard extends StatelessWidget {
   String _fmt(DateTime dt) =>
       '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')} '
       '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+}
+
+class _StatusDot extends StatelessWidget {
+  final Color color;
+  const _StatusDot({required this.color});
+
+  @override
+  Widget build(BuildContext context) => Container(
+        width: 10,
+        height: 10,
+        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+      );
 }
 
 class _TeamBadge extends StatelessWidget {

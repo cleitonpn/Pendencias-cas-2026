@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import '../models/client.dart';
@@ -258,6 +259,17 @@ class DatabaseService {
     return {for (final r in rows) r['client_id'] as String: r['cnt'] as int};
   }
 
+  /// Open (unresolved) pending count per client for an entire fair.
+  static Future<Map<String, int>> getAllPendingCounts(int fairId) async {
+    final database = await db;
+    final rows = await database.rawQuery(
+      'SELECT client_id, COUNT(*) as cnt FROM pending_items '
+      'WHERE fair_id = ? AND is_resolved = 0 GROUP BY client_id',
+      [fairId],
+    );
+    return {for (final r in rows) r['client_id'] as String: r['cnt'] as int};
+  }
+
   static Future<Map<String, int>> getPendingCountsByTeam(
       List<String> clientIds, String team) async {
     if (clientIds.isEmpty) return {};
@@ -384,6 +396,18 @@ class DatabaseService {
       {'firestore_id': firestoreId},
       where: 'id = ?',
       whereArgs: [sqliteId],
+    );
+  }
+
+  /// Updates the editable content (description + photos) of a pending item.
+  static Future<void> updatePendingContent(
+      int id, String description, List<String> photoUrls) async {
+    final database = await db;
+    await database.update(
+      'pending_items',
+      {'description': description, 'photo_urls': jsonEncode(photoUrls)},
+      where: 'id = ?',
+      whereArgs: [id],
     );
   }
 
