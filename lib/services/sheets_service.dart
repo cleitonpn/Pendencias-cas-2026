@@ -3,12 +3,38 @@ import 'package:http/http.dart' as http;
 import '../models/client.dart';
 
 class SheetsService {
+  // headers=1: the Google Sheets gviz API designates the first row as the
+  // header and returns each column's name in `table.cols[].label`. Reading the
+  // header from the labels (instead of from a data row) is essential because a
+  // numeric column (e.g. m²) returns a NULL value for its text header cell,
+  // which would otherwise make the column name disappear.
   static String _gvizUrl(
           String spreadsheetId, String sheetName, String range) =>
       'https://docs.google.com/spreadsheets/d/$spreadsheetId/gviz/tq'
-      '?tqx=out:json&headers=0&sheet=${Uri.encodeComponent(sheetName)}&range=${Uri.encodeComponent(range)}';
+      '?tqx=out:json&headers=1&sheet=${Uri.encodeComponent(sheetName)}&range=${Uri.encodeComponent(range)}';
 
-  static Future<List<List<dynamic>>> _fetchRange(
+  static String _cellToString(dynamic cell) {
+    if (cell == null) return '';
+    final cellMap = cell as Map;
+    final f = cellMap['f'] as String?;
+    // If the cell has a HYPERLINK formula, extract the URL (first quoted arg)
+    if (f != null) {
+      final upper = f.trim().toUpperCase();
+      if (upper.startsWith('HYPERLINK(') || upper.startsWith('=HYPERLINK(')) {
+        final match = RegExp(r'"([^"]+)"').firstMatch(f);
+        if (match != null) return match.group(1)!;
+      }
+    }
+    final v = cellMap['v'];
+    if (v == null) return '';
+    if (v is double) {
+      return v == v.truncateToDouble() ? v.toInt().toString() : v.toString();
+    }
+    return v.toString().trim();
+  }
+
+  /// Returns the column header labels and the data rows (header excluded).
+  static Future<({List<String> header, List<List<dynamic>> rows})> _fetchTable(
       String spreadsheetId, String sheetName, String range) async {
     final response = await http
         .get(Uri.parse(_gvizUrl(spreadsheetId, sheetName, range)))
@@ -40,32 +66,18 @@ class SheetsService {
     }
 
     final table = json['table'] as Map<String, dynamic>;
-    final rows = (table['rows'] as List?) ?? [];
+    final cols = (table['cols'] as List?) ?? [];
+    final header = cols
+        .map((c) => ((c as Map)['label'] ?? '').toString())
+        .toList();
 
-    return rows.map((row) {
+    final rawRows = (table['rows'] as List?) ?? [];
+    final rows = rawRows.map((row) {
       final cells = (row['c'] as List?) ?? [];
-      return cells.map((cell) {
-        if (cell == null) return '';
-        final cellMap = cell as Map;
-        final f = cellMap['f'] as String?;
-        // If the cell has a HYPERLINK formula, extract the URL (first quoted arg)
-        if (f != null) {
-          final upper = f.trim().toUpperCase();
-          if (upper.startsWith('HYPERLINK(') || upper.startsWith('=HYPERLINK(')) {
-            final match = RegExp(r'"([^"]+)"').firstMatch(f);
-            if (match != null) return match.group(1)!;
-          }
-        }
-        final v = cellMap['v'];
-        if (v == null) return '';
-        if (v is double) {
-          return v == v.truncateToDouble()
-              ? v.toInt().toString()
-              : v.toString();
-        }
-        return v.toString().trim();
-      }).toList();
+      return cells.map(_cellToString).toList();
     }).toList();
+
+    return (header: header, rows: rows);
   }
 
   /// Reads a wide range (B:T) and auto-detects column positions from the header
@@ -75,16 +87,17 @@ class SheetsService {
     required String sheetName,
     required int fairId,
   }) async {
-    final rows = await _fetchRange(spreadsheetId, sheetName, 'A:BZ');
-    if (rows.isEmpty) {
+    final table = await _fetchTable(spreadsheetId, sheetName, 'A:BZ');
+    final dataRows = table.rows;
+    if (table.header.isEmpty) {
       throw Exception(
           'Planilha vazia ou aba "$sheetName" não encontrada.\n'
           'Verifique o nome da aba e as permissões de compartilhamento.');
     }
 
-    // Row 0 is the header — detect column positions by name (case-insensitive)
+    // Column names come from the header labels (case-insensitive)
     final header =
-        rows[0].map((v) => v.toString().toLowerCase().trim()).toList();
+        table.header.map((v) => v.toString().toLowerCase().trim()).toList();
 
     int findCol(List<String> variants) {
       for (final v in variants) {
@@ -139,8 +152,8 @@ class SheetsService {
 
     final clients = <Client>[];
 
-    for (int i = 1; i < rows.length; i++) {
-      final row = rows[i];
+    for (int i = 0; i < dataRows.length; i++) {
+      final row = dataRows[i];
 
       String s(int idx) {
         if (idx < 0 || idx >= row.length) return '';
@@ -171,7 +184,9 @@ class SheetsService {
 
       clients.add(Client(
         fairId: fairId,
-        rowId: '${fairId}_$i',
+        // +1 keeps rowIds identical to the previous scheme (where row 0 was the
+        // header), so existing pending items stay linked to their clients.
+        rowId: '${fairId}_${i + 1}',
         nome: nome,
         montagem: s(montagemIdx),
         local: s(localIdx),
