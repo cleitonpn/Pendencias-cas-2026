@@ -8,10 +8,13 @@ import '../providers/app_provider.dart';
 import '../services/database_service.dart';
 import '../services/firestore_service.dart';
 import '../widgets/photo_gallery.dart';
+import '../widgets/montage_section.dart';
 
 class ProducerClientDetailScreen extends StatefulWidget {
   final Client client;
-  const ProducerClientDetailScreen({super.key, required this.client});
+  final String producerName;
+  const ProducerClientDetailScreen(
+      {super.key, required this.client, this.producerName = ''});
 
   @override
   State<ProducerClientDetailScreen> createState() =>
@@ -313,6 +316,18 @@ class _ProducerClientDetailScreenState
                       ),
                     ),
                   ],
+
+                  // Montage progress photos (producer can add)
+                  MontageSection(
+                    clientId: c.rowId,
+                    fairId: c.fairId,
+                    fairName:
+                        context.read<AppProvider>().currentFairName,
+                    canAdd: true,
+                    createdBy: widget.producerName.isNotEmpty
+                        ? widget.producerName
+                        : 'Produtor',
+                  ),
 
                   // Open pending items
                   if (open.isNotEmpty) ...[

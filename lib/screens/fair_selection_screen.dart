@@ -177,39 +177,76 @@ class _ModeToggle extends StatelessWidget {
   final Fair fair;
   const _ModeToggle({required this.fair});
 
+  String get _subtitle {
+    if (fair.isMaintenance) {
+      return 'Evento: expositores pedem manutenção pelo QR';
+    }
+    if (fair.isProduction) {
+      return 'Equipe montando — lembrete diário de foto ao produtor às 18h';
+    }
+    return 'Pré-produção — sem notificações';
+  }
+
   @override
   Widget build(BuildContext context) {
-    final maintenance = fair.isMaintenance;
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(maintenance ? Icons.construction : Icons.build_circle_outlined,
-            size: 20, color: maintenance ? Colors.orange : Colors.grey),
-        const SizedBox(width: 8),
-        Expanded(
+        Row(
+          children: [
+            _seg(context, 'pre_producao', 'Pré-prod.', Icons.schedule,
+                Colors.blueGrey),
+            const SizedBox(width: 6),
+            _seg(context, 'producao', 'Produção', Icons.handyman,
+                Colors.green),
+            const SizedBox(width: 6),
+            _seg(context, 'manutencao', 'Manutenção', Icons.construction,
+                Colors.orange),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Text(_subtitle,
+            style: const TextStyle(fontSize: 11, color: Colors.grey)),
+      ],
+    );
+  }
+
+  Widget _seg(BuildContext context, String mode, String label, IconData icon,
+      Color color) {
+    final selected = fair.mode == mode;
+    return Expanded(
+      child: GestureDetector(
+        onTap: selected
+            ? null
+            : () => context.read<AppProvider>().setFairMode(fair, mode),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+          decoration: BoxDecoration(
+            color: selected ? color.withOpacity(0.12) : Colors.white,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+                color: selected ? color : Colors.grey.shade300,
+                width: selected ? 1.5 : 1),
+          ),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Text(maintenance ? 'Modo manutenção (evento)' : 'Modo produção',
-                  style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: maintenance ? Colors.orange : Colors.black87)),
-              Text(
-                  maintenance
-                      ? 'Expositores podem pedir manutenção pelo QR'
-                      : 'Equipe montando — pedidos do QR bloqueados',
-                  style: const TextStyle(fontSize: 11, color: Colors.grey)),
+              Icon(icon,
+                  size: 18, color: selected ? color : Colors.grey),
+              const SizedBox(height: 3),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(label,
+                    style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w600,
+                        color: selected ? color : Colors.grey.shade600)),
+              ),
             ],
           ),
         ),
-        Switch(
-          value: maintenance,
-          activeColor: Colors.orange,
-          onChanged: (v) => context
-              .read<AppProvider>()
-              .setFairMode(fair, v ? 'manutencao' : 'producao'),
-        ),
-      ],
+      ),
     );
   }
 }

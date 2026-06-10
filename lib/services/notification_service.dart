@@ -1,12 +1,14 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:timezone/timezone.dart' as tz;
+import '../models/fair.dart';
 import '../utils/fcm_topics.dart';
 
-/// Handles push notifications via Firebase Cloud Messaging.
+/// Handles push notifications (FCM) and local scheduled notifications.
 ///
-/// FCM is only available on Android/iOS — on Windows/Linux/macOS/web all
-/// methods are safe no-ops, so the desktop build keeps working normally.
+/// Only active on Android/iOS — all methods are safe no-ops on web/desktop.
 class NotificationService {
   static final messengerKey = GlobalKey<ScaffoldMessengerState>();
 
@@ -17,8 +19,10 @@ class NotificationService {
   }
 
   static bool _initialized = false;
+  static final _localPlugin = FlutterLocalNotificationsPlugin();
+  static const _montageReminderId = 1001;
 
-  /// Requests permission and wires up foreground message handling.
+  /// Requests FCM permission and wires up foreground message handling.
   /// Call once after Firebase.initializeApp().
   static Future<void> init() async {
     if (!_supported || _initialized) return;
@@ -54,10 +58,63 @@ class NotificationService {
     } catch (_) {
       // Messaging not available — ignore.
     }
+
+    // Initialize local notifications plugin.
+    const initSettings = InitializationSettings(
+      android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+    );
+    await _localPlugin.initialize(initSettings);
   }
 
-  /// Subscribes this device to the topics for a given role, after first
-  /// clearing any previously-subscribed role topics.
+  // ── Local daily reminder ───────────────────────────────────────────────────
+
+  /// Schedule the daily 18h montage reminder if any fair is in 'producao'
+  /// mode, or cancel it if none are. Call this every time the producer's fair
+  /// list is loaded or changes.
+  static Future<void> syncMontageReminder(List<Fair> fairs) async {
+    if (!_supported) return;
+    final inProducao = fairs.any((f) => f.isProduction);
+    if (inProducao) {
+      await _scheduleDailyAt18h();
+    } else {
+      await _localPlugin.cancel(_montageReminderId);
+    }
+  }
+
+  static Future<void> _scheduleDailyAt18h() async {
+    const details = NotificationDetails(
+      android: AndroidNotificationDetails(
+        'montagem_lembrete',
+        'Lembrete de Montagem',
+        channelDescription:
+            'Lembrete diário para registrar o progresso da montagem às 18h',
+        importance: Importance.high,
+        priority: Priority.high,
+      ),
+    );
+    final now = tz.TZDateTime.now(tz.local);
+    var scheduled =
+        tz.TZDateTime(tz.local, now.year, now.month, now.day, 18);
+    if (!scheduled.isAfter(now)) {
+      scheduled = scheduled.add(const Duration(days: 1));
+    }
+    try {
+      await _localPlugin.zonedSchedule(
+        _montageReminderId,
+        'Hora de atualizar a montagem!',
+        'Registre o progresso do dia com uma foto de cada stand.',
+        scheduled,
+        details,
+        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        matchDateTimeComponents: DateTimeComponents.time,
+      );
+    } catch (_) {
+      // Scheduling not supported on this device — ignore.
+    }
+  }
+
+  // ── FCM topic subscriptions ────────────────────────────────────────────────
+
   static Future<void> subscribeAdmin() => _subscribe(['admins']);
 
   static Future<void> subscribeProducer(String producerName) =>

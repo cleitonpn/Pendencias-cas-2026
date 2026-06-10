@@ -8,6 +8,7 @@ import '../models/pending_item.dart';
 import '../services/database_service.dart';
 import '../services/firestore_service.dart';
 import '../widgets/photo_gallery.dart';
+import '../widgets/montage_section.dart';
 import 'add_pending_screen.dart';
 import 'edit_pending_screen.dart';
 
@@ -409,6 +410,14 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
                   ),
                 ],
               ),
+            ),
+
+            // Montage progress photos (admin only views)
+            MontageSection(
+              clientId: c.rowId,
+              fairId: c.fairId,
+              fairName: context.read<AppProvider>().currentFairName,
+              canAdd: false,
             ),
 
             if (_loading)

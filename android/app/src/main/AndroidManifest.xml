@@ -5,6 +5,9 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <!-- Permite o app baixar e instalar a atualização (APK) diretamente -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
+    <!-- Needed to reschedule local notifications after device reboot -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
 
     <application
         android:label="Montagem USET"
@@ -32,6 +35,21 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2"/>
+
+        <!-- flutter_local_notifications: rescheduled after reboot or app update -->
+        <receiver
+            android:exported="false"
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+                <action android:name="android.intent.action.QUICKBOOT_POWERON"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+            </intent-filter>
+        </receiver>
+        <receiver
+            android:exported="false"
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver"/>
     </application>
 
     <queries>

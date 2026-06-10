@@ -136,6 +136,7 @@ class _ProducerClientListScreenState
                           MaterialPageRoute(
                             builder: (_) => ProducerClientDetailScreen(
                               client: clients[i],
+                              producerName: widget.producerName,
                             ),
                           ),
                         );

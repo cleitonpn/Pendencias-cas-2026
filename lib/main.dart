@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:timezone/data/latest.dart' as tz;
+import 'package:timezone/timezone.dart' as tzlib;
 import 'firebase_options.dart';
 import 'providers/app_provider.dart';
 import 'utils/desktop_db.dart';
@@ -25,6 +27,12 @@ void main() async {
 
   // Initialize FFI SQLite on desktop (no-op on web and mobile).
   if (!kIsWeb) initDesktopDatabase();
+
+  // Initialize timezone data for local notification scheduling (native only).
+  if (!kIsWeb) {
+    tz.initializeTimeZones();
+    tzlib.setLocalLocation(tzlib.getLocation('America/Sao_Paulo'));
+  }
 
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 

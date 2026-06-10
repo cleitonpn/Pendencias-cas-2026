@@ -1,13 +1,44 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_provider.dart';
+import '../services/notification_service.dart';
 import '../services/session_service.dart';
 import 'login_screen.dart';
 import 'producer_hangar_list_screen.dart';
 
-class ProducerHomeScreen extends StatelessWidget {
+class ProducerHomeScreen extends StatefulWidget {
   final String producerName;
   const ProducerHomeScreen({super.key, required this.producerName});
+
+  @override
+  State<ProducerHomeScreen> createState() => _ProducerHomeScreenState();
+}
+
+class _ProducerHomeScreenState extends State<ProducerHomeScreen> {
+  AppProvider? _provider;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _provider = context.read<AppProvider>();
+      _provider!.addListener(_onFairsChanged);
+      _syncReminder();
+    });
+  }
+
+  @override
+  void dispose() {
+    _provider?.removeListener(_onFairsChanged);
+    super.dispose();
+  }
+
+  void _onFairsChanged() => _syncReminder();
+
+  void _syncReminder() {
+    final fairs = context.read<AppProvider>().fairs;
+    NotificationService.syncMontageReminder(fairs);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -17,7 +48,7 @@ class ProducerHomeScreen extends StatelessWidget {
       backgroundColor: const Color(0xFFF0F2F5),
       appBar: AppBar(
         backgroundColor: const Color(0xFF1E3A5F),
-        title: Text(producerName,
+        title: Text(widget.producerName,
             style: const TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.bold,
@@ -27,6 +58,7 @@ class ProducerHomeScreen extends StatelessWidget {
             icon: const Icon(Icons.logout, color: Colors.white),
             tooltip: 'Sair',
             onPressed: () async {
+              await NotificationService.syncMontageReminder([]);
               await SessionService.clear();
               if (context.mounted) {
                 Navigator.of(context).pushAndRemoveUntil(
@@ -53,7 +85,7 @@ class ProducerHomeScreen extends StatelessWidget {
                         context,
                         MaterialPageRoute(
                           builder: (_) => ProducerHangarListScreen(
-                              producerName: producerName),
+                              producerName: widget.producerName),
                         ),
                       );
                     }

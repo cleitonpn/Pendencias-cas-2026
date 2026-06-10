@@ -4,7 +4,9 @@ class Fair {
   final String spreadsheetId;
   final String sheetName;
   final DateTime createdAt;
-  final String mode; // 'producao' (equipe monta) | 'manutencao' (evento aberto ao expositor)
+  // 'pre_producao' (sem notificações) | 'producao' (equipe monta, lembrete
+  // diário ao produtor) | 'manutencao' (evento aberto ao expositor pelo QR)
+  final String mode;
 
   const Fair({
     this.id,
@@ -16,6 +18,8 @@ class Fair {
   });
 
   bool get isMaintenance => mode == 'manutencao';
+  bool get isProduction => mode == 'producao';
+  bool get isPreProduction => mode == 'pre_producao';
 
   Fair copyWith({String? mode}) => Fair(
         id: id,

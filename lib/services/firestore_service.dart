@@ -1,8 +1,39 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/pending_item.dart';
+import '../models/montage_update.dart';
 
 class FirestoreService {
   static FirebaseFirestore get _db => FirebaseFirestore.instance;
+
+  // ─── Montage updates (fotos de andamento da montagem) ────────────────────────
+
+  static Future<void> saveMontageUpdate({
+    required String clientId,
+    required String fairName,
+    required String photoUrl,
+    required String createdBy,
+  }) async {
+    // Fire-and-forget: Firestore enfileira offline e envia ao reconectar.
+    _db.collection('montage_updates').add({
+      'clientId': clientId,
+      'fairName': fairName,
+      'photoUrl': photoUrl,
+      'createdBy': createdBy,
+      'createdAt': DateTime.now().toIso8601String(),
+    }).ignore();
+  }
+
+  static Future<List<MontageUpdate>> getMontageUpdates(String clientId) async {
+    final snap = await _db
+        .collection('montage_updates')
+        .where('clientId', isEqualTo: clientId)
+        .get();
+    final list = snap.docs
+        .map((d) => MontageUpdate.fromFirestore(d.id, d.data()))
+        .toList();
+    list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return list;
+  }
 
   // ─── Pending Items ───────────────────────────────────────────────────────────
 

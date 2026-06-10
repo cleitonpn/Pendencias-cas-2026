@@ -1,7 +1,7 @@
 name: montagem_uset
 description: Gestão de pendências - Montagem USET
 publish_to: 'none'
-version: 1.0.7+8
+version: 1.0.8+9
 
 environment:
   sdk: '>=3.3.0 <4.0.0'
@@ -28,6 +28,8 @@ dependencies:
   sqflite_common_ffi: ^2.3.4
   sqlite3_flutter_libs: ^0.5.4+1
   package_info_plus: ^8.0.2
+  flutter_local_notifications: ^18.0.1
+  timezone: ^0.9.4
 
 dev_dependencies:
   flutter_test:
