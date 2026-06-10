@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../services/update_service.dart';
-import '../utils/apk_installer.dart';
-import '../utils/apk_progress.dart';
 
-/// Shows the "new version available" prompt and, if accepted, the download
-/// progress while the APK is fetched and the installer is launched.
+/// Shows the "new version available" prompt. Accepting opens the APK download
+/// through the system (browser / download manager), which reliably follows
+/// GitHub's redirects. The user then taps the downloaded file to install
+/// (over the current app, since it is signed with the same key).
 Future<void> showUpdateFlow(BuildContext context, UpdateInfo info) async {
   final accept = await showDialog<bool>(
     context: context,
@@ -20,8 +21,8 @@ Future<void> showUpdateFlow(BuildContext context, UpdateInfo info) async {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Há uma atualização disponível do app. Deseja baixar e '
-              'instalar agora?'),
+          const Text('Há uma atualização disponível do app. Deseja baixar '
+              'agora?'),
           if (info.notes.isNotEmpty) ...[
             const SizedBox(height: 12),
             Container(
@@ -54,100 +55,37 @@ Future<void> showUpdateFlow(BuildContext context, UpdateInfo info) async {
 
   if (accept != true || !context.mounted) return;
 
+  bool launched = false;
+  try {
+    launched = await launchUrl(
+      Uri.parse(info.apkUrl),
+      mode: LaunchMode.externalApplication,
+    );
+  } catch (_) {
+    launched = false;
+  }
+
+  if (!context.mounted) return;
+
   await showDialog(
     context: context,
-    barrierDismissible: false,
-    builder: (ctx) => _DownloadDialog(url: info.apkUrl),
-  );
-}
-
-class _DownloadDialog extends StatefulWidget {
-  final String url;
-  const _DownloadDialog({required this.url});
-
-  @override
-  State<_DownloadDialog> createState() => _DownloadDialogState();
-}
-
-class _DownloadDialogState extends State<_DownloadDialog> {
-  int _percent = 0;
-  String _status = 'Iniciando download...';
-  bool _error = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _start();
-  }
-
-  void _start() {
-    try {
-      installApk(widget.url).listen((e) {
-        if (!mounted) return;
-        setState(() {
-          if (e.percent >= 0) _percent = e.percent;
-          if (e.isError) {
-            _error = true;
-            _status = 'Falha ao baixar. Tente novamente.';
-          } else if (e.status == 'INSTALLING') {
-            _status = 'Abrindo instalador...';
-          } else {
-            _status = 'Baixando atualização...';
-          }
-        });
-      }, onError: (_) {
-        if (mounted) {
-          setState(() {
-            _error = true;
-            _status = 'Falha ao baixar. Tente novamente.';
-          });
-        }
-      });
-    } catch (_) {
-      setState(() {
-        _error = true;
-        _status = 'Não foi possível iniciar a atualização.';
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
+    builder: (ctx) => AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      title: const Text('Atualizando'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (!_error) ...[
-            LinearProgressIndicator(
-              value: _percent > 0 ? _percent / 100 : null,
-              minHeight: 8,
-              backgroundColor: Colors.grey.shade200,
-            ),
-            const SizedBox(height: 12),
-            Text('$_status${_percent > 0 ? " ($_percent%)" : ""}',
-                style: const TextStyle(fontSize: 13, color: Colors.grey)),
-          ] else ...[
-            const Icon(Icons.error_outline, color: Colors.red, size: 40),
-            const SizedBox(height: 8),
-            Text(_status,
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.red)),
-          ],
-        ],
+      title: Text(launched ? 'Download iniciado' : 'Baixar atualização'),
+      content: Text(
+        launched
+            ? 'Quando o download terminar, abra o arquivo "app-release.apk" '
+                '(na barra de notificações ou na pasta Downloads) e toque em '
+                'Instalar. Seus dados são mantidos.'
+            : 'Não foi possível abrir o download automaticamente. Acesse o '
+                'link abaixo no navegador para baixar a nova versão:\n\n'
+                '${info.apkUrl}',
+        style: const TextStyle(fontSize: 14),
       ),
-      actions: _error
-          ? [
-              TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Fechar')),
-            ]
-          : [
-              TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Continuar em segundo plano')),
-            ],
-    );
-  }
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.pop(ctx), child: const Text('Ok')),
+      ],
+    ),
+  );
 }

@@ -94,23 +94,21 @@ class SheetsService {
       return -1;
     }
 
-    // Fallback: first header that CONTAINS any of the needles (handles headers
-    // like "Área (m²)", "Metragem", "M² Stand").
-    int findColContains(List<String> needles) {
-      for (var i = 0; i < header.length; i++) {
-        for (final n in needles) {
-          if (header[i].contains(n)) return i;
-        }
-      }
-      return -1;
-    }
-
     final nomeIdx     = findCol(['nome']);
     final montagemIdx = findCol(['montagem']);
     final localIdx    = findCol(['local']);
     final hangarIdx   = findCol(['hangar']);
-    var areaIdx       = findCol(['m²', 'm2', 'área', 'area', 'metragem', 'tamanho']);
-    if (areaIdx < 0) areaIdx = findColContains(['m²', 'm2', 'metr']);
+    // Robust m²/área detection: normalize "²"→"2" and drop spaces so "m²",
+    // "M2", "Área (m²)", "Metragem" etc. are all recognized, regardless of how
+    // the superscript character is encoded in the spreadsheet.
+    int areaIdx = -1;
+    for (var i = 0; i < header.length; i++) {
+      final h = header[i].replaceAll('²', '2').replaceAll(' ', '');
+      if (h.contains('m2') || h.contains('metr') || h == 'area' || h == 'área') {
+        areaIdx = i;
+        break;
+      }
+    }
     final produtorIdx = findCol(['produtor']);
     final atendIdx    = findCol(['atendimento', 'consultor', 'atendimento responsável', 'atendimento responsavel']);
     final organizadoraIdx = findCol(['organizadora', 'organizador', 'organização', 'organizacao']);
