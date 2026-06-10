@@ -129,6 +129,18 @@ class SheetsService {
         return row[idx]?.toString().trim() ?? '';
       }
 
+      // Normalizes a person name to Title Case so the casing in the spreadsheet
+      // does not affect PIN lookups (which use the name as a Firestore doc ID).
+      // "RENAN" → "Renan"  |  "JOÃO PEDRO" → "João Pedro"
+      String n(int idx) {
+        final raw = s(idx);
+        if (raw.isEmpty) return raw;
+        return raw.split(' ').map((w) {
+          if (w.isEmpty) return w;
+          return w[0].toUpperCase() + w.substring(1).toLowerCase();
+        }).join(' ');
+      }
+
       final nome = s(nomeIdx);
       if (nome.isEmpty) continue;
 
@@ -150,13 +162,13 @@ class SheetsService {
         deck: '',
         totalArea: '',
         mezanino: '',
-        produtor: s(produtorIdx),
-        atendimento: s(atendIdx),
+        produtor: n(produtorIdx),
+        atendimento: n(atendIdx),
         pin: s(pinIdx),
-        marceneiro: s(marceIdx),
-        tapeceiro: s(tapecIdx),
-        eletricista: s(eletrIdx),
-        faxineira: s(faxiIdx),
+        marceneiro: n(marceIdx),
+        tapeceiro: n(tapecIdx),
+        eletricista: n(eletrIdx),
+        faxineira: n(faxiIdx),
         teto50: '',
         projectLink: s(linkIdx),
         linkCv: s(linkCvIdx),
