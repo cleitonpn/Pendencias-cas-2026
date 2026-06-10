@@ -69,7 +69,9 @@ jobs:
         if: github.ref_name == 'main' || github.ref_name == 'claude/fair-setup-tracker-app-J9EOm'
         uses: softprops/action-gh-release@v2
         with:
+          token: ${{ secrets.GITHUB_TOKEN }}
           tag_name: v${{ steps.ver.outputs.code }}
+          target_commitish: ${{ github.sha }}
           name: ${{ steps.ver.outputs.name }}
           body: "Atualização do app Montagem USET (versão ${{ steps.ver.outputs.name }})."
           make_latest: "true"
