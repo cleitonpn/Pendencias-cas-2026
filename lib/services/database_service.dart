@@ -15,7 +15,7 @@ class DatabaseService {
 
   static Future<Database> _initDb() async {
     final path = join(await getDatabasesPath(), 'cas2026.db');
-    return openDatabase(path, version: 11, onCreate: _onCreate, onUpgrade: _onUpgrade);
+    return openDatabase(path, version: 12, onCreate: _onCreate, onUpgrade: _onUpgrade);
   }
 
   static Future<void> _onCreate(Database db, int version) async {
@@ -39,7 +39,7 @@ class DatabaseService {
         fair_id INTEGER DEFAULT 1,
         nome TEXT, montagem TEXT, local TEXT, hangar TEXT,
         area TEXT, deck TEXT, total_area TEXT, mezanino TEXT,
-        produtor TEXT, atendimento TEXT DEFAULT '', pin TEXT DEFAULT '', marceneiro TEXT, tapeceiro TEXT,
+        produtor TEXT, atendimento TEXT DEFAULT '', organizadora TEXT DEFAULT '', pin TEXT DEFAULT '', marceneiro TEXT, tapeceiro TEXT,
         eletricista TEXT, faxineira TEXT, teto50 TEXT,
         project_link TEXT DEFAULT '',
         link_cv TEXT DEFAULT '',
@@ -59,6 +59,8 @@ class DatabaseService {
         origem TEXT DEFAULT 'equipe',
         created_by TEXT DEFAULT '',
         resolved_by TEXT DEFAULT '',
+        approval_status TEXT DEFAULT 'none',
+        rejection_reason TEXT DEFAULT '',
         is_resolved INTEGER DEFAULT 0,
         awaiting_validation INTEGER DEFAULT 0,
         created_at TEXT, resolved_at TEXT,
@@ -162,7 +164,23 @@ class DatabaseService {
         await db.execute("ALTER TABLE pending_items ADD COLUMN resolved_by TEXT DEFAULT ''");
       } catch (_) {}
     }
+    if (oldV < 12) {
+      try {
+        await db.execute("ALTER TABLE clients ADD COLUMN organizadora TEXT DEFAULT ''");
+      } catch (_) {}
+      try {
+        await db.execute("ALTER TABLE pending_items ADD COLUMN approval_status TEXT DEFAULT 'none'");
+      } catch (_) {}
+      try {
+        await db.execute("ALTER TABLE pending_items ADD COLUMN rejection_reason TEXT DEFAULT ''");
+      } catch (_) {}
+    }
   }
+
+  /// SQL fragment: items hidden from producer/leader because they are organizer
+  /// requests still awaiting approval, or that were rejected by the attendant.
+  static const _visibleClause =
+      "COALESCE(approval_status, 'none') NOT IN ('pendente', 'recusada')";
 
   // ─── Fairs ──────────────────────────────────────────────────────────────────
 
@@ -264,7 +282,7 @@ class DatabaseService {
     final ids = clientIds.map((id) => "'$id'").join(',');
     final rows = await database.rawQuery(
       'SELECT client_id, COUNT(*) as cnt FROM pending_items '
-      'WHERE client_id IN ($ids) AND is_resolved = 0 GROUP BY client_id',
+      'WHERE client_id IN ($ids) AND is_resolved = 0 AND $_visibleClause GROUP BY client_id',
     );
     return {for (final r in rows) r['client_id'] as String: r['cnt'] as int};
   }
@@ -274,7 +292,7 @@ class DatabaseService {
     final database = await db;
     final rows = await database.rawQuery(
       'SELECT client_id, COUNT(*) as cnt FROM pending_items '
-      'WHERE fair_id = ? AND is_resolved = 0 GROUP BY client_id',
+      'WHERE fair_id = ? AND is_resolved = 0 AND $_visibleClause GROUP BY client_id',
       [fairId],
     );
     return {for (final r in rows) r['client_id'] as String: r['cnt'] as int};
@@ -287,7 +305,7 @@ class DatabaseService {
     final ids = clientIds.map((id) => "'$id'").join(',');
     final rows = await database.rawQuery(
       'SELECT client_id, COUNT(*) as cnt FROM pending_items '
-      'WHERE client_id IN ($ids) AND is_resolved = 0 AND team = ? GROUP BY client_id',
+      'WHERE client_id IN ($ids) AND is_resolved = 0 AND team = ? AND $_visibleClause GROUP BY client_id',
       [team],
     );
     return {for (final r in rows) r['client_id'] as String: r['cnt'] as int};
@@ -310,13 +328,64 @@ class DatabaseService {
   }
 
   static Future<List<PendingItem>> getPendingItemsByClient(
-      String clientId) async {
+      String clientId, {bool excludeUnapproved = false}) async {
     final database = await db;
+    final where = excludeUnapproved
+        ? 'client_id = ? AND $_visibleClause'
+        : 'client_id = ?';
     final maps = await database.query('pending_items',
-        where: 'client_id = ?',
+        where: where,
         whereArgs: [clientId],
         orderBy: 'created_at DESC');
     return maps.map(PendingItem.fromMap).toList();
+  }
+
+  /// Distinct organizer names from the spreadsheet (column "organizadora").
+  static Future<List<String>> getOrganizers({required int fairId}) async {
+    final database = await db;
+    final result = await database.rawQuery(
+        "SELECT DISTINCT organizadora FROM clients WHERE organizadora != '' AND fair_id = ? ORDER BY organizadora",
+        [fairId]);
+    return result.map((r) => r['organizadora'] as String).toList();
+  }
+
+  /// Organizer requests awaiting the attendant's approval, for a fair.
+  static Future<List<PendingItem>> getPendingApprovalItems(
+      {required int fairId}) async {
+    final database = await db;
+    final maps = await database.query(
+      'pending_items',
+      where: "fair_id = ? AND origem = 'organizadora' AND approval_status = 'pendente' AND is_resolved = 0",
+      whereArgs: [fairId],
+      orderBy: 'created_at',
+    );
+    return maps.map(PendingItem.fromMap).toList();
+  }
+
+  /// Approves an organizer request: it becomes a normal pending and flows to
+  /// the producer/leader.
+  static Future<void> approveOrganizerItem(int id) async {
+    final database = await db;
+    await database.update('pending_items', {'approval_status': 'aprovada'},
+        where: 'id = ?', whereArgs: [id]);
+  }
+
+  /// Rejects an organizer request: it is finalized (closed) with a reason.
+  static Future<void> rejectOrganizerItem(int id,
+      {String reason = '', String by = ''}) async {
+    final database = await db;
+    await database.update(
+      'pending_items',
+      {
+        'approval_status': 'recusada',
+        'rejection_reason': reason,
+        'is_resolved': 1,
+        'resolved_at': DateTime.now().toIso8601String(),
+        if (by.isNotEmpty) 'resolved_by': by,
+      },
+      where: 'id = ?',
+      whereArgs: [id],
+    );
   }
 
   static Future<List<String>> getProducers({required int fairId}) async {
@@ -345,7 +414,7 @@ class DatabaseService {
     if (clients.isEmpty) return [];
     final ids = clients.map((c) => "'${c['row_id']}'").join(',');
     final maps = await database.rawQuery(
-      'SELECT * FROM pending_items WHERE client_id IN ($ids) AND is_resolved = 0 '
+      'SELECT * FROM pending_items WHERE client_id IN ($ids) AND is_resolved = 0 AND $_visibleClause '
       'ORDER BY hangar, local, created_at',
     );
     return maps.map(PendingItem.fromMap).toList();
@@ -356,7 +425,7 @@ class DatabaseService {
     final database = await db;
     final maps = await database.query(
       'pending_items',
-      where: 'team = ? AND fair_id = ? AND is_resolved = 0',
+      where: 'team = ? AND fair_id = ? AND is_resolved = 0 AND $_visibleClause',
       whereArgs: [team, fairId],
       orderBy: 'hangar, local, created_at',
     );
@@ -378,6 +447,10 @@ class DatabaseService {
           'awaiting_validation': item.awaitingValidation ? 1 : 0,
           'resolved_at': item.resolvedAt?.toIso8601String(),
           'resolved_by': item.resolvedBy,
+          'approval_status': item.approvalStatus,
+          'rejection_reason': item.rejectionReason,
+          'description': item.description,
+          'photo_urls': jsonEncode(item.photoUrls),
         },
         where: 'firestore_id = ?',
         whereArgs: [item.firestoreId],

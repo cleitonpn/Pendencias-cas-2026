@@ -47,7 +47,7 @@ class _ProducerClientDetailScreenState
   Future<void> _load({bool silent = false}) async {
     if (!silent) setState(() => _loading = true);
     final items = await DatabaseService.getPendingItemsByClient(
-        widget.client.rowId);
+        widget.client.rowId, excludeUnapproved: true);
     final awaitingItems = await FirestoreService.getAwaitingItemsByClientId(
         widget.client.rowId);
     if (mounted) {

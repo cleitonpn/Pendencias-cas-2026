@@ -13,9 +13,13 @@ class PendingItem {
   final String responsible;
   final String description;
   final List<String> photoUrls; // download URLs of attached photos
-  final String origem;          // 'equipe' (criada pela equipe) | 'cliente' (expositor via QR)
+  final String origem;          // 'equipe' (criada pela equipe) | 'cliente' (expositor via QR) | 'organizadora'
   final String createdBy;       // quem registrou a pendência
   String resolvedBy;            // quem resolveu/validou
+  // Fluxo de aprovação (só relevante para origem == 'organizadora'):
+  // 'none' (não precisa de aprovação) | 'pendente' | 'aprovada' | 'recusada'
+  String approvalStatus;
+  String rejectionReason;       // motivo da recusa pelo atendimento
   bool isResolved;
   bool awaitingValidation;     // producer marked as done, admin needs to validate
   final DateTime createdAt;
@@ -37,6 +41,8 @@ class PendingItem {
     this.origem = 'equipe',
     this.createdBy = '',
     this.resolvedBy = '',
+    this.approvalStatus = 'none',
+    this.rejectionReason = '',
     this.isResolved = false,
     this.awaitingValidation = false,
     required this.createdAt,
@@ -58,6 +64,8 @@ class PendingItem {
         'origem': origem,
         'created_by': createdBy,
         'resolved_by': resolvedBy,
+        'approval_status': approvalStatus,
+        'rejection_reason': rejectionReason,
         'is_resolved': isResolved ? 1 : 0,
         'awaiting_validation': awaitingValidation ? 1 : 0,
         'created_at': createdAt.toIso8601String(),
@@ -92,6 +100,8 @@ class PendingItem {
         origem: (map['origem'] as String?) ?? 'equipe',
         createdBy: (map['created_by'] as String?) ?? '',
         resolvedBy: (map['resolved_by'] as String?) ?? '',
+        approvalStatus: (map['approval_status'] as String?) ?? 'none',
+        rejectionReason: (map['rejection_reason'] as String?) ?? '',
         isResolved: (map['is_resolved'] as int? ?? 0) == 1,
         awaitingValidation: (map['awaiting_validation'] as int? ?? 0) == 1,
         createdAt: DateTime.parse(map['created_at'] as String),
@@ -117,6 +127,8 @@ class PendingItem {
         origem: (data['origem'] as String?) ?? 'equipe',
         createdBy: (data['createdBy'] as String?) ?? '',
         resolvedBy: (data['resolvedBy'] as String?) ?? '',
+        approvalStatus: (data['approvalStatus'] as String?) ?? 'none',
+        rejectionReason: (data['rejectionReason'] as String?) ?? '',
         isResolved: data['isResolved'] as bool? ?? false,
         awaitingValidation: data['awaitingValidation'] as bool? ?? false,
         createdAt: DateTime.tryParse(data['createdAt'] as String? ?? '') ??
@@ -127,6 +139,9 @@ class PendingItem {
       );
 
   bool get fromClient => origem == 'cliente';
+  bool get fromOrganizer => origem == 'organizadora';
+  bool get isPendingApproval => approvalStatus == 'pendente';
+  bool get isRejected => approvalStatus == 'recusada';
 
   String toWhatsAppText() {
     final d = createdAt;

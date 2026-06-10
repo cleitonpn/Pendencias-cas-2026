@@ -5,6 +5,7 @@ import '../providers/app_provider.dart';
 import '../models/client.dart';
 import '../services/database_service.dart';
 import 'consultant_client_list_screen.dart';
+import 'organizer_approval_screen.dart';
 
 class ConsultantHangarListScreen extends StatefulWidget {
   final String consultantName;
@@ -19,6 +20,7 @@ class ConsultantHangarListScreen extends StatefulWidget {
 class _ConsultantHangarListScreenState
     extends State<ConsultantHangarListScreen> {
   Map<String, int> _pendingCounts = {};
+  int _approvalCount = 0;
 
   @override
   void initState() {
@@ -27,11 +29,20 @@ class _ConsultantHangarListScreenState
   }
 
   Future<void> _loadCounts() async {
+    final fairId = context.read<AppProvider>().currentFair?.id ?? 1;
+    final approval =
+        await DatabaseService.getPendingApprovalItems(fairId: fairId);
     final clients = _allClients;
-    if (clients.isEmpty) return;
-    final counts = await DatabaseService.getPendingCounts(
-        clients.map((c) => c.rowId).toList());
-    if (mounted) setState(() => _pendingCounts = counts);
+    final counts = clients.isEmpty
+        ? <String, int>{}
+        : await DatabaseService.getPendingCounts(
+            clients.map((c) => c.rowId).toList());
+    if (mounted) {
+      setState(() {
+        _pendingCounts = counts;
+        _approvalCount = approval.length;
+      });
+    }
   }
 
   bool _matchesConsultant(Client c) =>
@@ -87,6 +98,44 @@ class _ConsultantHangarListScreenState
                 fontWeight: FontWeight.bold,
                 fontSize: 20)),
         actions: [
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.fact_check_outlined,
+                    color: Colors.white),
+                tooltip: 'Pedidos da organizadora',
+                onPressed: () async {
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => OrganizerApprovalScreen(
+                          consultantName: widget.consultantName),
+                    ),
+                  );
+                  await _loadCounts();
+                },
+              ),
+              if (_approvalCount > 0)
+                Positioned(
+                  top: 8,
+                  right: 6,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 5, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: Colors.orange,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text('$_approvalCount',
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold)),
+                  ),
+                ),
+            ],
+          ),
           IconButton(
             icon: provider.isLoading
                 ? const SizedBox(

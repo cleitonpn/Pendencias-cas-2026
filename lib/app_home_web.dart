@@ -1,20 +1,33 @@
 import 'package:flutter/material.dart';
 import 'screens/stand_request_screen.dart';
+import 'screens/organizer_web_screen.dart';
 
-/// Web: the app is the public exhibitor page. The QR code uses the hash
-/// strategy (…/#/stand?f=<fair>&c=<rowId>), so params may live in the URL
-/// fragment or the query string — read both.
+/// Web: the app is a public page. Two routes share the same Flutter Web build,
+/// selected by the URL fragment (hash strategy works on static hosting):
+///   …/#/stand?f=<fair>&c=<rowId>   → exhibitor maintenance request (QR)
+///   …/#/organizadora?f=<fair>      → event organizer request portal
 Widget buildHome() {
   final base = Uri.base;
   final qp = <String, String>{...base.queryParameters};
+  String path = '';
   if (base.fragment.isNotEmpty) {
     final frag =
         base.fragment.startsWith('/') ? base.fragment : '/${base.fragment}';
     final fragUri = Uri.tryParse(frag);
-    if (fragUri != null) qp.addAll(fragUri.queryParameters);
+    if (fragUri != null) {
+      qp.addAll(fragUri.queryParameters);
+      path = fragUri.path;
+    }
   }
+
+  final fairId = int.tryParse(qp['f'] ?? '');
+
+  if (path.contains('organizadora')) {
+    return OrganizerWebScreen(fairId: fairId);
+  }
+
   return StandRequestScreen(
-    fairId: int.tryParse(qp['f'] ?? ''),
+    fairId: fairId,
     rowId: (qp['c'] ?? '').isEmpty ? null : qp['c'],
   );
 }

@@ -6,3 +6,8 @@ const String kStandBaseUrl = 'https://montagem-uset.web.app';
 /// Uses the hash strategy so it works on static hosting without rewrites.
 String buildStandUrl({required int fairId, required String rowId}) =>
     '$kStandBaseUrl/#/stand?f=$fairId&c=${Uri.encodeComponent(rowId)}';
+
+/// Link opened by the event organizer to create requests for any stand.
+/// Requests go to the attendant (consultant) for approval before reaching teams.
+String buildOrganizerUrl({required int fairId}) =>
+    '$kStandBaseUrl/#/organizadora?f=$fairId';

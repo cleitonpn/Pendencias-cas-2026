@@ -25,8 +25,9 @@ enum _Step { loading, pickFair, closed, pickStand, pin, form, sent, error }
 class _StandRequestScreenState extends State<StandRequestScreen> {
   static const _navy = Color(0xFF0A0F64);
 
+  // Limpeza não faz parte do atendimento ao expositor durante o evento, por
+  // isso não aparece como opção no QR do cliente.
   static const _teams = [
-    _TeamInfo('Limpeza',            Icons.cleaning_services, Color(0xFF00897B)),
     _TeamInfo('Elétrica',           Icons.bolt,              Color(0xFFFF6F00)),
     _TeamInfo('Marcenaria',         Icons.carpenter,         Color(0xFF795548)),
     _TeamInfo('Tapeçaria',          Icons.chair,             Color(0xFF7B1FA2)),

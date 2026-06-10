@@ -5,6 +5,7 @@ import '../providers/app_provider.dart';
 import '../services/database_service.dart';
 import '../services/firestore_service.dart';
 import '../utils/admin_pin.dart';
+import '../utils/stand_link.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -21,6 +22,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   // Consultants
   List<String> _consultants = [];
   Map<String, String?> _consultantPins = {};
+
+  // Organizers
+  List<String> _organizers = [];
+  Map<String, String?> _organizerPins = {};
 
   // Team leaders
   List<String> _leaderNames = [];
@@ -64,6 +69,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
       consultantPins[c] = await FirestoreService.getConsultantPin(c);
     }
 
+    // Organizers: from the spreadsheet column "organizadora" + Firestore pins
+    final localOrganizers = await DatabaseService.getOrganizers(fairId: fairId);
+    final firestoreOrganizers = await FirestoreService.getOrganizersWithPins();
+    final allOrganizers =
+        {...localOrganizers, ...firestoreOrganizers}.toList()..sort();
+    final organizerPins = <String, String?>{};
+    for (final o in allOrganizers) {
+      organizerPins[o] = await FirestoreService.getOrganizerPin(o);
+    }
+
     final leaderList = await FirestoreService.getTeamLeadersWithPins();
     final lNames = leaderList.map((l) => l['name']!).toList();
     final lTeams = { for (final l in leaderList) l['name']!: l['team']! };
@@ -78,6 +93,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _pins = pins;
         _consultants = allConsultants;
         _consultantPins = consultantPins;
+        _organizers = allOrganizers;
+        _organizerPins = organizerPins;
         _leaderNames = lNames;
         _leaderTeams = lTeams;
         _leaderPins = lPins;
@@ -210,6 +227,64 @@ class _SettingsScreenState extends State<SettingsScreen> {
       await FirestoreService.setConsultantPin(name, result);
     }
     await _loadPins();
+  }
+
+  Future<void> _editOrganizerPin(String name) async {
+    final currentPin = _organizerPins[name];
+    final ctrl = TextEditingController(text: currentPin ?? '');
+
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        title: Text('PIN — $name'),
+        content: TextField(
+          controller: ctrl,
+          keyboardType: TextInputType.number,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          maxLength: 6,
+          autofocus: true,
+          decoration: const InputDecoration(
+            hintText: 'Digite o PIN (4–6 dígitos)',
+            prefixIcon: Icon(Icons.lock_outline),
+          ),
+          onSubmitted: (_) => Navigator.pop(ctx, ctrl.text),
+        ),
+        actions: [
+          if (currentPin != null)
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, ''),
+              child: const Text('Remover', style: TextStyle(color: Colors.red)),
+            ),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancelar')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, ctrl.text),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1E3A5F),
+                foregroundColor: Colors.white),
+            child: const Text('Salvar'),
+          ),
+        ],
+      ),
+    );
+
+    if (result == null) return;
+    if (result.isEmpty) {
+      await FirestoreService.deleteOrganizerPin(name);
+    } else {
+      await FirestoreService.setOrganizerPin(name, result);
+    }
+    await _loadPins();
+  }
+
+  Future<void> _copyOrganizerLink() async {
+    final fair = context.read<AppProvider>().currentFair;
+    if (fair?.id == null) return;
+    final url = buildOrganizerUrl(fairId: fair!.id!);
+    await Clipboard.setData(ClipboardData(text: url));
+    if (mounted) _snack('Link da organizadora copiado!');
   }
 
   Future<void> _editLeader(String name) async {
@@ -680,6 +755,92 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       }).toList(),
                     ),
                   ),
+
+            const SizedBox(height: 24),
+
+            // Organizer PINs
+            const Text('PINs DAS ORGANIZADORAS',
+                style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey,
+                    letterSpacing: 1)),
+            const SizedBox(height: 4),
+            const Text(
+                'A organizadora (coluna "organizadora") acessa por um link no navegador, '
+                'cria pedidos para qualquer stand e o atendimento aprova ou recusa.',
+                style: TextStyle(fontSize: 12, color: Colors.grey)),
+            const SizedBox(height: 10),
+            _organizers.isEmpty
+                ? Card(
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                    child: const Padding(
+                      padding: EdgeInsets.all(16),
+                      child: Text(
+                          'Nenhuma organizadora encontrada. Adicione a coluna "organizadora" na planilha e sincronize.',
+                          style: TextStyle(color: Colors.grey)),
+                    ),
+                  )
+                : Card(
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                    child: Column(
+                      children: _organizers.asMap().entries.map((entry) {
+                        final i = entry.key;
+                        final p = entry.value;
+                        final pin = _organizerPins[p];
+                        final hasPin = pin != null;
+                        return Column(
+                          children: [
+                            if (i > 0) const Divider(height: 1, indent: 16),
+                            ListTile(
+                              leading: CircleAvatar(
+                                backgroundColor: hasPin
+                                    ? Colors.green.shade100
+                                    : Colors.grey.shade100,
+                                child: Icon(
+                                    hasPin ? Icons.lock : Icons.lock_open,
+                                    color: hasPin ? Colors.green : Colors.grey,
+                                    size: 20),
+                              ),
+                              title: Text(p,
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w600)),
+                              subtitle: Text(
+                                  hasPin ? 'PIN configurado' : 'Sem PIN',
+                                  style: TextStyle(
+                                      fontSize: 12,
+                                      color:
+                                          hasPin ? Colors.green : Colors.grey)),
+                              trailing: TextButton(
+                                onPressed: () => _editOrganizerPin(p),
+                                child: Text(hasPin ? 'Alterar' : 'Definir PIN',
+                                    style: const TextStyle(
+                                        color: Color(0xFF1E3A5F))),
+                              ),
+                            ),
+                          ],
+                        );
+                      }).toList(),
+                    ),
+                  ),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _copyOrganizerLink,
+                icon: const Icon(Icons.link),
+                label: const Text('Copiar link da organizadora'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.orange.shade800,
+                  side: BorderSide(color: Colors.orange.shade300),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+              ),
+            ),
 
             const SizedBox(height: 24),
 

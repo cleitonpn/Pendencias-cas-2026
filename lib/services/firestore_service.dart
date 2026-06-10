@@ -26,12 +26,48 @@ class FirestoreService {
       'origem': item.origem,
       'createdBy': item.createdBy,
       'resolvedBy': '',
+      'approvalStatus': item.approvalStatus,
+      'rejectionReason': '',
       'isResolved': false,
       'awaitingValidation': false,
       'createdAt': item.createdAt.toIso8601String(),
       'resolvedAt': null,
     }).catchError((_) {});
     return doc.id;
+  }
+
+  /// Approves an organizer request (becomes a normal pending).
+  static Future<void> approveOrganizerItem(String firestoreId) async {
+    if (firestoreId.isEmpty) return;
+    await _db.collection('pending_items').doc(firestoreId).update({
+      'approvalStatus': 'aprovada',
+    });
+  }
+
+  /// Rejects an organizer request, finalizing it with a reason.
+  static Future<void> rejectOrganizerItem(String firestoreId,
+      {String reason = '', String by = ''}) async {
+    if (firestoreId.isEmpty) return;
+    await _db.collection('pending_items').doc(firestoreId).update({
+      'approvalStatus': 'recusada',
+      'rejectionReason': reason,
+      'isResolved': true,
+      'resolvedAt': DateTime.now().toIso8601String(),
+      if (by.isNotEmpty) 'resolvedBy': by,
+    });
+  }
+
+  /// All requests created by a given organizer (for the "my requests" view).
+  static Future<List<PendingItem>> getOrganizerRequests(String createdBy) async {
+    final snapshot = await _db
+        .collection('pending_items')
+        .where('createdBy', isEqualTo: createdBy)
+        .get();
+    final items = snapshot.docs
+        .map((d) => PendingItem.fromFirestore(d.id, d.data()))
+        .toList();
+    items.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return items;
   }
 
   static Future<void> resolveItem(String firestoreId,
@@ -134,6 +170,28 @@ class FirestoreService {
 
   static Future<List<String>> getConsultantsWithPins() async {
     final snapshot = await _db.collection('consultant_pins').get();
+    final names = snapshot.docs.map((d) => d.id).toList()..sort();
+    return names;
+  }
+
+  // ─── Organizer PINs ───────────────────────────────────────────────────────────
+
+  static Future<String?> getOrganizerPin(String name) async {
+    final doc = await _db.collection('organizer_pins').doc(name).get();
+    if (!doc.exists) return null;
+    return doc.data()?['pin'] as String?;
+  }
+
+  static Future<void> setOrganizerPin(String name, String pin) async {
+    await _db.collection('organizer_pins').doc(name).set({'pin': pin});
+  }
+
+  static Future<void> deleteOrganizerPin(String name) async {
+    await _db.collection('organizer_pins').doc(name).delete();
+  }
+
+  static Future<List<String>> getOrganizersWithPins() async {
+    final snapshot = await _db.collection('organizer_pins').get();
     final names = snapshot.docs.map((d) => d.id).toList()..sort();
     return names;
   }

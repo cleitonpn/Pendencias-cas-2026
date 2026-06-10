@@ -223,6 +223,30 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Attendant approves an organizer request → becomes a normal pending.
+  Future<void> approveOrganizerItem(int sqliteId, {String? firestoreId}) async {
+    await DatabaseService.approveOrganizerItem(sqliteId);
+    if (firestoreId != null && firestoreId.isNotEmpty) {
+      FirestoreService.approveOrganizerItem(firestoreId).catchError((_) {});
+    }
+    if (_currentFair != null) {
+      _pendingCounts =
+          await DatabaseService.getAllPendingCounts(_currentFair!.id!);
+    }
+    notifyListeners();
+  }
+
+  /// Attendant rejects an organizer request → finalized with a reason.
+  Future<void> rejectOrganizerItem(int sqliteId,
+      {String? firestoreId, String reason = '', String by = ''}) async {
+    await DatabaseService.rejectOrganizerItem(sqliteId, reason: reason, by: by);
+    if (firestoreId != null && firestoreId.isNotEmpty) {
+      FirestoreService.rejectOrganizerItem(firestoreId, reason: reason, by: by)
+          .catchError((_) {});
+    }
+    notifyListeners();
+  }
+
   Future<void> markItemAwaitingValidation(int sqliteId, {String? firestoreId}) async {
     await DatabaseService.markItemAwaitingValidation(sqliteId);
     if (firestoreId != null) {
