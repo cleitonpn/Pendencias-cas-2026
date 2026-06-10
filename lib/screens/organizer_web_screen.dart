@@ -324,10 +324,22 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
     }
   }
 
-  Widget _header({String? subtitle}) {
+  Widget _header({String? subtitle, VoidCallback? onBack}) {
     return Column(
       children: [
-        const SizedBox(height: 20),
+        onBack != null
+            ? SizedBox(
+                height: 48,
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: IconButton(
+                    icon: const Icon(Icons.arrow_back, color: _navy),
+                    tooltip: 'Voltar',
+                    onPressed: onBack,
+                  ),
+                ),
+              )
+            : const SizedBox(height: 20),
         ClipRRect(
           borderRadius: BorderRadius.circular(14),
           child: Image.asset('assets/logo.png',
@@ -552,7 +564,9 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
   Widget _pickStandView() {
     return Column(
       children: [
-        _header(subtitle: 'Encontre o stand'),
+        _header(
+            subtitle: 'Encontre o stand',
+            onBack: () => _setStep(_Step.menu)),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20),
           child: Autocomplete<Client>(
@@ -611,7 +625,9 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        _header(subtitle: c.displayName),
+        _header(
+            subtitle: c.displayName,
+            onBack: () => _setStep(_Step.pickStand)),
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
