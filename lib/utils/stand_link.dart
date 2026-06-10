@@ -7,7 +7,10 @@ const String kStandBaseUrl = 'https://montagem-uset.web.app';
 String buildStandUrl({required int fairId, required String rowId}) =>
     '$kStandBaseUrl/#/stand?f=$fairId&c=${Uri.encodeComponent(rowId)}';
 
-/// Link opened by the event organizer to create requests for any stand.
+/// Link opened by the event organizer. With no [fairId] it is a single
+/// universal link: the organizer identifies herself and the page lists the
+/// fairs she is responsible for. Passing [fairId] opens straight into one fair.
 /// Requests go to the attendant (consultant) for approval before reaching teams.
-String buildOrganizerUrl({required int fairId}) =>
-    '$kStandBaseUrl/#/organizadora?f=$fairId';
+String buildOrganizerUrl({int? fairId}) => fairId == null
+    ? '$kStandBaseUrl/#/organizadora'
+    : '$kStandBaseUrl/#/organizadora?f=$fairId';

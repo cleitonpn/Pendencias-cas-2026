@@ -280,9 +280,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _copyOrganizerLink() async {
-    final fair = context.read<AppProvider>().currentFair;
-    if (fair?.id == null) return;
-    final url = buildOrganizerUrl(fairId: fair!.id!);
+    // Link único: serve para todas as organizadoras. Cada uma se identifica
+    // com seu nome + PIN e vê apenas as feiras dela.
+    final url = buildOrganizerUrl();
     await Clipboard.setData(ClipboardData(text: url));
     if (mounted) _snack('Link da organizadora copiado!');
   }
@@ -767,8 +767,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     letterSpacing: 1)),
             const SizedBox(height: 4),
             const Text(
-                'A organizadora (coluna "organizadora") acessa por um link no navegador, '
-                'cria pedidos para qualquer stand e o atendimento aprova ou recusa.',
+                'A organizadora (coluna "organizadora") acessa por um link único no '
+                'navegador, identifica-se com nome + PIN e vê só as feiras dela. '
+                'Cria pedidos para qualquer stand e o atendimento aprova ou recusa.',
                 style: TextStyle(fontSize: 12, color: Colors.grey)),
             const SizedBox(height: 10),
             _organizers.isEmpty

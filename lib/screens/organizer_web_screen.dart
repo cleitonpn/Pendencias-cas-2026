@@ -44,6 +44,7 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
 
   List<Client> _clients = [];
   Client? _client;
+  final Map<int, List<Client>> _clientCache = {}; // fairId → clients
 
   final _pinCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
@@ -79,40 +80,77 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
             'configurar o PIN da organizadora no app.');
         return;
       }
+      // A organizadora se identifica primeiro; depois listamos as feiras dela.
+      _setStep(_Step.identify);
+    } catch (e) {
+      _fail('Não foi possível carregar. Verifique sua conexão e tente '
+          'novamente.\n\nDetalhe: $e');
+    }
+  }
+
+  /// After identifying, loads the fairs the organizer is responsible for
+  /// (her name appears in the "organizadora" column of that fair's sheet).
+  Future<void> _loadFairs() async {
+    setState(() => _step = _Step.loading);
+    try {
+      final all = (await FirestoreService.getFairs())
+          .map(_fairFromData)
+          .where((f) =>
+              f.id != null &&
+              f.spreadsheetId.isNotEmpty &&
+              f.sheetName.isNotEmpty)
+          .toList();
+
+      // Specific-fair link (compatibilidade com links antigos com ?f=).
       if (widget.fairId != null) {
-        final data = await FirestoreService.getFair(widget.fairId!);
-        if (data == null) {
+        final match = all.where((f) => f.id == widget.fairId).toList();
+        if (match.isEmpty) {
           _fail('Feira não encontrada. Verifique o link ou contate a organização.');
           return;
         }
-        final fair = _fairFromData(data);
-        if (fair.spreadsheetId.isEmpty || fair.sheetName.isEmpty) {
-          _fail('Esta feira ainda não está configurada. Peça ao administrador '
-              'para abrir o app e ativar a feira novamente.');
-          return;
+        _fair = match.first;
+        _setStep(_Step.menu);
+        return;
+      }
+
+      // Link único: mantém apenas as feiras em que ela é a organizadora.
+      final name = _organizerName!.toLowerCase().trim();
+      final mine = <Fair>[];
+      await Future.wait(all.map((f) async {
+        try {
+          final clients = await SheetsService.fetchClients(
+            spreadsheetId: f.spreadsheetId,
+            sheetName: f.sheetName,
+            fairId: f.id!,
+          );
+          if (clients
+              .any((c) => c.organizadora.toLowerCase().trim() == name)) {
+            _clientCache[f.id!] = clients;
+            mine.add(f);
+          }
+        } catch (_) {
+          // Ignora feiras que não puderam ser lidas.
         }
-        _fair = fair;
-        _setStep(_Step.identify);
+      }));
+      mine.sort((a, b) => a.name.compareTo(b.name));
+      _fairs = mine;
+
+      if (mine.isEmpty) {
+        _fail('Nenhuma feira atribuída a você no momento.\n\n'
+            'Verifique se o seu nome está na coluna "organizadora" da planilha, '
+            'ou contate a organização.');
         return;
       }
-      final all = await FirestoreService.getFairs();
-      _fairs = all
-          .map(_fairFromData)
-          .where((f) => f.spreadsheetId.isNotEmpty && f.sheetName.isNotEmpty)
-          .toList();
-      if (_fairs.isEmpty) {
-        _fail('Nenhuma feira disponível no momento.');
-        return;
-      }
-      if (_fairs.length == 1) {
-        _fair = _fairs.first;
-        _setStep(_Step.identify);
+      if (mine.length == 1) {
+        _fair = mine.first;
+        _clients = _clientCache[mine.first.id!] ?? [];
+        _setStep(_Step.menu);
       } else {
         _setStep(_Step.pickFair);
       }
     } catch (e) {
-      _fail('Não foi possível carregar. Verifique sua conexão e tente '
-          'novamente.\n\nDetalhe: $e');
+      _fail('Não foi possível carregar as feiras. Tente novamente.\n\n'
+          'Detalhe: $e');
     }
   }
 
@@ -129,7 +167,8 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
   void _selectFair(Fair f) {
     setState(() {
       _fair = f;
-      _step = _Step.identify;
+      _clients = _clientCache[f.id!] ?? [];
+      _step = _Step.menu;
     });
   }
 
@@ -159,10 +198,17 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
       _pinCtrl.clear();
       return;
     }
-    _setStep(_Step.menu);
+    await _loadFairs();
   }
 
   Future<void> _loadClients() async {
+    // Usa os clientes já carregados na seleção da feira, quando disponíveis.
+    final cached = _clientCache[_fair!.id!];
+    if (cached != null && cached.isNotEmpty) {
+      _clients = cached;
+      _setStep(_Step.pickStand);
+      return;
+    }
     setState(() => _step = _Step.loading);
     try {
       _clients = await SheetsService.fetchClients(
@@ -170,6 +216,7 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
         sheetName: _fair!.sheetName,
         fairId: _fair!.id!,
       );
+      _clientCache[_fair!.id!] = _clients;
       _setStep(_Step.pickStand);
     } catch (e) {
       _fail('Não foi possível carregar os stands. Tente novamente em instantes.');
@@ -389,7 +436,9 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        _header(subtitle: 'Selecione o evento'),
+        _header(
+            subtitle: 'Selecione a feira',
+            onBack: () => _setStep(_Step.identify)),
         ..._fairs.map((f) => Card(
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12)),
@@ -409,7 +458,7 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        _header(subtitle: _fair?.name),
+        _header(subtitle: 'Identifique-se para ver suas feiras'),
         const Text('SEU NOME',
             style: TextStyle(
                 fontSize: 11,
@@ -498,7 +547,10 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        _header(subtitle: '${_organizerName ?? ''} • ${_fair?.name ?? ''}'),
+        _header(
+            subtitle: '${_organizerName ?? ''} • ${_fair?.name ?? ''}',
+            // Permite trocar de feira quando a organizadora tem mais de uma.
+            onBack: _fairs.length > 1 ? () => _setStep(_Step.pickFair) : null),
         _menuButton(
           icon: Icons.add_circle_outline,
           color: Colors.orange,
@@ -514,6 +566,16 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
           subtitle: 'Acompanhe o status (aguardando / aprovado / recusado)',
           onTap: _loadMyRequests,
         ),
+        if (_fairs.length > 1) ...[
+          const SizedBox(height: 12),
+          Center(
+            child: TextButton.icon(
+              onPressed: () => _setStep(_Step.pickFair),
+              icon: const Icon(Icons.swap_horiz, size: 18),
+              label: const Text('Trocar de feira'),
+            ),
+          ),
+        ],
       ],
     );
   }
