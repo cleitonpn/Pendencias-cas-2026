@@ -98,13 +98,20 @@ class SheetsService {
     final montagemIdx = findCol(['montagem']);
     final localIdx    = findCol(['local']);
     final hangarIdx   = findCol(['hangar']);
-    // Robust m²/área detection: normalize "²"→"2" and drop spaces so "m²",
-    // "M2", "Área (m²)", "Metragem" etc. are all recognized, regardless of how
-    // the superscript character is encoded in the spreadsheet.
+    // Robust m²/área detection independent of how the superscript is encoded:
+    // matches "área"/"area"/"metragem" or "m" followed by 1–2 NON-letter chars
+    // (m², m2, m³…). This way any encoding of the "²" character is recognized.
     int areaIdx = -1;
     for (var i = 0; i < header.length; i++) {
-      final h = header[i].replaceAll('²', '2').replaceAll(' ', '');
-      if (h.contains('m2') || h.contains('metr') || h == 'area' || h == 'área') {
+      final h = header[i].replaceAll(' ', '');
+      final isArea = h == 'area' ||
+          h == 'área' ||
+          h.contains('metr') ||
+          (h.startsWith('m') &&
+              h.length >= 2 &&
+              h.length <= 3 &&
+              !RegExp(r'[a-zà-ÿ]').hasMatch(h.substring(1)));
+      if (isArea) {
         areaIdx = i;
         break;
       }
