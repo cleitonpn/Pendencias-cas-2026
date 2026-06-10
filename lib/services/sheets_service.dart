@@ -94,11 +94,23 @@ class SheetsService {
       return -1;
     }
 
+    // Fallback: first header that CONTAINS any of the needles (handles headers
+    // like "Área (m²)", "Metragem", "M² Stand").
+    int findColContains(List<String> needles) {
+      for (var i = 0; i < header.length; i++) {
+        for (final n in needles) {
+          if (header[i].contains(n)) return i;
+        }
+      }
+      return -1;
+    }
+
     final nomeIdx     = findCol(['nome']);
     final montagemIdx = findCol(['montagem']);
     final localIdx    = findCol(['local']);
     final hangarIdx   = findCol(['hangar']);
-    final areaIdx     = findCol(['m²', 'm2', 'área', 'area']);
+    var areaIdx       = findCol(['m²', 'm2', 'área', 'area', 'metragem', 'tamanho']);
+    if (areaIdx < 0) areaIdx = findColContains(['m²', 'm2', 'metr']);
     final produtorIdx = findCol(['produtor']);
     final atendIdx    = findCol(['atendimento', 'consultor', 'atendimento responsável', 'atendimento responsavel']);
     final organizadoraIdx = findCol(['organizadora', 'organizador', 'organização', 'organizacao']);
