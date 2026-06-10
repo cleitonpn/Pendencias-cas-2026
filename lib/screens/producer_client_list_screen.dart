@@ -229,6 +229,12 @@ class _ClientCard extends StatelessWidget {
                           style: TextStyle(
                               color: Colors.grey.shade600,
                               fontSize: 12)),
+                    if (client.area.isNotEmpty)
+                      Text('${client.area} m²',
+                          style: const TextStyle(
+                              color: Color(0xFF1E3A5F),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600)),
                   ],
                 ),
               ),
