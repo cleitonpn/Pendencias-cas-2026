@@ -11,6 +11,8 @@ jobs:
   build:
     name: Build APK
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout código
@@ -53,6 +55,25 @@ jobs:
           name: CAS2026-Pendencias-APK
           path: build/app/outputs/flutter-apk/app-release.apk
           retention-days: 30
+
+      # Publica o APK como Release para a atualização automática dentro do app.
+      # O app lê a release "latest" e compara o número de build da tag (v<code>).
+      - name: Extrair versão do pubspec
+        id: ver
+        run: |
+          LINE=$(grep '^version:' pubspec.yaml | sed 's/version:[[:space:]]*//')
+          echo "name=${LINE%%+*}" >> "$GITHUB_OUTPUT"
+          echo "code=${LINE##*+}" >> "$GITHUB_OUTPUT"
+
+      - name: Publicar Release com APK
+        if: github.ref_name == 'main' || github.ref_name == 'claude/fair-setup-tracker-app-J9EOm'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.ver.outputs.code }}
+          name: ${{ steps.ver.outputs.name }}
+          body: "Atualização do app Montagem USET (versão ${{ steps.ver.outputs.name }})."
+          make_latest: "true"
+          files: build/app/outputs/flutter-apk/app-release.apk
 
       - name: Build APK debug
         run: flutter build apk --debug

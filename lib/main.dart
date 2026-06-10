@@ -7,6 +7,8 @@ import 'firebase_options.dart';
 import 'providers/app_provider.dart';
 import 'utils/desktop_db.dart';
 import 'services/notification_service.dart';
+import 'services/update_service.dart';
+import 'widgets/update_dialog.dart';
 import 'app_home.dart';
 
 /// Background/terminated FCM handler. Must be a top-level function.
@@ -40,14 +42,39 @@ void main() async {
   );
 }
 
-class CasApp extends StatelessWidget {
+class CasApp extends StatefulWidget {
   const CasApp({super.key});
+
+  static final navigatorKey = GlobalKey<NavigatorState>();
+
+  @override
+  State<CasApp> createState() => _CasAppState();
+}
+
+class _CasAppState extends State<CasApp> {
+  @override
+  void initState() {
+    super.initState();
+    // After the first screen is up, check for an app update (Android only;
+    // no-op on web/desktop) and offer to download + install it.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkForUpdate());
+  }
+
+  Future<void> _checkForUpdate() async {
+    await Future.delayed(const Duration(seconds: 2));
+    final info = await UpdateService.checkForUpdate();
+    if (info == null) return;
+    final ctx = CasApp.navigatorKey.currentContext;
+    if (ctx == null) return;
+    await showUpdateFlow(ctx, info);
+  }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Montagem USET',
       debugShowCheckedModeBanner: false,
+      navigatorKey: CasApp.navigatorKey,
       scaffoldMessengerKey: NotificationService.messengerKey,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
