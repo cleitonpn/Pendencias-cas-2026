@@ -75,7 +75,7 @@ class SheetsService {
     required String sheetName,
     required int fairId,
   }) async {
-    final rows = await _fetchRange(spreadsheetId, sheetName, 'B:AD');
+    final rows = await _fetchRange(spreadsheetId, sheetName, 'A:BZ');
     if (rows.isEmpty) {
       throw Exception(
           'Planilha vazia ou aba "$sheetName" não encontrada.\n'
