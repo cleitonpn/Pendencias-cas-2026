@@ -1,11 +1,26 @@
 rules_version = '2';
 
-// The app does not use Firebase Authentication — access is controlled by
-// the app itself (admin PIN, producer PIN, stand PIN). All collections must
-// therefore be readable and writable by any client.
+// ── Modelo de segurança ────────────────────────────────────────────────────
+//
+// O controle de acesso fica dentro do app (PIN admin, PIN produtor, token QR
+// do stand). O Firebase Auth é usado apenas para dar uma identidade anônima
+// a cada cliente, permitindo que as regras do Firestore rejeitem requisições
+// não autenticadas vindas de fora do app.
+//
+// PASSOS DA MIGRAÇÃO (Etapa 2):
+//  1. Ative Autenticação Anônima no Firebase Console:
+//     Authentication → Sign-in methods → Anonymous → Ativar
+//  2. Garanta que todos os dispositivos estejam na v1.0.9+ do app.
+//  3. Troque `if true` por `if request.auth != null` abaixo e faça deploy.
+//
+// O app v1.0.9+ já chama signInAnonymously() na inicialização, então depois
+// que todos os dispositivos atualizarem, o passo 3 é seguro.
+// ──────────────────────────────────────────────────────────────────────────
+
 service cloud.firestore {
   match /databases/{database}/documents {
     match /{document=**} {
+      // Etapa 2: trocar `if true` → `if request.auth != null`
       allow read, write: if true;
     }
   }
