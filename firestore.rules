@@ -20,8 +20,7 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     match /{document=**} {
-      // Etapa 2: trocar `if true` → `if request.auth != null`
-      allow read, write: if true;
+      allow read, write: if request.auth != null;
     }
   }
 }
