@@ -9,6 +9,7 @@ import '../services/database_service.dart';
 import '../services/firestore_service.dart';
 import '../widgets/photo_gallery.dart';
 import '../widgets/montage_section.dart';
+import 'add_pending_screen.dart';
 
 class ProducerClientDetailScreen extends StatefulWidget {
   final Client client;
@@ -67,6 +68,21 @@ class _ProducerClientDetailScreenState
   bool _isAwaiting(PendingItem item) =>
       item.firestoreId != null &&
       _awaitingFirestoreIds.contains(item.firestoreId);
+
+  Future<void> _addPending() async {
+    final added = await Navigator.push<PendingItem>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AddPendingScreen(
+          client: widget.client,
+          createdBy: widget.producerName.isNotEmpty
+              ? 'Produtor: ${widget.producerName}'
+              : 'Produtor',
+        ),
+      ),
+    );
+    if (added != null) await _load();
+  }
 
   Future<void> _markInProgress(PendingItem item) async {
     final name = widget.producerName.isNotEmpty ? widget.producerName : 'Produtor';
@@ -130,6 +146,13 @@ class _ProducerClientDetailScreenState
         title: Text(c.local.isNotEmpty ? 'Stand ${c.local}' : c.displayName,
             style: const TextStyle(
                 color: Colors.white, fontWeight: FontWeight.bold)),
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _addPending,
+        backgroundColor: Colors.orange,
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.add),
+        label: const Text('Nova pendência'),
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
