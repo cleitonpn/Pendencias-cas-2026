@@ -6,6 +6,7 @@ import '../utils/admin_pin.dart';
 import 'client_list_screen.dart';
 import 'settings_screen.dart';
 import 'reports_screen.dart';
+import 'dashboard_screen.dart';
 import 'producer_pending_screen.dart';
 import 'pending_board_screen.dart';
 
@@ -27,6 +28,12 @@ class HangarListScreen extends StatelessWidget {
                 fontWeight: FontWeight.bold,
                 fontSize: 20)),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.dashboard_outlined, color: Colors.white),
+            tooltip: 'Painel operacional',
+            onPressed: () => Navigator.push(context,
+                MaterialPageRoute(builder: (_) => const DashboardScreen())),
+          ),
           IconButton(
             icon: const Icon(Icons.checklist, color: Colors.white),
             tooltip: 'Todas as Pendências',

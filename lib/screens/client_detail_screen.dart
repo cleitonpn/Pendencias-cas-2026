@@ -7,6 +7,7 @@ import '../models/client.dart';
 import '../models/pending_item.dart';
 import '../services/database_service.dart';
 import '../services/firestore_service.dart';
+import '../services/pdf_service.dart';
 import '../widgets/photo_gallery.dart';
 import '../widgets/montage_section.dart';
 import 'add_pending_screen.dart';
@@ -72,6 +73,21 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
           content: Text('Stand marcado como concluído!'),
           backgroundColor: Colors.green));
     }
+  }
+
+  Future<void> _generateDeliveryReport() async {
+    final fairName = context.read<AppProvider>().currentFairName;
+    final resolved = await DatabaseService.getPendingItemsByClient(
+        widget.client.rowId,
+        resolvedOnly: true);
+    final montage =
+        await FirestoreService.getMontageUpdates(widget.client.rowId);
+    if (!context.mounted) return;
+    await PdfService.generateAndShow(
+      context,
+      () => PdfService.generateStandDeliveryReport(
+          fairName, widget.client, resolved, montage),
+    );
   }
 
   Future<void> _addPending() async {
@@ -375,34 +391,56 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
             // Botões de ação
             Padding(
               padding: const EdgeInsets.all(16),
-              child: Row(
+              child: Column(
                 children: [
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: _toggle,
-                      icon: Icon(c.isCompleted ? Icons.undo : Icons.check),
-                      label:
-                          Text(c.isCompleted ? 'Desfazer' : 'Concluído'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor:
-                            c.isCompleted ? Colors.grey : Colors.green,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10)),
+                  Row(children: [
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: _toggle,
+                        icon: Icon(c.isCompleted ? Icons.undo : Icons.check),
+                        label: Text(
+                            c.isCompleted ? 'Desfazer' : 'Concluído'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor:
+                              c.isCompleted ? Colors.grey : Colors.green,
+                          foregroundColor: Colors.white,
+                          padding:
+                              const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10)),
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: _addPending,
-                      icon: const Icon(Icons.add),
-                      label: const Text('Pendência'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.orange,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: _addPending,
+                        icon: const Icon(Icons.add),
+                        label: const Text('Pendência'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.orange,
+                          foregroundColor: Colors.white,
+                          padding:
+                              const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10)),
+                        ),
+                      ),
+                    ),
+                  ]),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: _generateDeliveryReport,
+                      icon: const Icon(Icons.picture_as_pdf,
+                          color: Colors.red),
+                      label: const Text('Relatório de Entrega (PDF)',
+                          style: TextStyle(color: Colors.red)),
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: Colors.red),
+                        padding:
+                            const EdgeInsets.symmetric(vertical: 12),
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(10)),
                       ),

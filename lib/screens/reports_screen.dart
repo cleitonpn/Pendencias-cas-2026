@@ -21,13 +21,14 @@ class _ReportsScreenState extends State<ReportsScreen>
   Map<String, int> _stats = {};
   List<Map<String, dynamic>> _teamRankings = [];
   List<Map<String, dynamic>> _producerRankings = [];
+  List<Map<String, dynamic>> _crossFair = [];
   bool _loading = true;
 
   @override
   void initState() {
     super.initState();
     _fairId = context.read<AppProvider>().currentFair?.id ?? 1;
-    _tab = TabController(length: 5, vsync: this);
+    _tab = TabController(length: 6, vsync: this);
     _load();
   }
 
@@ -48,6 +49,7 @@ class _ReportsScreenState extends State<ReportsScreen>
         await DatabaseService.getTeamRankings(fairId: _fairId);
     _producerRankings =
         await DatabaseService.getProducerRankings(fairId: _fairId);
+    _crossFair = await DatabaseService.getCrossFairStats();
     setState(() => _loading = false);
   }
 
@@ -78,6 +80,7 @@ class _ReportsScreenState extends State<ReportsScreen>
             const Tab(text: 'Resumo'),
             const Tab(text: 'Por Equipe'),
             const Tab(text: 'Por Produtor'),
+            const Tab(text: 'Comparativo'),
           ],
         ),
       ),
@@ -117,6 +120,7 @@ class _ReportsScreenState extends State<ReportsScreen>
                   nameKey: 'team',
                   emptyMsg: 'Nenhuma pendência registrada.',
                   title: 'RANKING POR EQUIPE',
+                  showAvgTime: true,
                 ),
                 _RankingTab(
                   data: _producerRankings,
@@ -124,6 +128,7 @@ class _ReportsScreenState extends State<ReportsScreen>
                   emptyMsg: 'Nenhuma pendência com produtor registrado.',
                   title: 'RANKING POR PRODUTOR',
                 ),
+                _CrossFairTab(data: _crossFair),
               ],
             ),
     );
@@ -448,12 +453,14 @@ class _RankingTab extends StatelessWidget {
   final String nameKey;
   final String emptyMsg;
   final String title;
+  final bool showAvgTime;
 
   const _RankingTab({
     required this.data,
     required this.nameKey,
     required this.emptyMsg,
     required this.title,
+    this.showAvgTime = false,
   });
 
   @override
@@ -550,12 +557,43 @@ class _RankingTab extends StatelessWidget {
                   _chip('$open abertas', Colors.orange),
                   const SizedBox(width: 8),
                   _chip('$resolved resolvidas', Colors.green),
+                  if (showAvgTime) ...[
+                    const SizedBox(width: 8),
+                    _avgTimeChip(item['avg_minutes']),
+                  ],
                 ]),
               ],
             ),
           ),
         );
       },
+    );
+  }
+
+  Widget _avgTimeChip(dynamic avgMinutes) {
+    if (avgMinutes == null) return const SizedBox.shrink();
+    final mins = (avgMinutes as num).round();
+    final d = Duration(minutes: mins);
+    String label;
+    if (d.inDays > 0) {
+      label = '⌀ ${d.inDays}d ${d.inHours % 24}h';
+    } else if (d.inHours > 0) {
+      label = '⌀ ${d.inHours}h${d.inMinutes % 60}min';
+    } else {
+      label = '⌀ ${d.inMinutes}min';
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.purple.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.purple.withOpacity(0.3)),
+      ),
+      child: Text(label,
+          style: const TextStyle(
+              fontSize: 11,
+              color: Colors.purple,
+              fontWeight: FontWeight.w600)),
     );
   }
 
@@ -572,4 +610,123 @@ class _RankingTab extends StatelessWidget {
                 color: color,
                 fontWeight: FontWeight.w600)),
       );
+}
+
+class _CrossFairTab extends StatelessWidget {
+  final List<Map<String, dynamic>> data;
+  const _CrossFairTab({required this.data});
+
+  String _dur(dynamic mins) {
+    if (mins == null) return '—';
+    final d = Duration(minutes: (mins as num).round());
+    if (d.inDays > 0) return '${d.inDays}d ${d.inHours % 24}h';
+    if (d.inHours > 0) return '${d.inHours}h ${d.inMinutes % 60}min';
+    return '${d.inMinutes}min';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (data.isEmpty) {
+      return const Center(
+        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+          Icon(Icons.compare_arrows, size: 64, color: Colors.grey),
+          SizedBox(height: 12),
+          Text('Nenhuma feira cadastrada.',
+              style: TextStyle(color: Colors.grey, fontSize: 16)),
+        ]),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(12),
+      itemCount: data.length + 1,
+      itemBuilder: (context, i) {
+        if (i == 0) {
+          return const Padding(
+            padding: EdgeInsets.only(bottom: 12),
+            child: Text('COMPARATIVO ENTRE FEIRAS',
+                style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey,
+                    letterSpacing: 1)),
+          );
+        }
+        final row = data[i - 1];
+        final name = row['fair_name'] as String? ?? '—';
+        final total = (row['total_clients'] as num?)?.toInt() ?? 0;
+        final completed = (row['completed_clients'] as num?)?.toInt() ?? 0;
+        final pct = total > 0 ? completed / total : 0.0;
+        final totalPend = (row['total_pending'] as num?)?.toInt() ?? 0;
+        final resolved = (row['resolved_pending'] as num?)?.toInt() ?? 0;
+        final color = pct == 1.0
+            ? Colors.green
+            : pct > 0.5
+                ? Colors.orange
+                : const Color(0xFF1E3A5F);
+
+        return Card(
+          margin: const EdgeInsets.only(bottom: 10),
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12)),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(name,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 15)),
+                const SizedBox(height: 10),
+                Row(children: [
+                  Expanded(
+                    child: _stat('Stands', '$completed/$total',
+                        Icons.grid_on, color),
+                  ),
+                  Expanded(
+                    child: _stat('Pendências', '$resolved/$totalPend',
+                        Icons.pending_actions, Colors.orange),
+                  ),
+                  Expanded(
+                    child: _stat('Tempo médio', _dur(row['avg_minutes']),
+                        Icons.timer, Colors.purple),
+                  ),
+                ]),
+                const SizedBox(height: 10),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: LinearProgressIndicator(
+                    value: pct,
+                    minHeight: 6,
+                    backgroundColor: Colors.grey.shade200,
+                    valueColor: AlwaysStoppedAnimation<Color>(color),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text('${(pct * 100).round()}% concluído',
+                    style: TextStyle(
+                        fontSize: 11,
+                        color: color,
+                        fontWeight: FontWeight.w600)),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _stat(String label, String value, IconData icon, Color color) =>
+      Column(children: [
+        Icon(icon, color: color, size: 18),
+        const SizedBox(height: 4),
+        Text(value,
+            style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+                color: color)),
+        Text(label,
+            style:
+                const TextStyle(fontSize: 10, color: Colors.grey)),
+      ]);
 }

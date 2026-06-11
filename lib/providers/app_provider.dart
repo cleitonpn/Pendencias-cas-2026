@@ -16,6 +16,7 @@ class AppProvider extends ChangeNotifier {
   String? _error;
   DateTime? _lastSync;
   StreamSubscription? _pendingSubscription;
+  Timer? _autoSyncTimer;
   Map<String, int> _pendingCounts = {}; // clientId → open pending count
 
   List<Fair> get fairs => _fairs;
@@ -78,6 +79,17 @@ class AppProvider extends ChangeNotifier {
     await _loadLocal();
     _startPendingStream(fair.name);
     _setLoading(false);
+    _restartAutoSync(fair);
+  }
+
+  void _restartAutoSync(Fair fair) {
+    _autoSyncTimer?.cancel();
+    if (fair.isProduction) {
+      _autoSyncTimer =
+          Timer.periodic(const Duration(minutes: 10), (_) {
+        if (_currentFair != null && !_isLoading) syncFromSheets();
+      });
+    }
   }
 
   void _startPendingStream(String fairName) {
@@ -98,6 +110,7 @@ class AppProvider extends ChangeNotifier {
   @override
   void dispose() {
     _pendingSubscription?.cancel();
+    _autoSyncTimer?.cancel();
     super.dispose();
   }
 
@@ -315,6 +328,7 @@ class AppProvider extends ChangeNotifier {
     } catch (_) {}
     if (_currentFair?.id == fair.id) {
       _currentFair = _currentFair!.copyWith(mode: mode);
+      _restartAutoSync(_currentFair!);
     }
     _fairs = await DatabaseService.getFairs();
     notifyListeners();

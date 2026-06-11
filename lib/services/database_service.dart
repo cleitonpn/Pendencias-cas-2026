@@ -328,11 +328,14 @@ class DatabaseService {
   }
 
   static Future<List<PendingItem>> getPendingItemsByClient(
-      String clientId, {bool excludeUnapproved = false}) async {
+      String clientId,
+      {bool excludeUnapproved = false,
+      bool resolvedOnly = false}) async {
     final database = await db;
-    final where = excludeUnapproved
-        ? 'client_id = ? AND $_visibleClause'
-        : 'client_id = ?';
+    var clauses = <String>['client_id = ?'];
+    if (excludeUnapproved) clauses.add(_visibleClause);
+    if (resolvedOnly) clauses.add('is_resolved = 1');
+    final where = clauses.join(' AND ');
     final maps = await database.query('pending_items',
         where: where,
         whereArgs: [clientId],
@@ -580,12 +583,40 @@ class DatabaseService {
       SELECT team,
         COUNT(*) as total,
         SUM(CASE WHEN is_resolved = 0 THEN 1 ELSE 0 END) as open,
-        SUM(CASE WHEN is_resolved = 1 THEN 1 ELSE 0 END) as resolved
+        SUM(CASE WHEN is_resolved = 1 THEN 1 ELSE 0 END) as resolved,
+        AVG(CASE
+          WHEN is_resolved = 1 AND resolved_at IS NOT NULL
+          THEN (JULIANDAY(resolved_at) - JULIANDAY(created_at)) * 24 * 60
+          ELSE NULL
+        END) as avg_minutes
       FROM pending_items
       WHERE fair_id = ?
       GROUP BY team
       ORDER BY total DESC
     ''', [fairId]);
+    return rows.map((r) => Map<String, dynamic>.from(r)).toList();
+  }
+
+  /// Returns cross-fair summary for all fairs (for the metrics tab).
+  static Future<List<Map<String, dynamic>>> getCrossFairStats() async {
+    final database = await db;
+    final rows = await database.rawQuery('''
+      SELECT f.name as fair_name,
+        COUNT(DISTINCT c.row_id) as total_clients,
+        SUM(CASE WHEN c.is_completed = 1 THEN 1 ELSE 0 END) as completed_clients,
+        COUNT(p.id) as total_pending,
+        SUM(CASE WHEN p.is_resolved = 1 THEN 1 ELSE 0 END) as resolved_pending,
+        AVG(CASE
+          WHEN p.is_resolved = 1 AND p.resolved_at IS NOT NULL
+          THEN (JULIANDAY(p.resolved_at) - JULIANDAY(p.created_at)) * 24 * 60
+          ELSE NULL
+        END) as avg_minutes
+      FROM fairs f
+      LEFT JOIN clients c ON c.fair_id = f.id
+      LEFT JOIN pending_items p ON p.fair_id = f.id
+      GROUP BY f.id, f.name
+      ORDER BY f.created_at DESC
+    ''');
     return rows.map((r) => Map<String, dynamic>.from(r)).toList();
   }
 

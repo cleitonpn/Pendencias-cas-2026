@@ -35,6 +35,27 @@ class FirestoreService {
     return list;
   }
 
+  /// Returns the set of producer names who sent at least one montage photo
+  /// today (local date) for the given fair.
+  static Future<Set<String>> getMontageProducersToday(String fairName) async {
+    final todayPrefix =
+        DateTime.now().toIso8601String().substring(0, 10); // "YYYY-MM-DD"
+    try {
+      final snap = await _db
+          .collection('montage_updates')
+          .where('fairName', isEqualTo: fairName)
+          .get();
+      return snap.docs
+          .where((d) =>
+              ((d.data()['createdAt'] as String?) ?? '').startsWith(todayPrefix))
+          .map((d) => (d.data()['createdBy'] as String?) ?? '')
+          .where((s) => s.isNotEmpty)
+          .toSet();
+    } catch (_) {
+      return {};
+    }
+  }
+
   // ─── Pending Items ───────────────────────────────────────────────────────────
 
   static Future<String> savePendingItem(

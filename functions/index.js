@@ -1,13 +1,17 @@
 /**
  * Cloud Functions for Montagem USET.
  *
- * Sends push notifications (FCM) automatically when a pending item is created
- * or marked as awaiting validation, targeting topics the app subscribes to.
+ * - onPendingCreated: notifica equipe + produtor quando pendência é criada
+ * - onPendingUpdated: notifica admins quando pendência vai para validação
+ * - dailyMontageReminder: às 18h BRT envia push aos produtores de feiras em
+ *   modo produção que ainda não enviaram foto de montagem naquele dia
  */
 const {onDocumentCreated, onDocumentUpdated} =
     require("firebase-functions/v2/firestore");
+const {onSchedule} = require("firebase-functions/v2/scheduler");
 const {initializeApp} = require("firebase-admin/app");
 const {getMessaging} = require("firebase-admin/messaging");
+const {getFirestore} = require("firebase-admin/firestore");
 
 initializeApp();
 
@@ -101,4 +105,65 @@ exports.onPendingUpdated = onDocumentUpdated(
           ["admins"],
           "Pendência aguardando validação",
           `${team}${client}: ${desc}`);
+    });
+
+// Daily 18:00 BRT reminder to producers who haven't sent a montage photo yet.
+exports.dailyMontageReminder = onSchedule(
+    {schedule: "0 18 * * *", timeZone: "America/Sao_Paulo"},
+    async (_event) => {
+      const firestore = getFirestore();
+
+      // Find fairs currently in production mode.
+      const fairsSnap = await firestore.collection("fairs").get();
+      const productionFairs = fairsSnap.docs
+          .filter((d) => d.data().mode === "producao")
+          .map((d) => ({id: d.id, name: d.data().name || ""}));
+
+      if (productionFairs.length === 0) return;
+
+      // "Today" in BRT: Dart stores DateTime.now().toIso8601String() in local
+      // time (BRT), so we compare the date portion after subtracting UTC-3.
+      const nowUTC = new Date();
+      const brtMs = nowUTC.getTime() - (3 * 60 * 60 * 1000);
+      const brtDate = new Date(brtMs).toISOString().split("T")[0]; // "YYYY-MM-DD"
+
+      for (const fair of productionFairs) {
+        // Producers who already sent a photo today.
+        const updatesSnap = await firestore.collection("montage_updates")
+            .where("fairName", "==", fair.name)
+            .get();
+
+        const sentToday = new Set(
+            updatesSnap.docs
+                .filter((d) =>
+                  (d.data().createdAt || "").startsWith(brtDate))
+                .map((d) => d.data().createdBy || "")
+                .filter(Boolean),
+        );
+
+        // All producers involved in this fair (from pending_items).
+        const pendingSnap = await firestore.collection("pending_items")
+            .where("fairName", "==", fair.name)
+            .get();
+
+        const allProducers = new Set(
+            pendingSnap.docs
+                .map((d) => d.data().producerName || "")
+                .filter(Boolean),
+        );
+
+        // Notify those who haven't sent today.
+        const toNotify = [...allProducers].filter((p) => !sentToday.has(p));
+        if (toNotify.length === 0) continue;
+
+        await Promise.allSettled(
+            toNotify.map((producer) =>
+              sendToTopics(
+                  [sanitize("producer", producer)],
+                  "Hora de atualizar a montagem! 📸",
+                  `Envie a foto de progresso dos seus stands — ${fair.name}`,
+              ),
+            ),
+        );
+      }
     });

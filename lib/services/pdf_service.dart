@@ -5,6 +5,8 @@ import 'package:share_plus/share_plus.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:intl/intl.dart';
+import '../models/client.dart';
+import '../models/montage_update.dart';
 import '../models/pending_item.dart';
 
 class PdfService {
@@ -252,6 +254,249 @@ class PdfService {
 
     await _saveAndShare(pdf, 'CAS2026_relatorio_final.pdf');
   }
+
+  /// Gera um relatório de entrega individual por stand.
+  /// Inclui dados do cliente, equipe responsável, pendências resolvidas e
+  /// histórico de atualizações de montagem — comprovante profissional de entrega.
+  static Future<void> generateStandDeliveryReport(
+    String fairName,
+    Client client,
+    List<PendingItem> resolvedItems,
+    List<MontageUpdate> montageUpdates,
+  ) async {
+    final pdf = pw.Document();
+    final now = DateTime.now();
+    final nowFmt = _dtFmt.format(now);
+    final dateFmt = _dateFmt.format(now);
+
+    pdf.addPage(pw.MultiPage(
+      pageFormat: PdfPageFormat.a4,
+      margin: const pw.EdgeInsets.all(36),
+      header: (_) => pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                pw.Text('RELATÓRIO DE ENTREGA DE STAND',
+                    style: pw.TextStyle(
+                        fontSize: 14,
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColors.indigo900)),
+                pw.Text('$fairName  ·  $dateFmt',
+                    style: const pw.TextStyle(
+                        fontSize: 9, color: PdfColors.grey600)),
+              ]),
+              pw.Container(
+                padding: const pw.EdgeInsets.symmetric(
+                    horizontal: 12, vertical: 6),
+                decoration: pw.BoxDecoration(
+                  color: PdfColors.green50,
+                  border:
+                      pw.Border.all(color: PdfColors.green600, width: 1),
+                  borderRadius:
+                      const pw.BorderRadius.all(pw.Radius.circular(6)),
+                ),
+                child: pw.Text('ENTREGUE',
+                    style: pw.TextStyle(
+                        fontSize: 11,
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColors.green700)),
+              ),
+            ],
+          ),
+          pw.SizedBox(height: 6),
+          pw.Divider(color: PdfColors.grey400),
+        ],
+      ),
+      build: (_) {
+        final resp = <String>[
+          if (client.produtor.isNotEmpty) 'Produtor: ${client.produtor}',
+          if (client.marceneiro.isNotEmpty) 'Marcenaria: ${client.marceneiro}',
+          if (client.tapeceiro.isNotEmpty) 'Tapeçaria: ${client.tapeceiro}',
+          if (client.eletricista.isNotEmpty)
+            'Elétrica: ${client.eletricista}',
+          if (client.faxineira.isNotEmpty) 'Limpeza: ${client.faxineira}',
+        ];
+
+        return [
+          // ── Dados do stand ─────────────────────────────────────────
+          _pdfSection('IDENTIFICAÇÃO DO STAND'),
+          pw.Table(
+            columnWidths: {
+              0: const pw.FlexColumnWidth(1.2),
+              1: const pw.FlexColumnWidth(2),
+            },
+            children: [
+              _pdfRow('Expositor', client.displayName),
+              if (client.local.isNotEmpty)
+                _pdfRow('Número do Stand', client.local),
+              if (client.hangar.isNotEmpty)
+                _pdfRow('Hangar', client.hangar),
+              if (client.area.isNotEmpty)
+                _pdfRow('Área', '${client.area} m²'),
+              if (client.montagem.isNotEmpty)
+                _pdfRow('Tipo de Montagem', client.montagem),
+              _pdfRow('Data de entrega', nowFmt),
+            ],
+          ),
+          pw.SizedBox(height: 16),
+
+          // ── Equipe responsável ─────────────────────────────────────
+          if (resp.isNotEmpty) ...[
+            _pdfSection('EQUIPE RESPONSÁVEL'),
+            ...resp.map((r) => pw.Padding(
+                  padding: const pw.EdgeInsets.only(bottom: 4, left: 8),
+                  child: pw.Text('• $r',
+                      style: const pw.TextStyle(fontSize: 11)),
+                )),
+            pw.SizedBox(height: 16),
+          ],
+
+          // ── Pendências resolvidas ──────────────────────────────────
+          _pdfSection(
+              'PENDÊNCIAS RESOLVIDAS (${resolvedItems.length})'),
+          if (resolvedItems.isEmpty)
+            pw.Padding(
+              padding: const pw.EdgeInsets.only(left: 8, bottom: 8),
+              child: pw.Text('Nenhuma pendência registrada.',
+                  style: const pw.TextStyle(
+                      fontSize: 10, color: PdfColors.grey600)),
+            )
+          else
+            ...resolvedItems.map((item) {
+              final dur = item.resolvedAt != null
+                  ? _dur(
+                      item.resolvedAt!.difference(item.createdAt))
+                  : '';
+              return pw.Container(
+                margin:
+                    const pw.EdgeInsets.only(bottom: 6, left: 8),
+                padding: const pw.EdgeInsets.all(8),
+                decoration: pw.BoxDecoration(
+                  border: pw.Border.all(color: PdfColors.grey300),
+                  borderRadius: const pw.BorderRadius.all(
+                      pw.Radius.circular(4)),
+                ),
+                child: pw.Column(
+                    crossAxisAlignment:
+                        pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Row(children: [
+                        pw.Container(
+                          padding:
+                              const pw.EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 2),
+                          decoration: pw.BoxDecoration(
+                            color: _teamColor(item.team),
+                            borderRadius:
+                                const pw.BorderRadius.all(
+                                    pw.Radius.circular(3)),
+                          ),
+                          child: pw.Text(item.team,
+                              style: const pw.TextStyle(
+                                  fontSize: 9,
+                                  color: PdfColors.white)),
+                        ),
+                        if (dur.isNotEmpty) ...[
+                          pw.SizedBox(width: 8),
+                          pw.Text('Resolvido em $dur',
+                              style: const pw.TextStyle(
+                                  fontSize: 9,
+                                  color: PdfColors.green700)),
+                        ],
+                      ]),
+                      pw.SizedBox(height: 4),
+                      pw.Text(item.description,
+                          style:
+                              const pw.TextStyle(fontSize: 10)),
+                    ]),
+              );
+            }),
+          pw.SizedBox(height: 16),
+
+          // ── Atualizações de montagem ───────────────────────────────
+          _pdfSection(
+              'HISTÓRICO DE MONTAGEM (${montageUpdates.length} fotos)'),
+          if (montageUpdates.isEmpty)
+            pw.Padding(
+              padding: const pw.EdgeInsets.only(left: 8),
+              child: pw.Text('Nenhuma foto registrada.',
+                  style: const pw.TextStyle(
+                      fontSize: 10, color: PdfColors.grey600)),
+            )
+          else
+            ...montageUpdates.map((u) => pw.Padding(
+                  padding: const pw.EdgeInsets.only(
+                      bottom: 4, left: 8),
+                  child: pw.Row(children: [
+                    pw.Text('• ${_dtFmt.format(u.createdAt)}',
+                        style: const pw.TextStyle(
+                            fontSize: 10)),
+                    if (u.createdBy.isNotEmpty) ...[
+                      pw.SizedBox(width: 8),
+                      pw.Text('(${u.createdBy})',
+                          style: const pw.TextStyle(
+                              fontSize: 9,
+                              color: PdfColors.grey600)),
+                    ],
+                  ]),
+                )),
+
+          pw.SizedBox(height: 32),
+          pw.Divider(color: PdfColors.grey300),
+          pw.SizedBox(height: 8),
+          pw.Row(
+              mainAxisAlignment:
+                  pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.Text('Gerado em: $nowFmt',
+                    style: const pw.TextStyle(
+                        fontSize: 9, color: PdfColors.grey500)),
+                pw.Text('Montagem USET — $fairName',
+                    style: const pw.TextStyle(
+                        fontSize: 9, color: PdfColors.grey500)),
+              ]),
+        ];
+      },
+    ));
+
+    final standLabel =
+        client.local.isNotEmpty ? client.local : client.rowId;
+    await _saveAndShare(
+        pdf, 'Entrega_Stand_${standLabel}_$dateFmt.pdf'.replaceAll('/', '-'));
+  }
+
+  static pw.Widget _pdfSection(String title) => pw.Container(
+        margin: const pw.EdgeInsets.only(bottom: 6),
+        padding:
+            const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        color: PdfColors.indigo50,
+        child: pw.Text(title,
+            style: pw.TextStyle(
+                fontSize: 10,
+                fontWeight: pw.FontWeight.bold,
+                color: PdfColors.indigo900)),
+      );
+
+  static pw.TableRow _pdfRow(String label, String value) =>
+      pw.TableRow(children: [
+        pw.Padding(
+          padding: const pw.EdgeInsets.all(5),
+          child: pw.Text(label,
+              style: pw.TextStyle(
+                  fontSize: 10,
+                  fontWeight: pw.FontWeight.bold,
+                  color: PdfColors.grey700)),
+        ),
+        pw.Padding(
+          padding: const pw.EdgeInsets.all(5),
+          child:
+              pw.Text(value, style: const pw.TextStyle(fontSize: 10)),
+        ),
+      ]);
 
   /// Mostra snackbar de feedback enquanto gera o PDF
   static Future<void> generateAndShow(
