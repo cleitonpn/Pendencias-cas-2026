@@ -58,7 +58,9 @@ class _ProducerHomeScreenState extends State<ProducerHomeScreen> {
             icon: const Icon(Icons.logout, color: Colors.white),
             tooltip: 'Sair',
             onPressed: () async {
-              await NotificationService.syncMontageReminder([]);
+              try {
+                await NotificationService.syncMontageReminder([]);
+              } catch (_) {}
               await SessionService.clear();
               if (context.mounted) {
                 Navigator.of(context).pushAndRemoveUntil(
