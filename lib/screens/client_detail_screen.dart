@@ -646,7 +646,25 @@ class _PendingCard extends StatelessWidget {
                           color: Colors.green,
                           fontSize: 12,
                           fontWeight: FontWeight.bold)),
-                ]),
+                ])
+              else if (item.inProgress && item.inProgressBy.isNotEmpty)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: Colors.deepPurple.shade50,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: Colors.deepPurple.shade200),
+                  ),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(Icons.engineering, color: Colors.deepPurple.shade600, size: 13),
+                    const SizedBox(width: 4),
+                    Text('Em andamento por ${item.inProgressBy}',
+                        style: TextStyle(
+                            color: Colors.deepPurple.shade600,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold)),
+                  ]),
+                ),
             ]),
             const SizedBox(height: 8),
             if (item.fromClient) ...[

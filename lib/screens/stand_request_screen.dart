@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../models/client.dart';
 import '../models/fair.dart';
 import '../models/pending_item.dart';
@@ -267,6 +268,80 @@ class _StandRequestScreenState extends State<StandRequestScreen> {
     ));
   }
 
+  Future<void> _launchLink(String url) async {
+    String target = url.trim();
+    if (!target.startsWith('http://') && !target.startsWith('https://')) {
+      target = 'https://$target';
+    }
+    final uri = Uri.tryParse(target);
+    if (uri == null) return;
+    try {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (_) {
+      if (mounted) {
+        _toast('Não foi possível abrir o link.', error: true);
+      }
+    }
+  }
+
+  List<Widget> _linkCards(Client c) {
+    final cards = <Widget>[];
+    if (c.projectLink.isNotEmpty) {
+      cards.add(InkWell(
+        onTap: () => _launchLink(c.projectLink),
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: Colors.blue.shade50,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: Colors.blue.shade200),
+          ),
+          child: Row(children: [
+            Icon(Icons.folder_open, color: Colors.blue.shade700, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text('Ver projeto no Drive',
+                  style: TextStyle(
+                      color: Colors.blue.shade700,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14)),
+            ),
+            Icon(Icons.open_in_new, color: Colors.blue.shade400, size: 16),
+          ]),
+        ),
+      ));
+    }
+    if (c.linkCv.isNotEmpty) {
+      if (cards.isNotEmpty) cards.add(const SizedBox(height: 8));
+      cards.add(InkWell(
+        onTap: () => _launchLink(c.linkCv),
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: Colors.pink.shade50,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: Colors.pink.shade200),
+          ),
+          child: Row(children: [
+            Icon(Icons.image_outlined, color: Colors.pink.shade700, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text('Ver print Comunicação Visual',
+                  style: TextStyle(
+                      color: Colors.pink.shade700,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14)),
+            ),
+            Icon(Icons.open_in_new, color: Colors.pink.shade400, size: 16),
+          ]),
+        ),
+      ));
+    }
+    return cards;
+  }
+
   // ── UI ──────────────────────────────────────────────────────────────────────
 
   @override
@@ -493,6 +568,10 @@ class _StandRequestScreenState extends State<StandRequestScreen> {
                 '${c.hangar.isNotEmpty ? "Hangar ${c.hangar}  •  " : ""}Stand ${c.local}'),
           ),
         ),
+        if (c.projectLink.isNotEmpty || c.linkCv.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          ..._linkCards(c),
+        ],
         const SizedBox(height: 20),
         const Text('QUAL EQUIPE VOCÊ PRECISA?',
             style: TextStyle(

@@ -15,7 +15,7 @@ class DatabaseService {
 
   static Future<Database> _initDb() async {
     final path = join(await getDatabasesPath(), 'cas2026.db');
-    return openDatabase(path, version: 12, onCreate: _onCreate, onUpgrade: _onUpgrade);
+    return openDatabase(path, version: 13, onCreate: _onCreate, onUpgrade: _onUpgrade);
   }
 
   static Future<void> _onCreate(Database db, int version) async {
@@ -63,6 +63,8 @@ class DatabaseService {
         rejection_reason TEXT DEFAULT '',
         is_resolved INTEGER DEFAULT 0,
         awaiting_validation INTEGER DEFAULT 0,
+        in_progress INTEGER DEFAULT 0,
+        in_progress_by TEXT DEFAULT '',
         created_at TEXT, resolved_at TEXT,
         FOREIGN KEY (client_id) REFERENCES clients(row_id)
       )
@@ -173,6 +175,14 @@ class DatabaseService {
       } catch (_) {}
       try {
         await db.execute("ALTER TABLE pending_items ADD COLUMN rejection_reason TEXT DEFAULT ''");
+      } catch (_) {}
+    }
+    if (oldV < 13) {
+      try {
+        await db.execute("ALTER TABLE pending_items ADD COLUMN in_progress INTEGER DEFAULT 0");
+      } catch (_) {}
+      try {
+        await db.execute("ALTER TABLE pending_items ADD COLUMN in_progress_by TEXT DEFAULT ''");
       } catch (_) {}
     }
   }
@@ -448,6 +458,8 @@ class DatabaseService {
         {
           'is_resolved': item.isResolved ? 1 : 0,
           'awaiting_validation': item.awaitingValidation ? 1 : 0,
+          'in_progress': item.inProgress ? 1 : 0,
+          'in_progress_by': item.inProgressBy,
           'resolved_at': item.resolvedAt?.toIso8601String(),
           'resolved_by': item.resolvedBy,
           'approval_status': item.approvalStatus,
@@ -517,6 +529,16 @@ class DatabaseService {
     await database.update(
       'pending_items',
       {'awaiting_validation': 1},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  static Future<void> markInProgress(int id, String by) async {
+    final database = await db;
+    await database.update(
+      'pending_items',
+      {'in_progress': 1, 'in_progress_by': by},
       where: 'id = ?',
       whereArgs: [id],
     );

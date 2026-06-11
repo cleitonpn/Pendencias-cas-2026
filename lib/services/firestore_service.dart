@@ -148,6 +148,14 @@ class FirestoreService {
     });
   }
 
+  static Future<void> markInProgress(String firestoreId, String by) async {
+    if (firestoreId.isEmpty) return;
+    await _db.collection('pending_items').doc(firestoreId).update({
+      'inProgress': true,
+      'inProgressBy': by,
+    });
+  }
+
   static Future<List<PendingItem>> getItemsByProducer(
       String producerName) async {
     final snapshot = await _db

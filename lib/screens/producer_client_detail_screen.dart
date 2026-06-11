@@ -68,6 +68,17 @@ class _ProducerClientDetailScreenState
       item.firestoreId != null &&
       _awaitingFirestoreIds.contains(item.firestoreId);
 
+  Future<void> _markInProgress(PendingItem item) async {
+    final name = widget.producerName.isNotEmpty ? widget.producerName : 'Produtor';
+    if (item.id != null) {
+      await DatabaseService.markInProgress(item.id!, name);
+    }
+    if (item.firestoreId != null) {
+      await FirestoreService.markInProgress(item.firestoreId!, name);
+    }
+    await _load();
+  }
+
   Future<void> _markAwaiting(PendingItem item) async {
     final ok = await showDialog<bool>(
       context: context,
@@ -337,6 +348,9 @@ class _ProducerClientDetailScreenState
                     ...open.map((item) => _PendingCard(
                           item: item,
                           isAwaiting: false,
+                          onInProgress: item.inProgress
+                              ? null
+                              : () => _markInProgress(item),
                           onConcluir: () => _markAwaiting(item),
                           onCopy: () => _copyWhatsApp(item),
                         )),
@@ -351,6 +365,7 @@ class _ProducerClientDetailScreenState
                     ...awaiting.map((item) => _PendingCard(
                           item: item,
                           isAwaiting: true,
+                          onInProgress: null,
                           onConcluir: null,
                           onCopy: () => _copyWhatsApp(item),
                         )),
@@ -445,12 +460,14 @@ class _RespChip extends StatelessWidget {
 class _PendingCard extends StatelessWidget {
   final PendingItem item;
   final bool isAwaiting;
+  final VoidCallback? onInProgress;
   final VoidCallback? onConcluir;
   final VoidCallback onCopy;
 
   const _PendingCard({
     required this.item,
     required this.isAwaiting,
+    required this.onInProgress,
     required this.onConcluir,
     required this.onCopy,
   });
@@ -498,7 +515,25 @@ class _PendingCard extends StatelessWidget {
                           color: Colors.blue,
                           fontSize: 11,
                           fontWeight: FontWeight.bold)),
-                ]),
+                ])
+              else if (item.inProgress && item.inProgressBy.isNotEmpty)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: Colors.deepPurple.shade50,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: Colors.deepPurple.shade200),
+                  ),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(Icons.engineering, color: Colors.deepPurple.shade600, size: 13),
+                    const SizedBox(width: 4),
+                    Text('Em andamento por ${item.inProgressBy}',
+                        style: TextStyle(
+                            color: Colors.deepPurple.shade600,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold)),
+                  ]),
+                ),
             ]),
             const SizedBox(height: 8),
             if (item.fromClient) ...[
@@ -534,7 +569,7 @@ class _PendingCard extends StatelessWidget {
               style: const TextStyle(color: Colors.grey, fontSize: 11),
             ),
             const SizedBox(height: 10),
-            Row(children: [
+            Wrap(spacing: 8, runSpacing: 6, children: [
               OutlinedButton.icon(
                 onPressed: onCopy,
                 icon: const Icon(Icons.copy, size: 14),
@@ -548,8 +583,21 @@ class _PendingCard extends StatelessWidget {
                   minimumSize: Size.zero,
                 ),
               ),
-              if (onConcluir != null) ...[
-                const SizedBox(width: 8),
+              if (onInProgress != null)
+                OutlinedButton.icon(
+                  onPressed: onInProgress,
+                  icon: const Icon(Icons.engineering, size: 14),
+                  label: const Text('Peguei!',
+                      style: TextStyle(fontSize: 12)),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.deepPurple,
+                    side: const BorderSide(color: Colors.deepPurple),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 6),
+                    minimumSize: Size.zero,
+                  ),
+                ),
+              if (onConcluir != null)
                 ElevatedButton.icon(
                   onPressed: onConcluir,
                   icon: const Icon(Icons.check, size: 14),
@@ -563,7 +611,6 @@ class _PendingCard extends StatelessWidget {
                     minimumSize: Size.zero,
                   ),
                 ),
-              ],
             ]),
           ],
         ),

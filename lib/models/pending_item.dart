@@ -22,6 +22,8 @@ class PendingItem {
   String rejectionReason;       // motivo da recusa pelo atendimento
   bool isResolved;
   bool awaitingValidation;     // producer marked as done, admin needs to validate
+  bool inProgress;
+  String inProgressBy;
   final DateTime createdAt;
   DateTime? resolvedAt;
 
@@ -45,6 +47,8 @@ class PendingItem {
     this.rejectionReason = '',
     this.isResolved = false,
     this.awaitingValidation = false,
+    this.inProgress = false,
+    this.inProgressBy = '',
     required this.createdAt,
     this.resolvedAt,
   });
@@ -68,6 +72,8 @@ class PendingItem {
         'rejection_reason': rejectionReason,
         'is_resolved': isResolved ? 1 : 0,
         'awaiting_validation': awaitingValidation ? 1 : 0,
+        'in_progress': inProgress ? 1 : 0,
+        'in_progress_by': inProgressBy,
         'created_at': createdAt.toIso8601String(),
         'resolved_at': resolvedAt?.toIso8601String(),
       };
@@ -104,6 +110,8 @@ class PendingItem {
         rejectionReason: (map['rejection_reason'] as String?) ?? '',
         isResolved: (map['is_resolved'] as int? ?? 0) == 1,
         awaitingValidation: (map['awaiting_validation'] as int? ?? 0) == 1,
+        inProgress: (map['in_progress'] as int? ?? 0) == 1,
+        inProgressBy: (map['in_progress_by'] as String?) ?? '',
         createdAt: DateTime.parse(map['created_at'] as String),
         resolvedAt: map['resolved_at'] != null
             ? DateTime.tryParse(map['resolved_at'] as String)
@@ -131,6 +139,8 @@ class PendingItem {
         rejectionReason: (data['rejectionReason'] as String?) ?? '',
         isResolved: data['isResolved'] as bool? ?? false,
         awaitingValidation: data['awaitingValidation'] as bool? ?? false,
+        inProgress: data['inProgress'] as bool? ?? false,
+        inProgressBy: (data['inProgressBy'] as String?) ?? '',
         createdAt: DateTime.tryParse(data['createdAt'] as String? ?? '') ??
             DateTime.now(),
         resolvedAt: data['resolvedAt'] != null
