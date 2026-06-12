@@ -52,20 +52,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _loadPins() async {
-    final fairId = context.read<AppProvider>().currentFair?.id ?? 1;
-    // Load producer names from local DB (if synced) and from Firestore (if PINs set)
-    final localProducers = await DatabaseService.getProducers(fairId: fairId);
-    final firestoreProducers = await FirestoreService.getProducersWithPins();
-    final allProducers = {...localProducers, ...firestoreProducers}.toList()..sort();
+    final fairId = context.read<AppProvider>().currentFair?.id;
 
+    // Producers: merge local DB names (if a fair is open) with Firestore PIN holders
+    final firestoreProducers = await FirestoreService.getProducersWithPins();
+    final localProducers = fairId != null
+        ? await DatabaseService.getProducers(fairId: fairId)
+        : <String>[];
+    final allProducers = {...localProducers, ...firestoreProducers}.toList()..sort();
     final pins = <String, String?>{};
     for (final p in allProducers) {
       pins[p] = await FirestoreService.getProducerPin(p);
     }
 
-    // Consultants: from the spreadsheet column "atendimento" + Firestore pins
-    final localConsultants = await DatabaseService.getConsultants(fairId: fairId);
+    // Consultants
     final firestoreConsultants = await FirestoreService.getConsultantsWithPins();
+    final localConsultants = fairId != null
+        ? await DatabaseService.getConsultants(fairId: fairId)
+        : <String>[];
     final allConsultants =
         {...localConsultants, ...firestoreConsultants}.toList()..sort();
     final consultantPins = <String, String?>{};
@@ -73,9 +77,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
       consultantPins[c] = await FirestoreService.getConsultantPin(c);
     }
 
-    // Organizers: from the spreadsheet column "organizadora" + Firestore pins
-    final localOrganizers = await DatabaseService.getOrganizers(fairId: fairId);
+    // Organizers
     final firestoreOrganizers = await FirestoreService.getOrganizersWithPins();
+    final localOrganizers = fairId != null
+        ? await DatabaseService.getOrganizers(fairId: fairId)
+        : <String>[];
     final allOrganizers =
         {...localOrganizers, ...firestoreOrganizers}.toList()..sort();
     final organizerPins = <String, String?>{};
@@ -712,57 +718,83 @@ class _SettingsScreenState extends State<SettingsScreen> {
               const SizedBox(height: 20),
             ],
 
-            // Sync section
-            const Text('SINCRONIZAÇÃO',
-                style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.grey,
-                    letterSpacing: 1)),
-            const SizedBox(height: 8),
-            Card(
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
-              child: Padding(
-                padding: const EdgeInsets.all(14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _step('1', 'Abra a planilha no Google Sheets'),
-                    _step('2', 'Clique em Compartilhar'),
-                    _step('3',
-                        'Mude para "Qualquer pessoa com o link"\ne selecione "Visualizador"'),
-                    _step('4', 'Toque em Sincronizar abaixo'),
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 48,
-                      child: ElevatedButton.icon(
-                        onPressed: _isBusy ? null : _sync,
-                        icon: _isBusy
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                    color: Colors.white, strokeWidth: 2))
-                            : const Icon(Icons.sync, color: Colors.white),
-                        label: Text(
-                            _isBusy ? 'Sincronizando...' : 'Sincronizar Planilha',
-                            style: const TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white)),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green,
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10)),
+            // Sync section — only shown when a fair is active
+            if (fair != null) ...[
+              const Text('SINCRONIZAÇÃO',
+                  style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey,
+                      letterSpacing: 1)),
+              const SizedBox(height: 8),
+              Card(
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _step('1', 'Abra a planilha no Google Sheets'),
+                      _step('2', 'Clique em Compartilhar'),
+                      _step('3',
+                          'Mude para "Qualquer pessoa com o link"\ne selecione "Visualizador"'),
+                      _step('4', 'Toque em Sincronizar abaixo'),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 48,
+                        child: ElevatedButton.icon(
+                          onPressed: _isBusy ? null : _sync,
+                          icon: _isBusy
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                      color: Colors.white, strokeWidth: 2))
+                              : const Icon(Icons.sync, color: Colors.white),
+                          label: Text(
+                              _isBusy ? 'Sincronizando...' : 'Sincronizar Planilha',
+                              style: const TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.green,
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10)),
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
-            ),
+            ] else ...[
+              const Text('SINCRONIZAÇÃO',
+                  style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey,
+                      letterSpacing: 1)),
+              const SizedBox(height: 8),
+              Card(
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+                child: const Padding(
+                  padding: EdgeInsets.all(14),
+                  child: Row(children: [
+                    Icon(Icons.info_outline, color: Colors.grey, size: 18),
+                    SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                          'Abra uma feira na tela anterior para sincronizar a planilha.',
+                          style: TextStyle(color: Colors.grey, fontSize: 13)),
+                    ),
+                  ]),
+                ),
+              ),
+            ],
 
             const SizedBox(height: 24),
 

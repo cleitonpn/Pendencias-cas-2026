@@ -8,6 +8,7 @@ import 'hangar_list_screen.dart';
 import 'add_fair_screen.dart';
 import 'login_screen.dart';
 import 'producer_login_screen.dart';
+import 'settings_screen.dart';
 import 'sticker_generator_screen.dart';
 
 class FairSelectionScreen extends StatelessWidget {
@@ -27,7 +28,7 @@ class FairSelectionScreen extends StatelessWidget {
             style: TextStyle(
                 color: Colors.white, fontWeight: FontWeight.bold)),
         actions: [
-          if (canManage)
+          if (canManage) ...[
             IconButton(
               icon: const Icon(Icons.badge_outlined, color: Colors.white),
               tooltip: 'Acesso Produtor',
@@ -35,6 +36,18 @@ class FairSelectionScreen extends StatelessWidget {
                   MaterialPageRoute(
                       builder: (_) => const ProducerLoginScreen())),
             ),
+            IconButton(
+              icon: const Icon(Icons.settings_outlined, color: Colors.white),
+              tooltip: 'Configurações',
+              onPressed: () async {
+                final ok = await requireAdminPin(context);
+                if (ok && context.mounted) {
+                  Navigator.push(context,
+                      MaterialPageRoute(builder: (_) => const SettingsScreen()));
+                }
+              },
+            ),
+          ],
           IconButton(
             icon: const Icon(Icons.logout, color: Colors.white),
             tooltip: 'Sair',
