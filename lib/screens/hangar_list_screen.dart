@@ -127,7 +127,7 @@ class _SyncBar extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  'Última sync: ${DateFormat('dd/MM HH:mm').format(provider.lastSync!)}',
+                  '${provider.lastSync == provider.lastGlobalSync && provider.lastGlobalSync != null ? 'Sync geral' : 'Última sync'}: ${DateFormat('dd/MM HH:mm').format(provider.lastSync!)}',
                   style: const TextStyle(fontSize: 12, color: Colors.grey),
                 ),
                 if (provider.lastAutoSync != null)

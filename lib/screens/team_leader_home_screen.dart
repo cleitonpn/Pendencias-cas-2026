@@ -13,7 +13,9 @@ class TeamLeaderHomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fairs = context.watch<AppProvider>().fairs;
+    final provider = context.watch<AppProvider>();
+    final fairs = provider.fairs.where((f) => f.sheetMode != 'mestra').toList();
+    final isSyncing = provider.isLoading;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF0F2F5),
@@ -32,6 +34,25 @@ class TeamLeaderHomeScreen extends StatelessWidget {
           ],
         ),
         actions: [
+          isSyncing
+              ? const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 14),
+                  child: Center(
+                    child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                          color: Colors.white, strokeWidth: 2),
+                    ),
+                  ),
+                )
+              : IconButton(
+                  icon: const Icon(Icons.sync, color: Colors.white),
+                  tooltip: 'Sincronizar todas as feiras',
+                  onPressed: fairs.isEmpty
+                      ? null
+                      : () => context.read<AppProvider>().syncAllFairs(),
+                ),
           IconButton(
             icon: const Icon(Icons.logout, color: Colors.white),
             tooltip: 'Sair',

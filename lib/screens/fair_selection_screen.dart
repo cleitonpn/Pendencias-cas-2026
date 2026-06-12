@@ -18,7 +18,8 @@ class FairSelectionScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AppProvider>();
-    final fairs = provider.fairs;
+    // Hide master fairs — they're containers only; derived fairs are shown instead
+    final fairs = provider.fairs.where((f) => f.sheetMode != 'mestra').toList();
     final isSyncing = provider.isLoading;
 
     return Scaffold(
@@ -90,13 +91,13 @@ class FairSelectionScreen extends StatelessWidget {
               backgroundColor: Color(0xFFD0D8E4),
               color: Color(0xFF1E3A5F),
             ),
-          if (provider.lastSync != null)
+          if (provider.lastGlobalSync != null)
             Container(
               width: double.infinity,
               color: const Color(0xFFE8F0FB),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
               child: Text(
-                'Último sync: ${_fmt(provider.lastSync!)}',
+                'Último sync: ${_fmt(provider.lastGlobalSync!)}',
                 style: const TextStyle(fontSize: 11, color: Color(0xFF1E3A5F)),
               ),
             ),

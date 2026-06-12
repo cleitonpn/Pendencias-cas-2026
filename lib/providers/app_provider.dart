@@ -16,6 +16,7 @@ class AppProvider extends ChangeNotifier {
   String? _error;
   DateTime? _lastSync;
   DateTime? _lastAutoSync;
+  DateTime? _lastGlobalSync;
   StreamSubscription? _pendingSubscription;
   Timer? _autoSyncTimer;
   Map<String, int> _pendingCounts = {}; // clientId → open pending count
@@ -29,6 +30,7 @@ class AppProvider extends ChangeNotifier {
   String? get error => _error;
   DateTime? get lastSync => _lastSync;
   DateTime? get lastAutoSync => _lastAutoSync;
+  DateTime? get lastGlobalSync => _lastGlobalSync;
   Map<String, int> get pendingCounts => _pendingCounts;
 
   /// Total open pending items across all stands of a hangar (reactive).
@@ -77,7 +79,8 @@ class AppProvider extends ChangeNotifier {
 
   Future<void> selectFair(Fair fair) async {
     _currentFair = fair;
-    _lastSync = null;
+    // Carry over the global sync timestamp so HangarListScreen shows it
+    _lastSync = _lastGlobalSync;
     _error = null;
     _setLoading(true);
     await _loadLocal();
@@ -173,7 +176,8 @@ class AppProvider extends ChangeNotifier {
         }
       }
       _fairs = await DatabaseService.getFairs();
-      _lastSync = DateTime.now();
+      _lastGlobalSync = DateTime.now();
+      _lastSync = _lastGlobalSync;
       if (errors.isNotEmpty) _error = errors.join('\n');
     } finally {
       _currentFair = savedFair;
