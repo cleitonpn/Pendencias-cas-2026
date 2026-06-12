@@ -144,8 +144,9 @@ class AppProvider extends ChangeNotifier {
 
   /// Standard individual-sheet sync (original behavior + new-client detection).
   Future<void> _syncIndividualSheet() async {
-    final existingIds =
-        await DatabaseService.getExistingClientRowIds(_currentFair!.id!);
+    final existingClients =
+        await DatabaseService.getClients(fairId: _currentFair!.id!);
+    final existingMap = {for (final c in existingClients) c.rowId: c};
 
     final sheetClients = await SheetsService.fetchClients(
       spreadsheetId: _currentFair!.spreadsheetId,
@@ -153,14 +154,11 @@ class AppProvider extends ChangeNotifier {
       fairId: _currentFair!.id!,
     );
 
-    _preserveCompletion(sheetClients, _clients);
+    _preserveCompletion(sheetClients, existingClients);
 
-    final newClients =
-        sheetClients.where((c) => !existingIds.contains(c.rowId)).toList();
+    _notifyAssignments(sheetClients, existingMap, _currentFair!.name);
 
     await DatabaseService.upsertClients(sheetClients);
-
-    _notifyNewClients(newClients, _currentFair!.name);
 
     await _loadLocal();
     _lastSync = DateTime.now();
@@ -190,19 +188,15 @@ class AppProvider extends ChangeNotifier {
         return c.reidentify(derivedId, '${derivedId}_$rowNum');
       }).toList();
 
-      final existingIds =
-          await DatabaseService.getExistingClientRowIds(derivedId);
-
       final localClients =
           await DatabaseService.getClients(fairId: derivedId);
+      final existingMap = {for (final c in localClients) c.rowId: c};
+
       _preserveCompletion(finalClients, localClients);
 
-      final newClients =
-          finalClients.where((c) => !existingIds.contains(c.rowId)).toList();
+      _notifyAssignments(finalClients, existingMap, feiraNome);
 
       await DatabaseService.upsertClients(finalClients);
-
-      _notifyNewClients(newClients, feiraNome);
 
       // Push derived fair to Firestore so other devices see it
       try {
@@ -241,15 +235,14 @@ class AppProvider extends ChangeNotifier {
       return c.reidentify(fairId, '${fairId}_$rowNum');
     }).toList();
 
-    final existingIds = await DatabaseService.getExistingClientRowIds(fairId);
-    _preserveCompletion(finalClients, _clients);
+    final existingClients = await DatabaseService.getClients(fairId: fairId);
+    final existingMap = {for (final c in existingClients) c.rowId: c};
 
-    final newClients =
-        finalClients.where((c) => !existingIds.contains(c.rowId)).toList();
+    _preserveCompletion(finalClients, existingClients);
+
+    _notifyAssignments(finalClients, existingMap, _currentFair!.name);
 
     await DatabaseService.upsertClients(finalClients);
-
-    _notifyNewClients(newClients, _currentFair!.name);
 
     await _loadLocal();
     _lastSync = DateTime.now();
@@ -268,17 +261,27 @@ class AppProvider extends ChangeNotifier {
     }
   }
 
-  /// Fire-and-forget: writes sync_events documents for truly new clients so the
-  /// Cloud Function can send push notifications to their producer/consultant.
-  void _notifyNewClients(List<Client> newClients, String fairName) {
-    for (final nc in newClients) {
-      if (nc.produtor.isEmpty && nc.atendimento.isEmpty) continue;
+  /// Fire-and-forget: writes sync_events for any client that just received a
+  /// producer or consultant assignment (including brand-new clients).
+  /// Only the newly assigned party is included so the other side isn't
+  /// re-notified if they were already set.
+  void _notifyAssignments(
+      List<Client> sheetClients,
+      Map<String, Client> existingMap,
+      String fairName) {
+    for (final nc in sheetClients) {
+      final existing = existingMap[nc.rowId];
+      final newProducer =
+          (existing == null || existing.produtor.isEmpty) && nc.produtor.isNotEmpty;
+      final newConsultant =
+          (existing == null || existing.atendimento.isEmpty) && nc.atendimento.isNotEmpty;
+      if (!newProducer && !newConsultant) continue;
       FirestoreService.writeSyncEvent(
         clientId: nc.rowId,
         clientName: nc.nome,
         fairName: fairName,
-        producerName: nc.produtor,
-        consultantName: nc.atendimento,
+        producerName: newProducer ? nc.produtor : '',
+        consultantName: newConsultant ? nc.atendimento : '',
       );
     }
   }
