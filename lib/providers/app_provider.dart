@@ -149,6 +149,40 @@ class AppProvider extends ChangeNotifier {
     }
   }
 
+  /// Syncs all non-child fairs at once. Called from the main screen.
+  Future<void> syncAllFairs() async {
+    _error = null;
+    _isLoading = true;
+    notifyListeners();
+    final savedFair = _currentFair;
+    final errors = <String>[];
+    try {
+      final snapshot = List<Fair>.of(_fairs);
+      for (final fair in snapshot) {
+        // mestra_child fairs are covered when their parent mestra syncs
+        if (fair.sheetMode == 'mestra_child') continue;
+        _currentFair = fair;
+        try {
+          if (fair.isMestra) {
+            await _syncMasterSheet();
+          } else {
+            await _syncIndividualSheet();
+          }
+        } catch (e) {
+          errors.add('${fair.name}: ${e.toString().replaceFirst("Exception: ", "")}');
+        }
+      }
+      _fairs = await DatabaseService.getFairs();
+      _lastSync = DateTime.now();
+      if (errors.isNotEmpty) _error = errors.join('\n');
+    } finally {
+      _currentFair = savedFair;
+      if (savedFair != null) await _loadLocal();
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
   /// Standard individual-sheet sync (original behavior + new-client detection).
   Future<void> _syncIndividualSheet() async {
     final existingClients =
@@ -179,18 +213,23 @@ class AppProvider extends ChangeNotifier {
       sheetName: _currentFair!.sheetName,
     );
 
+    final masterName = _currentFair!.name.toLowerCase().trim();
+    final masterSheet = _currentFair!.sheetName.toLowerCase().trim();
+
+    // Names that belong to the master itself and must never become derived fairs.
+    bool _isMasterName(String name) {
+      final n = name.toLowerCase().trim();
+      return n == masterName ||
+          n == masterSheet ||
+          n.contains(masterName) ||
+          n.contains(masterSheet);
+    }
+
     for (final entry in grouped.entries) {
       final feiraNome = entry.key;
       final tempClients = entry.value;
 
-      // Skip groups whose name matches the master fair itself (e.g. a row with
-      // FEIRA = "OPERACIONAL 2026" where that's the master sheet's own name).
-      final masterName = _currentFair!.name.toLowerCase().trim();
-      final masterSheet = _currentFair!.sheetName.toLowerCase().trim();
-      if (feiraNome.toLowerCase().trim() == masterName ||
-          feiraNome.toLowerCase().trim() == masterSheet) {
-        continue;
-      }
+      if (_isMasterName(feiraNome)) continue;
 
       final derivedId = await DatabaseService.findOrCreateDerivedFair(
         name: feiraNome,
@@ -223,6 +262,18 @@ class AppProvider extends ChangeNotifier {
           mode: 'producao', sheetMode: 'mestra_child',
         );
       } catch (_) {}
+    }
+
+    // Clean up any stale derived fairs whose names match the master itself —
+    // these were created before the filter existed and should be deleted.
+    final allFairs = await DatabaseService.getFairs();
+    for (final df in allFairs) {
+      if (df.sheetMode != 'mestra_child') continue;
+      if (df.spreadsheetId != _currentFair!.spreadsheetId) continue;
+      if (df.sheetName != _currentFair!.sheetName) continue;
+      if (!_isMasterName(df.name)) continue;
+      await DatabaseService.deleteFair(df.id!);
+      try { await FirestoreService.deleteFairFromCloud(df.id!); } catch (_) {}
     }
 
     _fairs = await DatabaseService.getFairs();

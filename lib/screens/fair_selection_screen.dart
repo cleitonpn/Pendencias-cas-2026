@@ -19,6 +19,7 @@ class FairSelectionScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final provider = context.watch<AppProvider>();
     final fairs = provider.fairs;
+    final isSyncing = provider.isLoading;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF0F2F5),
@@ -48,6 +49,26 @@ class FairSelectionScreen extends StatelessWidget {
               },
             ),
           ],
+          // Sync all button — visible to any authenticated role
+          isSyncing
+              ? const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 14),
+                  child: Center(
+                    child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                          color: Colors.white, strokeWidth: 2),
+                    ),
+                  ),
+                )
+              : IconButton(
+                  icon: const Icon(Icons.sync, color: Colors.white),
+                  tooltip: 'Sincronizar todas as feiras',
+                  onPressed: fairs.isEmpty
+                      ? null
+                      : () => context.read<AppProvider>().syncAllFairs(),
+                ),
           IconButton(
             icon: const Icon(Icons.logout, color: Colors.white),
             tooltip: 'Sair',
@@ -62,14 +83,45 @@ class FairSelectionScreen extends StatelessWidget {
           ),
         ],
       ),
-      body: fairs.isEmpty
-          ? const _EmptyState()
-          : ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: fairs.length,
-              itemBuilder: (context, i) =>
-                  _FairCard(fair: fairs[i], canManage: canManage),
+      body: Column(
+        children: [
+          if (isSyncing)
+            const LinearProgressIndicator(
+              backgroundColor: Color(0xFFD0D8E4),
+              color: Color(0xFF1E3A5F),
             ),
+          if (provider.lastSync != null)
+            Container(
+              width: double.infinity,
+              color: const Color(0xFFE8F0FB),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              child: Text(
+                'Último sync: ${_fmt(provider.lastSync!)}',
+                style: const TextStyle(fontSize: 11, color: Color(0xFF1E3A5F)),
+              ),
+            ),
+          if (provider.error != null)
+            Container(
+              width: double.infinity,
+              color: const Color(0xFFFFEBEE),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+              child: Text(
+                provider.error!,
+                style: const TextStyle(fontSize: 12, color: Colors.red),
+              ),
+            ),
+          Expanded(
+            child: fairs.isEmpty
+                ? const _EmptyState()
+                : ListView.builder(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: fairs.length,
+                    itemBuilder: (context, i) =>
+                        _FairCard(fair: fairs[i], canManage: canManage),
+                  ),
+          ),
+        ],
+      ),
       floatingActionButton: canManage
           ? FloatingActionButton.extended(
               onPressed: () async {
@@ -87,6 +139,14 @@ class FairSelectionScreen extends StatelessWidget {
             )
           : null,
     );
+  }
+
+  static String _fmt(DateTime dt) {
+    final d = dt.day.toString().padLeft(2, '0');
+    final mo = dt.month.toString().padLeft(2, '0');
+    final h = dt.hour.toString().padLeft(2, '0');
+    final mi = dt.minute.toString().padLeft(2, '0');
+    return '$d/$mo $h:$mi';
   }
 }
 
