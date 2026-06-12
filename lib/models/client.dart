@@ -21,6 +21,7 @@ class Client {
   final String teto50;
   final String projectLink;
   final String linkCv;
+  final String linkMemorial;
   final String mobilario;
 
   // Event-level info columns (same for all clients in a fair)
@@ -55,6 +56,7 @@ class Client {
     required this.teto50,
     this.projectLink = '',
     this.linkCv = '',
+    this.linkMemorial = '',
     this.mobilario = '',
     this.pavilhao = '',
     this.dataMontagem = '',
@@ -89,6 +91,7 @@ class Client {
         teto50: teto50,
         projectLink: projectLink,
         linkCv: linkCv,
+        linkMemorial: linkMemorial,
         mobilario: mobilario,
         pavilhao: pavilhao,
         dataMontagem: dataMontagem,
@@ -121,6 +124,7 @@ class Client {
         'teto50': teto50,
         'project_link': projectLink,
         'link_cv': linkCv,
+        'link_memorial': linkMemorial,
         'mobilario': mobilario,
         'pavilhao': pavilhao,
         'data_montagem': dataMontagem,
@@ -153,6 +157,7 @@ class Client {
         teto50: map['teto50'] ?? '',
         projectLink: map['project_link'] ?? '',
         linkCv: map['link_cv'] ?? '',
+        linkMemorial: map['link_memorial'] ?? '',
         mobilario: map['mobilario'] ?? '',
         pavilhao: map['pavilhao'] ?? '',
         dataMontagem: map['data_montagem'] ?? '',

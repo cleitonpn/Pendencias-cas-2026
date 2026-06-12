@@ -121,17 +121,29 @@ class _SyncBar extends StatelessWidget {
         children: [
           const Icon(Icons.cloud_done, size: 14, color: Colors.green),
           const SizedBox(width: 6),
-          Text(
-            'Última sync: ${DateFormat('dd/MM HH:mm').format(provider.lastSync!)}',
-            style: const TextStyle(fontSize: 12, color: Colors.grey),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Última sync: ${DateFormat('dd/MM HH:mm').format(provider.lastSync!)}',
+                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+                if (provider.lastAutoSync != null)
+                  Text(
+                    'Auto-sync: ${DateFormat('dd/MM HH:mm').format(provider.lastAutoSync!)}',
+                    style: TextStyle(
+                        fontSize: 11, color: Colors.green.shade600),
+                  ),
+              ],
+            ),
           ),
-          if (provider.isLoading) ...[
-            const SizedBox(width: 12),
+          if (provider.isLoading)
             const SizedBox(
                 width: 12,
                 height: 12,
                 child: CircularProgressIndicator(strokeWidth: 2)),
-          ],
         ],
       ),
     );

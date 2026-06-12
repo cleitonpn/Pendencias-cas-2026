@@ -275,6 +275,39 @@ class _ConsultantClientDetailScreenState
                 ),
               ),
 
+            if (c.linkMemorial.isNotEmpty)
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                child: InkWell(
+                  onTap: () => _launchUrl(c.linkMemorial),
+                  borderRadius: BorderRadius.circular(10),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: Colors.teal.shade50,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.teal.shade200),
+                    ),
+                    child: Row(children: [
+                      Icon(Icons.description_outlined,
+                          color: Colors.teal.shade700, size: 20),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text('Ver Memorial Descritivo',
+                            style: TextStyle(
+                                color: Colors.teal.shade700,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 14)),
+                      ),
+                      Icon(Icons.open_in_new,
+                          color: Colors.teal.shade400, size: 16),
+                    ]),
+                  ),
+                ),
+              ),
+
             if (c.linkCv.isNotEmpty)
               Padding(
                 padding:

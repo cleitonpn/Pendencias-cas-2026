@@ -15,6 +15,7 @@ class AppProvider extends ChangeNotifier {
   bool _isLoading = false;
   String? _error;
   DateTime? _lastSync;
+  DateTime? _lastAutoSync;
   StreamSubscription? _pendingSubscription;
   Timer? _autoSyncTimer;
   Map<String, int> _pendingCounts = {}; // clientId → open pending count
@@ -27,6 +28,7 @@ class AppProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get error => _error;
   DateTime? get lastSync => _lastSync;
+  DateTime? get lastAutoSync => _lastAutoSync;
   Map<String, int> get pendingCounts => _pendingCounts;
 
   /// Total open pending items across all stands of a hangar (reactive).
@@ -89,7 +91,12 @@ class AppProvider extends ChangeNotifier {
     if (fair.isProduction) {
       _autoSyncTimer =
           Timer.periodic(const Duration(minutes: 10), (_) {
-        if (_currentFair != null && !_isLoading) syncFromSheets();
+        if (_currentFair != null && !_isLoading) {
+          syncFromSheets().then((_) {
+            _lastAutoSync = DateTime.now();
+            notifyListeners();
+          });
+        }
       });
     }
   }
@@ -175,6 +182,15 @@ class AppProvider extends ChangeNotifier {
     for (final entry in grouped.entries) {
       final feiraNome = entry.key;
       final tempClients = entry.value;
+
+      // Skip groups whose name matches the master fair itself (e.g. a row with
+      // FEIRA = "OPERACIONAL 2026" where that's the master sheet's own name).
+      final masterName = _currentFair!.name.toLowerCase().trim();
+      final masterSheet = _currentFair!.sheetName.toLowerCase().trim();
+      if (feiraNome.toLowerCase().trim() == masterName ||
+          feiraNome.toLowerCase().trim() == masterSheet) {
+        continue;
+      }
 
       final derivedId = await DatabaseService.findOrCreateDerivedFair(
         name: feiraNome,

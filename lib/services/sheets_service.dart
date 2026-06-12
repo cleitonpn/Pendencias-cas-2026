@@ -146,6 +146,8 @@ class SheetsService {
         'link do projeto']);
     final linkCvIdx      = findCol(['link comunicação visual',
         'link comunicacao visual', 'link cv', 'link print cv', 'print cv']);
+    final linkMemorialIdx = findCol(['link memorial', 'memorial',
+        'memorial descritivo', 'link do memorial']);
     final mobilarioIdx   = findCol(['mobiliário locado', 'mobiliario locado',
         'mobiliário', 'mobiliario']);
 
@@ -219,6 +221,7 @@ class SheetsService {
         teto50: '',
         projectLink: s(linkIdx),
         linkCv: s(linkCvIdx),
+        linkMemorial: s(linkMemorialIdx),
         mobilario: s(mobilarioIdx),
         pavilhao: s(pavilhaoIdx),
         dataMontagem: s(dataMontagemIdx),
@@ -286,6 +289,8 @@ class SheetsService {
     final linkCvIdx        = findCol(['print cv', 'link cv',
         'link comunicação visual', 'link comunicacao visual',
         'link print cv']);
+    final linkMemorialIdx  = findCol(['link memorial', 'memorial',
+        'memorial descritivo', 'link do memorial']);
     final mobilarioIdx     = findCol(['mobiliário locado', 'mobiliario locado',
         'mobiliário', 'mobiliario']);
     final linkPlantaIdx    = findCol(['link planta', 'link da planta',
@@ -353,6 +358,7 @@ class SheetsService {
         teto50: '',
         projectLink: s(linkIdx),
         linkCv: s(linkCvIdx),
+        linkMemorial: s(linkMemorialIdx),
         mobilario: s(mobilarioIdx),
         pavilhao: s(pavilhaoIdx),
         dataMontagem: s(dataMontagemIdx),
