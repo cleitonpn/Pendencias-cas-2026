@@ -15,7 +15,7 @@ class DatabaseService {
 
   static Future<Database> _initDb() async {
     final path = join(await getDatabasesPath(), 'cas2026.db');
-    return openDatabase(path, version: 13, onCreate: _onCreate, onUpgrade: _onUpgrade);
+    return openDatabase(path, version: 14, onCreate: _onCreate, onUpgrade: _onUpgrade);
   }
 
   static Future<void> _onCreate(Database db, int version) async {
@@ -26,7 +26,8 @@ class DatabaseService {
         spreadsheet_id TEXT NOT NULL,
         sheet_name TEXT NOT NULL,
         created_at TEXT NOT NULL,
-        mode TEXT DEFAULT 'producao'
+        mode TEXT DEFAULT 'producao',
+        sheet_mode TEXT DEFAULT 'individual'
       )
     ''');
     await db.execute('''
@@ -44,6 +45,11 @@ class DatabaseService {
         project_link TEXT DEFAULT '',
         link_cv TEXT DEFAULT '',
         mobilario TEXT DEFAULT '',
+        pavilhao TEXT DEFAULT '',
+        data_montagem TEXT DEFAULT '',
+        data_evento TEXT DEFAULT '',
+        data_desmontagem TEXT DEFAULT '',
+        link_planta TEXT DEFAULT '',
         is_completed INTEGER DEFAULT 0, completed_at TEXT
       )
     ''');
@@ -185,6 +191,26 @@ class DatabaseService {
         await db.execute("ALTER TABLE pending_items ADD COLUMN in_progress_by TEXT DEFAULT ''");
       } catch (_) {}
     }
+    if (oldV < 14) {
+      try {
+        await db.execute("ALTER TABLE fairs ADD COLUMN sheet_mode TEXT DEFAULT 'individual'");
+      } catch (_) {}
+      try {
+        await db.execute("ALTER TABLE clients ADD COLUMN pavilhao TEXT DEFAULT ''");
+      } catch (_) {}
+      try {
+        await db.execute("ALTER TABLE clients ADD COLUMN data_montagem TEXT DEFAULT ''");
+      } catch (_) {}
+      try {
+        await db.execute("ALTER TABLE clients ADD COLUMN data_evento TEXT DEFAULT ''");
+      } catch (_) {}
+      try {
+        await db.execute("ALTER TABLE clients ADD COLUMN data_desmontagem TEXT DEFAULT ''");
+      } catch (_) {}
+      try {
+        await db.execute("ALTER TABLE clients ADD COLUMN link_planta TEXT DEFAULT ''");
+      } catch (_) {}
+    }
   }
 
   /// SQL fragment: items hidden from producer/leader because they are organizer
@@ -276,6 +302,38 @@ class DatabaseService {
       where: 'row_id = ?',
       whereArgs: [rowId],
     );
+  }
+
+  /// Returns the set of row_ids already stored for a fair (used to detect new
+  /// clients after a sheet sync so that push notifications can be sent).
+  static Future<Set<String>> getExistingClientRowIds(int fairId) async {
+    final database = await db;
+    final rows = await database.query('clients',
+        columns: ['row_id'], where: 'fair_id = ?', whereArgs: [fairId]);
+    return rows.map((r) => r['row_id'] as String).toSet();
+  }
+
+  /// Finds a derived (mestra_child) fair by name or creates one if it doesn't
+  /// exist. Returns the fair's id. Called when syncing a master sheet.
+  static Future<int> findOrCreateDerivedFair({
+    required String name,
+    required String spreadsheetId,
+    required String sheetName,
+  }) async {
+    final database = await db;
+    final existing = await database.query('fairs',
+        where: "name = ? AND sheet_mode = 'mestra_child'",
+        whereArgs: [name],
+        limit: 1);
+    if (existing.isNotEmpty) return existing.first['id'] as int;
+    return database.insert('fairs', {
+      'name': name,
+      'spreadsheet_id': spreadsheetId,
+      'sheet_name': sheetName,
+      'created_at': DateTime.now().toIso8601String(),
+      'mode': 'producao',
+      'sheet_mode': 'mestra_child',
+    });
   }
 
   static Future<List<Client>> getClients({required int fairId}) async {

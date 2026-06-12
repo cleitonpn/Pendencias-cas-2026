@@ -31,10 +31,18 @@ class _ConsultantClientDetailScreenState
   bool _loading = false;
   AppProvider? _provider;
 
+  // Specs state
+  final _corBagumCtrl = TextEditingController();
+  final _corPisoCtrl = TextEditingController();
+  final _elevacaoCtrl = TextEditingController();
+  bool _pisoElevado = false;
+  bool _savingSpecs = false;
+
   @override
   void initState() {
     super.initState();
     _load();
+    _loadSpecs();
     _provider = context.read<AppProvider>();
     _provider!.addListener(_onProviderChanged);
   }
@@ -42,11 +50,54 @@ class _ConsultantClientDetailScreenState
   @override
   void dispose() {
     _provider?.removeListener(_onProviderChanged);
+    _corBagumCtrl.dispose();
+    _corPisoCtrl.dispose();
+    _elevacaoCtrl.dispose();
     super.dispose();
   }
 
   void _onProviderChanged() {
     if (mounted) _load(silent: true);
+  }
+
+  Future<void> _loadSpecs() async {
+    final specs =
+        await FirestoreService.getClientSpecs(widget.client.rowId);
+    if (!mounted || specs == null) return;
+    setState(() {
+      _corBagumCtrl.text = (specs['corBagum'] as String?) ?? '';
+      _corPisoCtrl.text = (specs['corPiso'] as String?) ?? '';
+      _pisoElevado = (specs['pisoElevado'] as bool?) ?? false;
+      _elevacaoCtrl.text = (specs['elevacao'] as String?) ?? '';
+    });
+  }
+
+  Future<void> _saveSpecs() async {
+    setState(() => _savingSpecs = true);
+    try {
+      await FirestoreService.saveClientSpecs(widget.client.rowId, {
+        'corBagum': _corBagumCtrl.text.trim(),
+        'corPiso': _corPisoCtrl.text.trim(),
+        'pisoElevado': _pisoElevado,
+        'elevacao': _pisoElevado ? _elevacaoCtrl.text.trim() : '',
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+                content: Text('Especificações salvas.'),
+                backgroundColor: Colors.green,
+                duration: Duration(seconds: 2)));
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+                content: Text('Erro ao salvar. Verifique sua conexão.'),
+                backgroundColor: Colors.red));
+      }
+    } finally {
+      if (mounted) setState(() => _savingSpecs = false);
+    }
   }
 
   Future<void> _load({bool silent = false}) async {
@@ -285,6 +336,75 @@ class _ConsultantClientDetailScreenState
               ),
             ],
 
+            // Especificações do stand
+            const _SectionTitle(
+                text: 'ESPECIFICAÇÕES DO STAND', color: Color(0xFF1E3A5F)),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Card(
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _SpecField(
+                          label: 'Cor Bagum',
+                          controller: _corBagumCtrl),
+                      const SizedBox(height: 12),
+                      _SpecField(
+                          label: 'Cor Piso',
+                          controller: _corPisoCtrl),
+                      const SizedBox(height: 12),
+                      Row(children: [
+                        const Expanded(
+                            child: Text('Piso Elevado',
+                                style: TextStyle(fontSize: 14))),
+                        Switch(
+                          value: _pisoElevado,
+                          activeColor: const Color(0xFF1E3A5F),
+                          onChanged: (v) =>
+                              setState(() => _pisoElevado = v),
+                        ),
+                      ]),
+                      if (_pisoElevado) ...[
+                        const SizedBox(height: 8),
+                        _SpecField(
+                            label: 'Elevação (ex: 10 cm)',
+                            controller: _elevacaoCtrl),
+                      ],
+                      const SizedBox(height: 14),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: _savingSpecs ? null : _saveSpecs,
+                          icon: _savingSpecs
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                      color: Colors.white, strokeWidth: 2))
+                              : const Icon(Icons.save_outlined, size: 18),
+                          label: Text(_savingSpecs
+                              ? 'Salvando...'
+                              : 'Salvar Especificações'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF1E3A5F),
+                            foregroundColor: Colors.white,
+                            padding:
+                                const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8)),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
             // Create pending button (the only action available)
             Padding(
               padding: const EdgeInsets.all(16),
@@ -518,6 +638,24 @@ class _PendingCard extends StatelessWidget {
   String _fmt(DateTime dt) =>
       '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')} '
       '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+}
+
+class _SpecField extends StatelessWidget {
+  final String label;
+  final TextEditingController controller;
+  const _SpecField({required this.label, required this.controller});
+
+  @override
+  Widget build(BuildContext context) => TextField(
+        controller: controller,
+        decoration: InputDecoration(
+          labelText: label,
+          isDense: true,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        ),
+      );
 }
 
 class _TeamBadge extends StatelessWidget {

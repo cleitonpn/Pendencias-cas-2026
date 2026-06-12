@@ -14,6 +14,7 @@ class _AddFairScreenState extends State<AddFairScreen> {
   final _nameCtrl = TextEditingController();
   final _urlCtrl = TextEditingController();
   final _sheetCtrl = TextEditingController(text: 'Sheet1');
+  String _sheetMode = 'individual'; // 'individual' | 'mestra'
   bool _saving = false;
   String? _error;
 
@@ -60,16 +61,20 @@ class _AddFairScreenState extends State<AddFairScreen> {
       _error = null;
     });
 
-    final fair =
-        await context.read<AppProvider>().addFair(name, spreadsheetId, sheet);
+    final fair = await context.read<AppProvider>().addFair(
+        name, spreadsheetId, sheet,
+        sheetMode: _sheetMode);
     if (!mounted) return;
 
-    await context.read<AppProvider>().selectFair(fair);
-    if (!mounted) return;
-
-    setState(() => _saving = false);
-    Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const HangarListScreen()));
+    if (_sheetMode == 'individual') {
+      await context.read<AppProvider>().selectFair(fair);
+      if (!mounted) return;
+      Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const HangarListScreen()));
+    } else {
+      // Mestra fair: go back to selection screen — user syncs to create children
+      Navigator.of(context).pop();
+    }
   }
 
   @override
@@ -87,6 +92,61 @@ class _AddFairScreenState extends State<AddFairScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Mode selector
+            _label('TIPO DE PLANILHA'),
+            const SizedBox(height: 10),
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              padding: const EdgeInsets.all(4),
+              child: Row(
+                children: [
+                  _ModeBtn(
+                    label: 'Individual',
+                    icon: Icons.table_chart_outlined,
+                    description: 'Uma planilha por feira',
+                    active: _sheetMode == 'individual',
+                    onTap: () => setState(() => _sheetMode = 'individual'),
+                  ),
+                  _ModeBtn(
+                    label: 'Mestra',
+                    icon: Icons.table_rows_outlined,
+                    description: 'Várias feiras numa planilha',
+                    active: _sheetMode == 'mestra',
+                    onTap: () => setState(() => _sheetMode = 'mestra'),
+                  ),
+                ],
+              ),
+            ),
+
+            if (_sheetMode == 'mestra') ...[
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.purple.shade50,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.purple.shade200),
+                ),
+                child: const Row(children: [
+                  Icon(Icons.info_outline, color: Colors.purple, size: 16),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'A planilha deve ter uma coluna "FEIRA". '
+                      'Cada linha representa um cliente de uma feira diferente. '
+                      'As feiras serão criadas automaticamente ao sincronizar.',
+                      style: TextStyle(fontSize: 12, color: Colors.purple),
+                    ),
+                  ),
+                ]),
+              ),
+            ],
+
+            const SizedBox(height: 20),
+
             Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
@@ -94,10 +154,10 @@ class _AddFairScreenState extends State<AddFairScreen> {
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(color: Colors.blue.shade200),
               ),
-              child: Column(
+              child: const Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Row(children: [
+                  Row(children: [
                     Icon(Icons.info_outline, color: Colors.blue, size: 18),
                     SizedBox(width: 8),
                     Text('Antes de adicionar',
@@ -105,8 +165,8 @@ class _AddFairScreenState extends State<AddFairScreen> {
                             color: Colors.blue,
                             fontWeight: FontWeight.bold)),
                   ]),
-                  const SizedBox(height: 8),
-                  const Text(
+                  SizedBox(height: 8),
+                  Text(
                     'A planilha deve estar compartilhada como "Qualquer pessoa com o link pode visualizar".',
                     style: TextStyle(fontSize: 13, color: Colors.blue),
                   ),
@@ -117,7 +177,11 @@ class _AddFairScreenState extends State<AddFairScreen> {
 
             _label('NOME DA FEIRA'),
             const SizedBox(height: 8),
-            _field(_nameCtrl, 'Ex: Forum 2026', Icons.event),
+            _field(_nameCtrl,
+                _sheetMode == 'mestra'
+                    ? 'Ex: Operacional 2026'
+                    : 'Ex: Forum 2026',
+                Icons.event),
             const SizedBox(height: 16),
 
             _label('LINK DA PLANILHA (Google Sheets)'),
@@ -202,4 +266,56 @@ class _AddFairScreenState extends State<AddFairScreen> {
           fillColor: Colors.white,
         ),
       );
+}
+
+class _ModeBtn extends StatelessWidget {
+  final String label;
+  final String description;
+  final IconData icon;
+  final bool active;
+  final VoidCallback onTap;
+  const _ModeBtn({
+    required this.label,
+    required this.description,
+    required this.icon,
+    required this.active,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          margin: const EdgeInsets.all(3),
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+          decoration: BoxDecoration(
+            color: active ? const Color(0xFF1E3A5F) : Colors.transparent,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon,
+                  color: active ? Colors.white : Colors.grey, size: 22),
+              const SizedBox(height: 4),
+              Text(label,
+                  style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      color: active ? Colors.white : Colors.black87)),
+              const SizedBox(height: 2),
+              Text(description,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                      fontSize: 10,
+                      color: active ? Colors.white70 : Colors.grey)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }

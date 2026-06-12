@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../providers/app_provider.dart';
 import '../utils/admin_pin.dart';
+import '../widgets/fair_info_header.dart';
 import 'client_list_screen.dart';
 import 'settings_screen.dart';
 import 'reports_screen.dart';
@@ -81,6 +82,7 @@ class HangarListScreen extends StatelessWidget {
       body: Column(
         children: [
           _SyncBar(provider: provider),
+          FairInfoHeader(clients: provider.clients),
           if (provider.error != null)
             _ErrorBanner(message: provider.error!),
           Expanded(child: _Body(provider: provider)),

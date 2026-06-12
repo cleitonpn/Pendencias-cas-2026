@@ -23,6 +23,13 @@ class Client {
   final String linkCv;
   final String mobilario;
 
+  // Event-level info columns (same for all clients in a fair)
+  final String pavilhao;
+  final String dataMontagem;
+  final String dataEvento;
+  final String dataDesmontagem;
+  final String linkPlanta;
+
   bool isCompleted;
   DateTime? completedAt;
 
@@ -49,36 +56,48 @@ class Client {
     this.projectLink = '',
     this.linkCv = '',
     this.mobilario = '',
+    this.pavilhao = '',
+    this.dataMontagem = '',
+    this.dataEvento = '',
+    this.dataDesmontagem = '',
+    this.linkPlanta = '',
     this.isCompleted = false,
     this.completedAt,
   });
 
-  static String _s(List<dynamic> list, int index) {
-    if (index < list.length) return list[index]?.toString().trim() ?? '';
-    return '';
-  }
-
-  factory Client.fromSheetRow(
-      List<dynamic> bToI, List<dynamic> oToT, int rowIndex, {int fairId = 1}) {
-    return Client(
-      fairId: fairId,
-      rowId: '${fairId}_$rowIndex',
-      nome: _s(bToI, 0),
-      montagem: _s(bToI, 1),
-      local: _s(bToI, 2),
-      hangar: _s(bToI, 3),
-      area: _s(bToI, 4),
-      deck: _s(bToI, 5),
-      totalArea: _s(bToI, 6),
-      mezanino: _s(bToI, 7),
-      produtor: _s(oToT, 0),
-      marceneiro: _s(oToT, 1),
-      tapeceiro: _s(oToT, 2),
-      eletricista: _s(oToT, 3),
-      faxineira: _s(oToT, 4),
-      teto50: _s(oToT, 5),
-    );
-  }
+  /// Returns a new Client with updated fairId and rowId (used when assigning
+  /// derived fair IDs after reading from a master sheet).
+  Client reidentify(int newFairId, String newRowId) => Client(
+        fairId: newFairId,
+        rowId: newRowId,
+        nome: nome,
+        montagem: montagem,
+        local: local,
+        hangar: hangar,
+        area: area,
+        deck: deck,
+        totalArea: totalArea,
+        mezanino: mezanino,
+        produtor: produtor,
+        atendimento: atendimento,
+        organizadora: organizadora,
+        pin: pin,
+        marceneiro: marceneiro,
+        tapeceiro: tapeceiro,
+        eletricista: eletricista,
+        faxineira: faxineira,
+        teto50: teto50,
+        projectLink: projectLink,
+        linkCv: linkCv,
+        mobilario: mobilario,
+        pavilhao: pavilhao,
+        dataMontagem: dataMontagem,
+        dataEvento: dataEvento,
+        dataDesmontagem: dataDesmontagem,
+        linkPlanta: linkPlanta,
+        isCompleted: isCompleted,
+        completedAt: completedAt,
+      );
 
   Map<String, dynamic> toMap() => {
         'fair_id': fairId,
@@ -103,6 +122,11 @@ class Client {
         'project_link': projectLink,
         'link_cv': linkCv,
         'mobilario': mobilario,
+        'pavilhao': pavilhao,
+        'data_montagem': dataMontagem,
+        'data_evento': dataEvento,
+        'data_desmontagem': dataDesmontagem,
+        'link_planta': linkPlanta,
         'is_completed': isCompleted ? 1 : 0,
         'completed_at': completedAt?.toIso8601String(),
       };
@@ -130,6 +154,11 @@ class Client {
         projectLink: map['project_link'] ?? '',
         linkCv: map['link_cv'] ?? '',
         mobilario: map['mobilario'] ?? '',
+        pavilhao: map['pavilhao'] ?? '',
+        dataMontagem: map['data_montagem'] ?? '',
+        dataEvento: map['data_evento'] ?? '',
+        dataDesmontagem: map['data_desmontagem'] ?? '',
+        linkPlanta: map['link_planta'] ?? '',
         isCompleted: (map['is_completed'] as int? ?? 0) == 1,
         completedAt: map['completed_at'] != null
             ? DateTime.tryParse(map['completed_at'] as String)

@@ -176,6 +176,7 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
     if (!mounted) return;
+    await NotificationService.subscribeConsultant(_selectedConsultant!);
     await SessionService.save(role: 'consultant', name: _selectedConsultant!);
     if (!mounted) return;
     Navigator.pushReplacement(context,

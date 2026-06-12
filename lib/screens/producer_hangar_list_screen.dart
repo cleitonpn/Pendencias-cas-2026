@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../providers/app_provider.dart';
 import '../models/client.dart';
 import '../services/database_service.dart';
+import '../widgets/fair_info_header.dart';
 import 'producer_client_list_screen.dart';
 
 class ProducerHangarListScreen extends StatefulWidget {
@@ -137,6 +138,7 @@ class _ProducerHangarListScreenState
                 ],
               ),
             ),
+          FairInfoHeader(clients: clients),
           if (clients.isEmpty && !provider.isLoading)
             Expanded(
               child: Center(

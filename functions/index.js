@@ -107,6 +107,35 @@ exports.onPendingUpdated = onDocumentUpdated(
           `${team}${client}: ${desc}`);
     });
 
+// New client detected during sheet sync → notify producer + consultant.
+exports.onNewClientSynced = onDocumentCreated(
+    "sync_events/{id}", async (event) => {
+      const data = event.data && event.data.data();
+      if (!data) return;
+
+      const producer = data.producerName || "";
+      const consultant = data.consultantName || "";
+      const client = data.clientName || "";
+      const fair = data.fairName || "";
+
+      const title = "Novo cliente na planilha";
+      const body = fair
+          ? `${client} foi adicionado à feira "${fair}".`
+          : `${client} foi adicionado à planilha.`;
+
+      const topics = [];
+      if (producer) topics.push(sanitize("producer", producer));
+      if (consultant) topics.push(sanitize("consultant", consultant));
+      if (topics.length === 0) return;
+
+      await sendToTopics(topics, title, body);
+
+      // Delete the transient event document after processing.
+      try {
+        await event.data.ref.delete();
+      } catch (_) {}
+    });
+
 // Daily 18:00 BRT reminder to producers who haven't sent a montage photo yet.
 exports.dailyMontageReminder = onSchedule(
     {schedule: "0 18 * * *", timeZone: "America/Sao_Paulo"},

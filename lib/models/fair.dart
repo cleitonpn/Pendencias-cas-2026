@@ -7,6 +7,8 @@ class Fair {
   // 'pre_producao' (sem notificações) | 'producao' (equipe monta, lembrete
   // diário ao produtor) | 'manutencao' (evento aberto ao expositor pelo QR)
   final String mode;
+  // 'individual' | 'mestra' | 'mestra_child'
+  final String sheetMode;
 
   const Fair({
     this.id,
@@ -15,19 +17,24 @@ class Fair {
     required this.sheetName,
     required this.createdAt,
     this.mode = 'producao',
+    this.sheetMode = 'individual',
   });
 
   bool get isMaintenance => mode == 'manutencao';
   bool get isProduction => mode == 'producao';
   bool get isPreProduction => mode == 'pre_producao';
 
-  Fair copyWith({String? mode}) => Fair(
+  bool get isMestra => sheetMode == 'mestra';
+  bool get isMestraChild => sheetMode == 'mestra_child';
+
+  Fair copyWith({String? mode, String? sheetMode}) => Fair(
         id: id,
         name: name,
         spreadsheetId: spreadsheetId,
         sheetName: sheetName,
         createdAt: createdAt,
         mode: mode ?? this.mode,
+        sheetMode: sheetMode ?? this.sheetMode,
       );
 
   Map<String, dynamic> toMap() => {
@@ -37,6 +44,7 @@ class Fair {
     'sheet_name': sheetName,
     'created_at': createdAt.toIso8601String(),
     'mode': mode,
+    'sheet_mode': sheetMode,
   };
 
   factory Fair.fromMap(Map<String, dynamic> map) => Fair(
@@ -46,5 +54,8 @@ class Fair {
     sheetName: map['sheet_name'] as String,
     createdAt: DateTime.parse(map['created_at'] as String),
     mode: (map['mode'] as String?) ?? 'producao',
+    sheetMode: ((map['sheet_mode'] as String?) ?? '').isNotEmpty
+        ? map['sheet_mode'] as String
+        : 'individual',
   );
 }

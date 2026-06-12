@@ -52,6 +52,7 @@ class AppProvider extends ChangeNotifier {
       for (final m in remote) {
         final id = m['id'] as int?;
         final mode = (m['mode'] as String?) ?? 'producao';
+        final sheetMode = (m['sheetMode'] as String?) ?? 'individual';
         final fair = Fair(
           id: id,
           name: m['name'] as String,
@@ -59,6 +60,7 @@ class AppProvider extends ChangeNotifier {
           sheetName: m['sheetName'] as String,
           createdAt: DateTime.parse(m['createdAt'] as String),
           mode: mode,
+          sheetMode: sheetMode,
         );
         await DatabaseService.upsertFairById(fair);
         // Keep local mode in sync with the cloud (upsert ignores existing rows)
@@ -126,28 +128,158 @@ class AppProvider extends ChangeNotifier {
     _error = null;
     _setLoading(true);
     try {
-      final sheetClients = await SheetsService.fetchClients(
-        spreadsheetId: _currentFair!.spreadsheetId,
-        sheetName: _currentFair!.sheetName,
-        fairId: _currentFair!.id!,
-      );
-
-      final localMap = {for (final c in _clients) c.rowId: c};
-      for (final c in sheetClients) {
-        final local = localMap[c.rowId];
-        if (local != null) {
-          c.isCompleted = local.isCompleted;
-          c.completedAt = local.completedAt;
-        }
+      if (_currentFair!.isMestra) {
+        await _syncMasterSheet();
+      } else if (_currentFair!.isMestraChild) {
+        await _syncMestraChildSheet();
+      } else {
+        await _syncIndividualSheet();
       }
-
-      await DatabaseService.upsertClients(sheetClients);
-      await _loadLocal();
-      _lastSync = DateTime.now();
     } catch (e) {
       _error = e.toString().replaceFirst('Exception: ', '');
     } finally {
       _setLoading(false);
+    }
+  }
+
+  /// Standard individual-sheet sync (original behavior + new-client detection).
+  Future<void> _syncIndividualSheet() async {
+    final existingIds =
+        await DatabaseService.getExistingClientRowIds(_currentFair!.id!);
+
+    final sheetClients = await SheetsService.fetchClients(
+      spreadsheetId: _currentFair!.spreadsheetId,
+      sheetName: _currentFair!.sheetName,
+      fairId: _currentFair!.id!,
+    );
+
+    _preserveCompletion(sheetClients, _clients);
+
+    final newClients =
+        sheetClients.where((c) => !existingIds.contains(c.rowId)).toList();
+
+    await DatabaseService.upsertClients(sheetClients);
+
+    _notifyNewClients(newClients, _currentFair!.name);
+
+    await _loadLocal();
+    _lastSync = DateTime.now();
+  }
+
+  /// Syncs a mestra (parent) sheet: groups clients by FEIRA column, auto-creates
+  /// derived fairs, upserts clients, and refreshes the fair list.
+  Future<void> _syncMasterSheet() async {
+    final grouped = await SheetsService.fetchClientsGroupedByFair(
+      spreadsheetId: _currentFair!.spreadsheetId,
+      sheetName: _currentFair!.sheetName,
+    );
+
+    for (final entry in grouped.entries) {
+      final feiraNome = entry.key;
+      final tempClients = entry.value;
+
+      final derivedId = await DatabaseService.findOrCreateDerivedFair(
+        name: feiraNome,
+        spreadsheetId: _currentFair!.spreadsheetId,
+        sheetName: _currentFair!.sheetName,
+      );
+
+      // Assign real fairId / rowId
+      final finalClients = tempClients.map((c) {
+        final rowNum = c.rowId.split('_').last;
+        return c.reidentify(derivedId, '${derivedId}_$rowNum');
+      }).toList();
+
+      final existingIds =
+          await DatabaseService.getExistingClientRowIds(derivedId);
+
+      final localClients =
+          await DatabaseService.getClients(fairId: derivedId);
+      _preserveCompletion(finalClients, localClients);
+
+      final newClients =
+          finalClients.where((c) => !existingIds.contains(c.rowId)).toList();
+
+      await DatabaseService.upsertClients(finalClients);
+
+      _notifyNewClients(newClients, feiraNome);
+
+      // Push derived fair to Firestore so other devices see it
+      try {
+        await FirestoreService.saveFair(
+          derivedId, feiraNome,
+          _currentFair!.spreadsheetId, _currentFair!.sheetName,
+          DateTime.now().toIso8601String(),
+          mode: 'producao', sheetMode: 'mestra_child',
+        );
+      } catch (_) {}
+    }
+
+    _fairs = await DatabaseService.getFairs();
+    await _loadLocal();
+    _lastSync = DateTime.now();
+  }
+
+  /// Syncs a mestra_child fair: re-reads the master sheet and updates only
+  /// the clients that belong to this derived fair name.
+  Future<void> _syncMestraChildSheet() async {
+    final grouped = await SheetsService.fetchClientsGroupedByFair(
+      spreadsheetId: _currentFair!.spreadsheetId,
+      sheetName: _currentFair!.sheetName,
+    );
+
+    final tempClients = grouped[_currentFair!.name];
+    if (tempClients == null || tempClients.isEmpty) {
+      throw Exception(
+          'Nenhum cliente encontrado para "${_currentFair!.name}" '
+          'na planilha mestra.');
+    }
+
+    final fairId = _currentFair!.id!;
+    final finalClients = tempClients.map((c) {
+      final rowNum = c.rowId.split('_').last;
+      return c.reidentify(fairId, '${fairId}_$rowNum');
+    }).toList();
+
+    final existingIds = await DatabaseService.getExistingClientRowIds(fairId);
+    _preserveCompletion(finalClients, _clients);
+
+    final newClients =
+        finalClients.where((c) => !existingIds.contains(c.rowId)).toList();
+
+    await DatabaseService.upsertClients(finalClients);
+
+    _notifyNewClients(newClients, _currentFair!.name);
+
+    await _loadLocal();
+    _lastSync = DateTime.now();
+  }
+
+  /// Copies isCompleted / completedAt from previously loaded local clients onto
+  /// the freshly fetched sheet clients (prevents overwriting local check-offs).
+  void _preserveCompletion(List<Client> sheetClients, List<Client> localClients) {
+    final localMap = {for (final c in localClients) c.rowId: c};
+    for (final c in sheetClients) {
+      final local = localMap[c.rowId];
+      if (local != null) {
+        c.isCompleted = local.isCompleted;
+        c.completedAt = local.completedAt;
+      }
+    }
+  }
+
+  /// Fire-and-forget: writes sync_events documents for truly new clients so the
+  /// Cloud Function can send push notifications to their producer/consultant.
+  void _notifyNewClients(List<Client> newClients, String fairName) {
+    for (final nc in newClients) {
+      if (nc.produtor.isEmpty && nc.atendimento.isEmpty) continue;
+      FirestoreService.writeSyncEvent(
+        clientId: nc.rowId,
+        clientName: nc.nome,
+        fairName: fairName,
+        producerName: nc.produtor,
+        consultantName: nc.atendimento,
+      );
     }
   }
 
@@ -284,12 +416,14 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<Fair> addFair(
-      String name, String spreadsheetId, String sheetName) async {
+      String name, String spreadsheetId, String sheetName,
+      {String sheetMode = 'individual'}) async {
     final fair = Fair(
       name: name,
       spreadsheetId: spreadsheetId,
       sheetName: sheetName,
       createdAt: DateTime.now(),
+      sheetMode: sheetMode,
     );
     final id = await DatabaseService.insertFair(fair);
     final newFair = Fair(
@@ -297,12 +431,14 @@ class AppProvider extends ChangeNotifier {
         name: fair.name,
         spreadsheetId: fair.spreadsheetId,
         sheetName: fair.sheetName,
-        createdAt: fair.createdAt);
+        createdAt: fair.createdAt,
+        sheetMode: sheetMode);
     // Push to Firestore so other devices see it
     try {
       await FirestoreService.saveFair(
           id, fair.name, fair.spreadsheetId, fair.sheetName,
-          fair.createdAt.toIso8601String());
+          fair.createdAt.toIso8601String(),
+          sheetMode: sheetMode);
     } catch (_) {}
     _fairs = await DatabaseService.getFairs();
     notifyListeners();
@@ -314,9 +450,6 @@ class AppProvider extends ChangeNotifier {
     if (fair.id == null) return;
     await DatabaseService.updateFairMode(fair.id!, mode);
     try {
-      // Write the FULL fair document (not just the mode), so the public stand
-      // page always finds name/spreadsheetId/sheetName. A merge-only update
-      // could leave a partial doc that crashes the exhibitor page.
       await FirestoreService.saveFair(
         fair.id!,
         fair.name,
@@ -324,6 +457,7 @@ class AppProvider extends ChangeNotifier {
         fair.sheetName,
         fair.createdAt.toIso8601String(),
         mode: mode,
+        sheetMode: fair.sheetMode,
       );
     } catch (_) {}
     if (_currentFair?.id == fair.id) {

@@ -305,13 +305,15 @@ class FirestoreService {
   }
 
   static Future<void> saveFair(int id, String name, String spreadsheetId,
-      String sheetName, String createdAt, {String mode = 'producao'}) async {
+      String sheetName, String createdAt,
+      {String mode = 'producao', String sheetMode = 'individual'}) async {
     await _db.collection('fairs').doc(id.toString()).set({
       'name': name,
       'spreadsheetId': spreadsheetId,
       'sheetName': sheetName,
       'createdAt': createdAt,
       'mode': mode,
+      'sheetMode': sheetMode,
     });
   }
 
@@ -334,6 +336,45 @@ class FirestoreService {
     try {
       await _db.collection('fairs').doc(id.toString()).delete();
     } catch (_) {}
+  }
+
+  // ─── Client Specs ────────────────────────────────────────────────────────────
+
+  static Future<Map<String, dynamic>?> getClientSpecs(String clientId) async {
+    try {
+      final doc = await _db.collection('client_specs').doc(clientId).get();
+      if (!doc.exists) return null;
+      return doc.data();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<void> saveClientSpecs(
+      String clientId, Map<String, dynamic> specs) async {
+    await _db.collection('client_specs').doc(clientId).set(specs);
+  }
+
+  // ─── Sync Events (new-client notifications) ──────────────────────────────────
+
+  /// Writes a transient event document that triggers the `onNewClientSynced`
+  /// Cloud Function, which sends FCM notifications to producer + consultant.
+  static void writeSyncEvent({
+    required String clientId,
+    required String clientName,
+    required String fairName,
+    required String producerName,
+    required String consultantName,
+  }) {
+    if (producerName.isEmpty && consultantName.isEmpty) return;
+    _db.collection('sync_events').add({
+      'clientId': clientId,
+      'clientName': clientName,
+      'fairName': fairName,
+      'producerName': producerName,
+      'consultantName': consultantName,
+      'createdAt': DateTime.now().toIso8601String(),
+    }).catchError((_) {});
   }
 
   /// Real-time stream of all pending items for a given fair name.

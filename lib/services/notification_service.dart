@@ -122,6 +122,9 @@ class NotificationService {
   static Future<void> subscribeProducer(String producerName) =>
       _subscribe([fcmTopic('producer', producerName)]);
 
+  static Future<void> subscribeConsultant(String consultantName) =>
+      _subscribe([fcmTopic('consultant', consultantName)]);
+
   static Future<void> subscribeTeam(String team) =>
       _subscribe([fcmTopic('team', team)]);
 

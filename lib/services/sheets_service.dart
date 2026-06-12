@@ -80,7 +80,34 @@ class SheetsService {
     return (header: header, rows: rows);
   }
 
-  /// Reads a wide range (B:T) and auto-detects column positions from the header
+  /// Shared helper: builds a findCol closure from a normalised header list.
+  static int Function(List<String>) _makeFindCol(List<String> header) {
+    return (List<String> variants) {
+      for (final v in variants) {
+        final idx = header.indexOf(v);
+        if (idx >= 0) return idx;
+      }
+      return -1;
+    };
+  }
+
+  /// Shared helper: robust m²/área detection independent of superscript encoding.
+  static int _findAreaCol(List<String> header) {
+    for (var i = 0; i < header.length; i++) {
+      final h = header[i].replaceAll(' ', '');
+      final isArea = h == 'area' ||
+          h == 'área' ||
+          h.contains('metr') ||
+          (h.startsWith('m') &&
+              h.length >= 2 &&
+              h.length <= 3 &&
+              !RegExp(r'[a-zà-ÿ]').hasMatch(h.substring(1)));
+      if (isArea) return i;
+    }
+    return -1;
+  }
+
+  /// Reads a wide range (A:BZ) and auto-detects column positions from the header
   /// row, so it works for CAS 2026, Forum, PetVet and any future fair layout.
   static Future<List<Client>> fetchClients({
     required String spreadsheetId,
@@ -95,54 +122,45 @@ class SheetsService {
           'Verifique o nome da aba e as permissões de compartilhamento.');
     }
 
-    // Column names come from the header labels (case-insensitive)
     final header =
         table.header.map((v) => v.toString().toLowerCase().trim()).toList();
+    final findCol = _makeFindCol(header);
 
-    int findCol(List<String> variants) {
-      for (final v in variants) {
-        final idx = header.indexOf(v);
-        if (idx >= 0) return idx;
-      }
-      return -1;
-    }
+    final nomeIdx        = findCol(['nome']);
+    final montagemIdx    = findCol(['montagem']);
+    final localIdx       = findCol(['local']);
+    final hangarIdx      = findCol(['hangar']);
+    final areaIdx        = _findAreaCol(header);
+    final produtorIdx    = findCol(['produtor']);
+    final atendIdx       = findCol(['atendimento', 'consultor',
+        'atendimento responsável', 'atendimento responsavel']);
+    final organizadoraIdx = findCol(['organizadora', 'organizador',
+        'organização', 'organizacao']);
+    final pinIdx         = findCol(['pin', 'senha', 'código', 'codigo',
+        'pin stand', 'pin acesso']);
+    final marceIdx       = findCol(['marceneiro']);
+    final tapecIdx       = findCol(['tapeceiro']);
+    final eletrIdx       = findCol(['eletricista']);
+    final faxiIdx        = findCol(['faxineira']);
+    final linkIdx        = findCol(['link projeto', 'link', 'projeto link',
+        'link do projeto']);
+    final linkCvIdx      = findCol(['link comunicação visual',
+        'link comunicacao visual', 'link cv', 'link print cv', 'print cv']);
+    final mobilarioIdx   = findCol(['mobiliário locado', 'mobiliario locado',
+        'mobiliário', 'mobiliario']);
 
-    final nomeIdx     = findCol(['nome']);
-    final montagemIdx = findCol(['montagem']);
-    final localIdx    = findCol(['local']);
-    final hangarIdx   = findCol(['hangar']);
-    // Robust m²/área detection independent of how the superscript is encoded:
-    // matches "área"/"area"/"metragem" or "m" followed by 1–2 NON-letter chars
-    // (m², m2, m³…). This way any encoding of the "²" character is recognized.
-    int areaIdx = -1;
-    for (var i = 0; i < header.length; i++) {
-      final h = header[i].replaceAll(' ', '');
-      final isArea = h == 'area' ||
-          h == 'área' ||
-          h.contains('metr') ||
-          (h.startsWith('m') &&
-              h.length >= 2 &&
-              h.length <= 3 &&
-              !RegExp(r'[a-zà-ÿ]').hasMatch(h.substring(1)));
-      if (isArea) {
-        areaIdx = i;
-        break;
-      }
-    }
-    final produtorIdx = findCol(['produtor']);
-    final atendIdx    = findCol(['atendimento', 'consultor', 'atendimento responsável', 'atendimento responsavel']);
-    final organizadoraIdx = findCol(['organizadora', 'organizador', 'organização', 'organizacao']);
-    final pinIdx      = findCol(['pin', 'senha', 'código', 'codigo', 'pin stand', 'pin acesso']);
-    final marceIdx    = findCol(['marceneiro']);
-    final tapecIdx    = findCol(['tapeceiro']);
-    final eletrIdx    = findCol(['eletricista']);
-    final faxiIdx     = findCol(['faxineira']);
-    final linkIdx      = findCol(['link', 'projeto link', 'link projeto', 'link do projeto']);
-    final linkCvIdx    = findCol([
-      'link comunicação visual', 'link comunicacao visual',
-      'link cv', 'link print cv', 'print cv',
-    ]);
-    final mobilarioIdx = findCol(['mobiliário locado', 'mobiliario locado', 'mobiliário', 'mobiliario']);
+    // New event-level columns (individual sheets use "data" prefix to distinguish
+    // from the assembly-type "montagem" column)
+    final pavilhaoIdx       = findCol(['pavilhão', 'pavilhao', 'paviliao',
+        'pavilhao do evento']);
+    final dataMontagemIdx   = findCol(['data montagem', 'data de montagem',
+        'data_montagem', 'dt montagem']);
+    final dataEventoIdx     = findCol(['data evento', 'data do evento',
+        'data abertura', 'dt evento', 'evento']);
+    final dataDesmontagemIdx = findCol(['data desmontagem',
+        'data de desmontagem', 'desmontagem', 'dt desmontagem']);
+    final linkPlantaIdx     = findCol(['link planta', 'link da planta',
+        'planta baixa', 'mapa', 'planta']);
 
     if (nomeIdx < 0) {
       throw Exception(
@@ -160,9 +178,6 @@ class SheetsService {
         return row[idx]?.toString().trim() ?? '';
       }
 
-      // Normalizes a person name to Title Case so the casing in the spreadsheet
-      // does not affect PIN lookups (which use the name as a Firestore doc ID).
-      // "RENAN" → "Renan"  |  "JOÃO PEDRO" → "João Pedro"
       String n(int idx) {
         final raw = s(idx);
         if (raw.isEmpty) return raw;
@@ -184,8 +199,6 @@ class SheetsService {
 
       clients.add(Client(
         fairId: fairId,
-        // +1 keeps rowIds identical to the previous scheme (where row 0 was the
-        // header), so existing pending items stay linked to their clients.
         rowId: '${fairId}_${i + 1}',
         nome: nome,
         montagem: s(montagemIdx),
@@ -207,9 +220,150 @@ class SheetsService {
         projectLink: s(linkIdx),
         linkCv: s(linkCvIdx),
         mobilario: s(mobilarioIdx),
+        pavilhao: s(pavilhaoIdx),
+        dataMontagem: s(dataMontagemIdx),
+        dataEvento: s(dataEventoIdx),
+        dataDesmontagem: s(dataDesmontagemIdx),
+        linkPlanta: s(linkPlantaIdx),
       ));
     }
 
     return clients;
+  }
+
+  /// Reads a master spreadsheet that has a FEIRA column and groups clients by
+  /// fair name. Returns a map of feiraNome → clients (with fairId=0 and rowId
+  /// '0_N' as placeholders — the caller must call [Client.reidentify] with the
+  /// real derived fair IDs before persisting).
+  ///
+  /// Master sheet expected columns (auto-detected by label):
+  ///   FEIRA | Pavilhão | montagem | evento | desmontagem | nome | local | area | …
+  static Future<Map<String, List<Client>>> fetchClientsGroupedByFair({
+    required String spreadsheetId,
+    required String sheetName,
+  }) async {
+    final table = await _fetchTable(spreadsheetId, sheetName, 'A:BZ');
+    final dataRows = table.rows;
+    if (table.header.isEmpty) {
+      throw Exception(
+          'Planilha vazia ou aba "$sheetName" não encontrada.\n'
+          'Verifique o nome da aba e as permissões de compartilhamento.');
+    }
+
+    final header =
+        table.header.map((v) => v.toString().toLowerCase().trim()).toList();
+    final findCol = _makeFindCol(header);
+
+    final feiraIdx         = findCol(['feira', 'nome da feira', 'evento feira']);
+    final pavilhaoIdx      = findCol(['pavilhão', 'pavilhao', 'paviliao',
+        'pavilhao do evento']);
+    // In the master sheet, "montagem" / "evento" / "desmontagem" are DATE columns
+    final dataMontagemIdx  = findCol(['montagem', 'data montagem',
+        'data de montagem']);
+    final dataEventoIdx    = findCol(['evento', 'data evento',
+        'data do evento', 'data abertura']);
+    final dataDesmontagemIdx = findCol(['desmontagem', 'data desmontagem',
+        'data de desmontagem']);
+    final nomeIdx          = findCol(['nome']);
+    final tipoIdx          = findCol(['tipo', 'type', 'tipo do stand',
+        'tipo stand', 'tipo montagem']);
+    final localIdx         = findCol(['local']);
+    final hangarIdx        = findCol(['hangar']);
+    final areaIdx          = _findAreaCol(header);
+    final produtorIdx      = findCol(['produtor']);
+    final atendIdx         = findCol(['atendimento', 'consultor',
+        'atendimento responsável', 'atendimento responsavel']);
+    final organizadoraIdx  = findCol(['organizadora', 'organizador',
+        'organização', 'organizacao']);
+    final pinIdx           = findCol(['pin', 'senha', 'código', 'codigo',
+        'pin stand', 'pin acesso']);
+    final marceIdx         = findCol(['marceneiro']);
+    final tapecIdx         = findCol(['tapeceiro']);
+    final eletrIdx         = findCol(['eletricista']);
+    final faxiIdx          = findCol(['faxineira']);
+    final linkIdx          = findCol(['link projeto', 'link projeto',
+        'projeto link', 'link do projeto']);
+    final linkCvIdx        = findCol(['print cv', 'link cv',
+        'link comunicação visual', 'link comunicacao visual',
+        'link print cv']);
+    final mobilarioIdx     = findCol(['mobiliário locado', 'mobiliario locado',
+        'mobiliário', 'mobiliario']);
+    final linkPlantaIdx    = findCol(['link planta', 'link da planta',
+        'planta baixa', 'planta', 'mapa']);
+
+    if (feiraIdx < 0) {
+      throw Exception(
+          'Coluna "FEIRA" não encontrada na aba "$sheetName".\n'
+          'A planilha mestra deve ter uma coluna com o nome "FEIRA".');
+    }
+    if (nomeIdx < 0) {
+      throw Exception(
+          'Coluna "nome" não encontrada na aba "$sheetName".\n'
+          'Verifique se a planilha tem cabeçalho.');
+    }
+
+    final grouped = <String, List<Client>>{};
+
+    for (int i = 0; i < dataRows.length; i++) {
+      final row = dataRows[i];
+
+      String s(int idx) {
+        if (idx < 0 || idx >= row.length) return '';
+        return row[idx]?.toString().trim() ?? '';
+      }
+
+      String n(int idx) {
+        final raw = s(idx);
+        if (raw.isEmpty) return raw;
+        return raw.split(' ').map((w) {
+          if (w.isEmpty) return w;
+          return w[0].toUpperCase() + w.substring(1).toLowerCase();
+        }).join(' ');
+      }
+
+      final feiraNome = s(feiraIdx);
+      final nome = s(nomeIdx);
+      if (feiraNome.isEmpty || nome.isEmpty) continue;
+
+      String hangar = s(hangarIdx);
+      if (hangar.isNotEmpty) {
+        final m = RegExp(r'^(?:EXT|Ext)\.?\s+(\S+)$').firstMatch(hangar);
+        if (m != null) hangar = m.group(1)!;
+      }
+
+      final client = Client(
+        fairId: 0,           // placeholder — caller calls reidentify()
+        rowId: '0_${i + 1}', // placeholder row id
+        nome: nome,
+        montagem: s(tipoIdx), // master sheet "TIPO" = stand assembly type
+        local: s(localIdx),
+        hangar: hangar,
+        area: s(areaIdx),
+        deck: '',
+        totalArea: '',
+        mezanino: '',
+        produtor: n(produtorIdx),
+        atendimento: n(atendIdx),
+        organizadora: n(organizadoraIdx),
+        pin: s(pinIdx),
+        marceneiro: n(marceIdx),
+        tapeceiro: n(tapecIdx),
+        eletricista: n(eletrIdx),
+        faxineira: n(faxiIdx),
+        teto50: '',
+        projectLink: s(linkIdx),
+        linkCv: s(linkCvIdx),
+        mobilario: s(mobilarioIdx),
+        pavilhao: s(pavilhaoIdx),
+        dataMontagem: s(dataMontagemIdx),
+        dataEvento: s(dataEventoIdx),
+        dataDesmontagem: s(dataDesmontagemIdx),
+        linkPlanta: s(linkPlantaIdx),
+      );
+
+      grouped.putIfAbsent(feiraNome, () => []).add(client);
+    }
+
+    return grouped;
   }
 }
