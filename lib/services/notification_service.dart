@@ -21,6 +21,15 @@ class NotificationService {
   static bool _initialized = false;
   static final _localPlugin = FlutterLocalNotificationsPlugin();
   static const _montageReminderId = 1001;
+  static const _fcmChannelId = 'fcm_foreground';
+  static const _fcmChannel = AndroidNotificationDetails(
+    'fcm_foreground',
+    'Notificações em tempo real',
+    channelDescription: 'Alertas recebidos enquanto o app está aberto',
+    importance: Importance.high,
+    priority: Priority.high,
+    playSound: true,
+  );
 
   /// Requests FCM permission and wires up foreground message handling.
   /// Call once after Firebase.initializeApp().
@@ -36,6 +45,16 @@ class NotificationService {
       FirebaseMessaging.onMessage.listen((RemoteMessage message) {
         final n = message.notification;
         if (n == null) return;
+
+        // Show in the system notification bar (works even when app is open)
+        _localPlugin.show(
+          message.hashCode,
+          n.title,
+          n.body,
+          const NotificationDetails(android: _fcmChannel),
+        );
+
+        // Also show an in-app snackbar for immediate attention
         final messenger = messengerKey.currentState;
         if (messenger == null) return;
         messenger.showSnackBar(SnackBar(

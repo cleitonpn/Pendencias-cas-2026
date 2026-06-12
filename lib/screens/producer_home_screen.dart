@@ -160,7 +160,6 @@ class _FairCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         side: BorderSide(color: _modeColor.withOpacity(0.5), width: 1.5),
       ),
-      color: _modeColor.withOpacity(0.04),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(14),

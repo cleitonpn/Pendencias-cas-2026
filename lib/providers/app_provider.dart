@@ -295,15 +295,13 @@ class AppProvider extends ChangeNotifier {
 
       await DatabaseService.upsertClients(finalClients);
 
-      // Push derived fair to Firestore so other devices see it
-      try {
-        await FirestoreService.saveFair(
-          derivedId, feiraNome,
-          _currentFair!.spreadsheetId, _currentFair!.sheetName,
-          DateTime.now().toIso8601String(),
-          mode: 'producao', sheetMode: 'mestra_child',
-        );
-      } catch (_) {}
+      // Push derived fair metadata to Firestore — mode is intentionally
+      // omitted so that mode changes set via setFairMode() survive syncs.
+      await FirestoreService.saveDerivedFairMetadata(
+        derivedId, feiraNome,
+        _currentFair!.spreadsheetId, _currentFair!.sheetName,
+        DateTime.now().toIso8601String(),
+      );
     }
 
     // Clean up any stale derived fairs whose names match the master itself —

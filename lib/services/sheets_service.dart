@@ -151,12 +151,12 @@ class SheetsService {
     final mobilarioIdx   = findCol(['mobiliário locado', 'mobiliario locado',
         'mobiliário', 'mobiliario']);
 
-    // New event-level columns (individual sheets use "data" prefix to distinguish
-    // from the assembly-type "montagem" column)
+    // Event-level date columns.  'montagem'/'evento'/'desmontagem' alone are
+    // accepted as fallbacks for sheets that don't use the "data " prefix.
     final pavilhaoIdx       = findCol(['pavilhão', 'pavilhao', 'paviliao',
         'pavilhao do evento']);
     final dataMontagemIdx   = findCol(['data montagem', 'data de montagem',
-        'data_montagem', 'dt montagem']);
+        'data_montagem', 'dt montagem', 'montagem']);
     final dataEventoIdx     = findCol(['data evento', 'data do evento',
         'data abertura', 'dt evento', 'evento']);
     final dataDesmontagemIdx = findCol(['data desmontagem',

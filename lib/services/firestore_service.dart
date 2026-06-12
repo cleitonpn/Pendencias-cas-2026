@@ -313,6 +313,23 @@ class FirestoreService {
     );
   }
 
+  /// Updates derived (mestra_child) fair metadata WITHOUT touching the mode field,
+  /// so that mode changes made via setFairMode() are preserved across syncs.
+  static Future<void> saveDerivedFairMetadata(int id, String name,
+      String spreadsheetId, String sheetName, String createdAt) async {
+    try {
+      await _db.collection('fairs').doc(id.toString()).set({
+        'id': id,
+        'name': name,
+        'spreadsheetId': spreadsheetId,
+        'sheetName': sheetName,
+        'createdAt': createdAt,
+        'sheetMode': 'mestra_child',
+        // mode field intentionally omitted — preserved by setFairMode()
+      }, SetOptions(merge: true));
+    } catch (_) {}
+  }
+
   static Future<void> saveFair(int id, String name, String spreadsheetId,
       String sheetName, String createdAt,
       {String mode = 'producao', String sheetMode = 'individual'}) async {
