@@ -156,12 +156,22 @@ class _FairCard extends StatelessWidget {
   final bool canManage;
   const _FairCard({required this.fair, this.canManage = true});
 
+  Color get _modeColor {
+    if (fair.isMaintenance) return Colors.orange;
+    if (fair.isProduction) return Colors.green;
+    return Colors.blueGrey;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: BorderSide(color: _modeColor.withOpacity(0.6), width: 1.5),
+      ),
+      color: _modeColor.withOpacity(0.04),
       child: InkWell(
         onTap: () async {
           await context.read<AppProvider>().selectFair(fair);

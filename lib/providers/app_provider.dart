@@ -18,6 +18,7 @@ class AppProvider extends ChangeNotifier {
   DateTime? _lastAutoSync;
   DateTime? _lastGlobalSync;
   StreamSubscription? _pendingSubscription;
+  StreamSubscription? _fairsSubscription;
   Timer? _autoSyncTimer;
   Map<String, int> _pendingCounts = {}; // clientId → open pending count
 
@@ -75,6 +76,42 @@ class AppProvider extends ChangeNotifier {
     }
     _fairs = await DatabaseService.getFairs();
     notifyListeners();
+    _startFairsStream();
+  }
+
+  /// Listens to Firestore fair changes so mode updates propagate to all devices.
+  void _startFairsStream() {
+    _fairsSubscription?.cancel();
+    _fairsSubscription = FirestoreService.streamFairs().listen((maps) async {
+      bool changed = false;
+      for (final m in maps) {
+        final id = m['id'] as int?;
+        if (id == null) continue;
+        final mode = (m['mode'] as String?) ?? 'producao';
+        // Find local fair and check if mode changed
+        final local = _fairs.firstWhere((f) => f.id == id,
+            orElse: () => Fair(id: -1, name: '', spreadsheetId: '',
+                sheetName: '', createdAt: DateTime.now()));
+        if (local.id == -1 || local.mode != mode) {
+          await DatabaseService.updateFairMode(id, mode);
+          changed = true;
+        }
+      }
+      if (changed) {
+        _fairs = await DatabaseService.getFairs();
+        // Keep current fair in sync too
+        if (_currentFair != null) {
+          final updated = _fairs.firstWhere(
+              (f) => f.id == _currentFair!.id,
+              orElse: () => _currentFair!);
+          if (updated.mode != _currentFair!.mode) {
+            _currentFair = updated;
+            _restartAutoSync(_currentFair!);
+          }
+        }
+        notifyListeners();
+      }
+    }, onError: (_) {});
   }
 
   Future<void> selectFair(Fair fair) async {
@@ -122,6 +159,7 @@ class AppProvider extends ChangeNotifier {
   @override
   void dispose() {
     _pendingSubscription?.cancel();
+    _fairsSubscription?.cancel();
     _autoSyncTimer?.cancel();
     super.dispose();
   }

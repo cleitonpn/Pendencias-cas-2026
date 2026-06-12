@@ -304,6 +304,15 @@ class FirestoreService {
         .toList();
   }
 
+  /// Real-time stream of all fairs — used to sync mode changes across devices.
+  static Stream<List<Map<String, dynamic>>> streamFairs() {
+    return _db.collection('fairs').snapshots().map(
+      (snap) => snap.docs
+          .map((d) => {'id': int.tryParse(d.id), ...d.data()})
+          .toList(),
+    );
+  }
+
   static Future<void> saveFair(int id, String name, String spreadsheetId,
       String sheetName, String createdAt,
       {String mode = 'producao', String sheetMode = 'individual'}) async {

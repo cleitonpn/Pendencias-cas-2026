@@ -349,6 +349,26 @@ class DatabaseService {
     return maps.map(Client.fromMap).toList();
   }
 
+  /// Fair IDs that have at least one client assigned to [producerName].
+  static Future<List<int>> getFairIdsWithProducer(String producerName) async {
+    final database = await db;
+    final rows = await database.rawQuery(
+      "SELECT DISTINCT fair_id FROM clients WHERE produtor = ? AND produtor != ''",
+      [producerName],
+    );
+    return rows.map((r) => r['fair_id'] as int).toList();
+  }
+
+  /// Fair IDs that have at least one client assigned to [consultantName].
+  static Future<List<int>> getFairIdsWithConsultant(String consultantName) async {
+    final database = await db;
+    final rows = await database.rawQuery(
+      "SELECT DISTINCT fair_id FROM clients WHERE atendimento = ? AND atendimento != ''",
+      [consultantName],
+    );
+    return rows.map((r) => r['fair_id'] as int).toList();
+  }
+
   static Future<Map<String, int>> getPendingCounts(
       List<String> clientIds) async {
     if (clientIds.isEmpty) return {};

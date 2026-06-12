@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../models/fair.dart';
 import '../providers/app_provider.dart';
 import '../services/session_service.dart';
 import 'login_screen.dart';
@@ -75,7 +76,7 @@ class TeamLeaderHomeScreen extends StatelessWidget {
               itemBuilder: (context, i) {
                 final fair = fairs[i];
                 return _FairCard(
-                  fairName: fair.name,
+                  fair: fair,
                   onTap: () async {
                     await context.read<AppProvider>().selectFair(fair);
                     if (context.mounted) {
@@ -96,16 +97,32 @@ class TeamLeaderHomeScreen extends StatelessWidget {
 }
 
 class _FairCard extends StatelessWidget {
-  final String fairName;
+  final Fair fair;
   final VoidCallback onTap;
-  const _FairCard({required this.fairName, required this.onTap});
+  const _FairCard({required this.fair, required this.onTap});
+
+  Color get _modeColor {
+    if (fair.isMaintenance) return Colors.orange;
+    if (fair.isProduction) return Colors.green;
+    return Colors.blueGrey;
+  }
+
+  String get _modeLabel {
+    if (fair.isMaintenance) return 'Manutenção';
+    if (fair.isProduction) return 'Produção';
+    return 'Pré-produção';
+  }
 
   @override
   Widget build(BuildContext context) {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: BorderSide(color: _modeColor.withOpacity(0.5), width: 1.5),
+      ),
+      color: _modeColor.withOpacity(0.04),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(14),
@@ -116,17 +133,23 @@ class _FairCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1E3A5F).withOpacity(0.1),
+                  color: _modeColor.withOpacity(0.12),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: const Icon(Icons.event,
-                    color: Color(0xFF1E3A5F), size: 28),
+                child: Icon(Icons.event, color: _modeColor, size: 28),
               ),
               const SizedBox(width: 14),
               Expanded(
-                child: Text(fairName,
-                    style: const TextStyle(
-                        fontSize: 18, fontWeight: FontWeight.bold)),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(fair.name,
+                        style: const TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.bold)),
+                    Text(_modeLabel,
+                        style: TextStyle(fontSize: 12, color: _modeColor)),
+                  ],
+                ),
               ),
               const Icon(Icons.chevron_right, color: Colors.grey),
             ],
