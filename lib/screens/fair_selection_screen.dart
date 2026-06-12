@@ -11,7 +11,8 @@ import 'producer_login_screen.dart';
 import 'sticker_generator_screen.dart';
 
 class FairSelectionScreen extends StatelessWidget {
-  const FairSelectionScreen({super.key});
+  final bool canManage;
+  const FairSelectionScreen({super.key, this.canManage = true});
 
   @override
   Widget build(BuildContext context) {
@@ -26,13 +27,14 @@ class FairSelectionScreen extends StatelessWidget {
             style: TextStyle(
                 color: Colors.white, fontWeight: FontWeight.bold)),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.badge_outlined, color: Colors.white),
-            tooltip: 'Acesso Produtor',
-            onPressed: () => Navigator.push(context,
-                MaterialPageRoute(
-                    builder: (_) => const ProducerLoginScreen())),
-          ),
+          if (canManage)
+            IconButton(
+              icon: const Icon(Icons.badge_outlined, color: Colors.white),
+              tooltip: 'Acesso Produtor',
+              onPressed: () => Navigator.push(context,
+                  MaterialPageRoute(
+                      builder: (_) => const ProducerLoginScreen())),
+            ),
           IconButton(
             icon: const Icon(Icons.logout, color: Colors.white),
             tooltip: 'Sair',
@@ -52,28 +54,33 @@ class FairSelectionScreen extends StatelessWidget {
           : ListView.builder(
               padding: const EdgeInsets.all(16),
               itemCount: fairs.length,
-              itemBuilder: (context, i) => _FairCard(fair: fairs[i]),
+              itemBuilder: (context, i) =>
+                  _FairCard(fair: fairs[i], canManage: canManage),
             ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () async {
-          final ok = await requireAdminPin(context);
-          if (ok && context.mounted) {
-            Navigator.push(context,
-                MaterialPageRoute(builder: (_) => const AddFairScreen()));
-          }
-        },
-        backgroundColor: const Color(0xFF1E3A5F),
-        icon: const Icon(Icons.add, color: Colors.white),
-        label: const Text('Nova Feira',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-      ),
+      floatingActionButton: canManage
+          ? FloatingActionButton.extended(
+              onPressed: () async {
+                final ok = await requireAdminPin(context);
+                if (ok && context.mounted) {
+                  Navigator.push(context,
+                      MaterialPageRoute(builder: (_) => const AddFairScreen()));
+                }
+              },
+              backgroundColor: const Color(0xFF1E3A5F),
+              icon: const Icon(Icons.add, color: Colors.white),
+              label: const Text('Nova Feira',
+                  style:
+                      TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            )
+          : null,
     );
   }
 }
 
 class _FairCard extends StatelessWidget {
   final Fair fair;
-  const _FairCard({required this.fair});
+  final bool canManage;
+  const _FairCard({required this.fair, this.canManage = true});
 
   @override
   Widget build(BuildContext context) {
@@ -86,7 +93,8 @@ class _FairCard extends StatelessWidget {
           await context.read<AppProvider>().selectFair(fair);
           if (context.mounted) {
             Navigator.push(context,
-                MaterialPageRoute(builder: (_) => const HangarListScreen()));
+                MaterialPageRoute(
+                    builder: (_) => HangarListScreen(canManage: canManage)));
           }
         },
         borderRadius: BorderRadius.circular(14),
@@ -128,15 +136,18 @@ class _FairCard extends StatelessWidget {
                             builder: (_) =>
                                 StickerGeneratorScreen(fair: fair))),
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.delete_outline, color: Colors.red),
-                    onPressed: () => _confirmDelete(context),
-                  ),
+                  if (canManage)
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline, color: Colors.red),
+                      onPressed: () => _confirmDelete(context),
+                    ),
                   const Icon(Icons.chevron_right, color: Colors.grey),
                 ],
               ),
-              const Divider(height: 18),
-              _ModeToggle(fair: fair),
+              if (canManage) ...[
+                const Divider(height: 18),
+                _ModeToggle(fair: fair),
+              ],
             ],
           ),
         ),

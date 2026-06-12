@@ -17,7 +17,7 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  String _role = 'producer'; // 'producer' | 'consultant' | 'leader' | 'admin'
+  String _role = 'producer'; // 'producer' | 'consultant' | 'manager' | 'leader' | 'admin'
 
   // Producer
   List<String> _producers = [];
@@ -28,6 +28,11 @@ class _LoginScreenState extends State<LoginScreen> {
   List<String> _consultants = [];
   String? _selectedConsultant;
   bool _loadingConsultants = true;
+
+  // Manager
+  List<String> _managers = [];
+  String? _selectedManager;
+  bool _loadingManagers = true;
 
   // Leader
   List<Map<String, String>> _leaders = [];
@@ -43,6 +48,7 @@ class _LoginScreenState extends State<LoginScreen> {
     super.initState();
     _loadProducers();
     _loadConsultants();
+    _loadManagers();
     _loadLeaders();
   }
 
@@ -70,6 +76,15 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  Future<void> _loadManagers() async {
+    try {
+      final list = await FirestoreService.getManagersWithPins();
+      if (mounted) setState(() { _managers = list; _loadingManagers = false; });
+    } catch (_) {
+      if (mounted) setState(() => _loadingManagers = false);
+    }
+  }
+
   Future<void> _loadLeaders() async {
     try {
       final list = await FirestoreService.getTeamLeadersWithPins();
@@ -86,6 +101,7 @@ class _LoginScreenState extends State<LoginScreen> {
       _pinCtrl.clear();
       if (role != 'producer') _selectedProducer = null;
       if (role != 'consultant') _selectedConsultant = null;
+      if (role != 'manager') _selectedManager = null;
       if (role != 'leader') _selectedLeader = null;
     });
   }
@@ -99,6 +115,8 @@ class _LoginScreenState extends State<LoginScreen> {
         await _enterProducer();
       } else if (_role == 'consultant') {
         await _enterConsultant();
+      } else if (_role == 'manager') {
+        await _enterManager();
       } else {
         await _enterLeader();
       }
@@ -183,6 +201,35 @@ class _LoginScreenState extends State<LoginScreen> {
         MaterialPageRoute(
             builder: (_) =>
                 ConsultantHomeScreen(consultantName: _selectedConsultant!)));
+  }
+
+  Future<void> _enterManager() async {
+    if (_selectedManager == null) {
+      setState(() => _error = 'Selecione seu nome.');
+      return;
+    }
+    if (_pinCtrl.text.isEmpty) {
+      setState(() => _error = 'Digite seu PIN.');
+      return;
+    }
+    final savedPin = await FirestoreService.getManagerPin(_selectedManager!);
+    if (!mounted) return;
+    if (savedPin == null) {
+      setState(() => _error = 'PIN não configurado. Contate o administrador.');
+      return;
+    }
+    if (_pinCtrl.text != savedPin) {
+      setState(() => _error = 'PIN incorreto.');
+      _pinCtrl.clear();
+      return;
+    }
+    if (!mounted) return;
+    await NotificationService.subscribeAdmin();
+    await SessionService.save(role: 'manager', name: _selectedManager!);
+    if (!mounted) return;
+    Navigator.pushReplacement(context,
+        MaterialPageRoute(
+            builder: (_) => const FairSelectionScreen(canManage: false)));
   }
 
   Future<void> _enterLeader() async {
@@ -290,6 +337,11 @@ class _LoginScreenState extends State<LoginScreen> {
                             icon: Icons.support_agent_outlined,
                             active: _role == 'consultant',
                             onTap: () => _setRole('consultant')),
+                        _ToggleBtn(
+                            label: 'Gerente',
+                            icon: Icons.manage_accounts_outlined,
+                            active: _role == 'manager',
+                            onTap: () => _setRole('manager')),
                         _ToggleBtn(
                             label: 'Líder',
                             icon: Icons.groups_outlined,
@@ -401,6 +453,67 @@ class _LoginScreenState extends State<LoginScreen> {
                                   return GestureDetector(
                                     onTap: () => setState(() {
                                       _selectedConsultant = p;
+                                      _error = null;
+                                    }),
+                                    child: AnimatedContainer(
+                                      duration: const Duration(milliseconds: 150),
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 14, vertical: 8),
+                                      decoration: BoxDecoration(
+                                        color: sel ? const Color(0xFF1E3A5F) : Colors.white,
+                                        borderRadius: BorderRadius.circular(20),
+                                        border: Border.all(
+                                          color: sel
+                                              ? const Color(0xFF1E3A5F)
+                                              : Colors.grey.shade300,
+                                        ),
+                                      ),
+                                      child: Text(p,
+                                          style: TextStyle(
+                                              fontWeight: FontWeight.w600,
+                                              color: sel ? Colors.white : Colors.black87,
+                                              fontSize: 13)),
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
+                    const SizedBox(height: 16),
+                  ],
+
+                  // Manager name pills
+                  if (_role == 'manager') ...[
+                    const Text('SEU NOME',
+                        style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.grey,
+                            letterSpacing: 1)),
+                    const SizedBox(height: 10),
+                    _loadingManagers
+                        ? const Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(8),
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ))
+                        : _managers.isEmpty
+                            ? Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                    color: Colors.orange.shade50,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: Colors.orange.shade200)),
+                                child: const Text(
+                                    'Nenhum gerente cadastrado.\nContate o administrador.',
+                                    style: TextStyle(color: Colors.orange, fontSize: 13)),
+                              )
+                            : Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: _managers.map((p) {
+                                  final sel = _selectedManager == p;
+                                  return GestureDetector(
+                                    onTap: () => setState(() {
+                                      _selectedManager = p;
                                       _error = null;
                                     }),
                                     child: AnimatedContainer(

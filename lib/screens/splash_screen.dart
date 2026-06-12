@@ -41,6 +41,8 @@ class _SplashScreenState extends State<SplashScreen> {
 
       if (role == 'admin') {
         destination = const FairSelectionScreen();
+      } else if (role == 'manager') {
+        destination = const FairSelectionScreen(canManage: false);
       } else if (role == 'producer' && name.isNotEmpty) {
         destination = ProducerHomeScreen(producerName: name);
       } else if (role == 'consultant' && name.isNotEmpty) {

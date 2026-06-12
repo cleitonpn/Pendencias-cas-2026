@@ -388,6 +388,28 @@ class FirestoreService {
             .toList());
   }
 
+  // ─── Manager PINs ────────────────────────────────────────────────────────────
+
+  static Future<String?> getManagerPin(String name) async {
+    final doc = await _db.collection('manager_pins').doc(name).get();
+    if (!doc.exists) return null;
+    return doc.data()?['pin'] as String?;
+  }
+
+  static Future<void> setManagerPin(String name, String pin) async {
+    await _db.collection('manager_pins').doc(name).set({'pin': pin});
+  }
+
+  static Future<void> deleteManagerPin(String name) async {
+    await _db.collection('manager_pins').doc(name).delete();
+  }
+
+  static Future<List<String>> getManagersWithPins() async {
+    final snapshot = await _db.collection('manager_pins').get();
+    final names = snapshot.docs.map((d) => d.id).toList()..sort();
+    return names;
+  }
+
   // ─── Team ────────────────────────────────────────────────────────────────────
 
   static Future<List<PendingItem>> getPendingItemsByTeam(

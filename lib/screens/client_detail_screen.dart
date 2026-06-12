@@ -10,6 +10,8 @@ import '../services/firestore_service.dart';
 import '../services/pdf_service.dart';
 import '../widgets/photo_gallery.dart';
 import '../widgets/montage_section.dart';
+import '../widgets/client_specs_card.dart';
+import '../services/session_service.dart';
 import 'add_pending_screen.dart';
 import 'edit_pending_screen.dart';
 
@@ -91,11 +93,17 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
   }
 
   Future<void> _addPending() async {
+    final session = await SessionService.get();
+    final role = session?['role'] ?? 'admin';
+    final name = session?['name'] ?? '';
+    final createdBy = (role == 'manager' && name.isNotEmpty)
+        ? 'Gerente: $name'
+        : 'Administrador';
     final item = await Navigator.push<PendingItem>(
         context,
         MaterialPageRoute(
             builder: (_) => AddPendingScreen(
-                client: widget.client, createdBy: 'Administrador')));
+                client: widget.client, createdBy: createdBy)));
     if (item != null) {
       _items.insert(0, item);
       setState(() {});
@@ -387,6 +395,9 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
                 ),
               ),
             ],
+
+            // Stand specifications (filled by consultant, read-only here)
+            ClientSpecsCard(clientId: c.rowId),
 
             // Botões de ação
             Padding(

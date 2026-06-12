@@ -32,6 +32,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Map<String, String> _leaderTeams = {};
   Map<String, String?> _leaderPins = {};
 
+  // Managers
+  List<String> _managerNames = [];
+  Map<String, String?> _managerPins = {};
+
   static const _availableTeams = [
     'Elétrica',
     'Marcenaria',
@@ -87,6 +91,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
       lPins[name] = await FirestoreService.getTeamLeaderPin(name);
     }
 
+    final mgrList = await FirestoreService.getManagersWithPins();
+    final mgrPins = <String, String?>{};
+    for (final name in mgrList) {
+      mgrPins[name] = await FirestoreService.getManagerPin(name);
+    }
+
     if (mounted) {
       setState(() {
         _producers = allProducers;
@@ -98,6 +108,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _leaderNames = lNames;
         _leaderTeams = lTeams;
         _leaderPins = lPins;
+        _managerNames = mgrList;
+        _managerPins = mgrPins;
       });
     }
   }
@@ -449,6 +461,138 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
     if (confirmed != true) return;
     await FirestoreService.deleteTeamLeaderPin(name);
+    await _loadPins();
+  }
+
+  Future<void> _editManagerPin(String name) async {
+    final currentPin = _managerPins[name];
+    final ctrl = TextEditingController(text: currentPin ?? '');
+
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        title: Text('PIN — $name'),
+        content: TextField(
+          controller: ctrl,
+          keyboardType: TextInputType.number,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          maxLength: 6,
+          autofocus: true,
+          decoration: const InputDecoration(
+            hintText: 'Digite o PIN (4–6 dígitos)',
+            prefixIcon: Icon(Icons.lock_outline),
+          ),
+          onSubmitted: (_) => Navigator.pop(ctx, ctrl.text),
+        ),
+        actions: [
+          if (currentPin != null)
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, ''),
+              child: const Text('Remover', style: TextStyle(color: Colors.red)),
+            ),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancelar')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, ctrl.text),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1E3A5F),
+                foregroundColor: Colors.white),
+            child: const Text('Salvar'),
+          ),
+        ],
+      ),
+    );
+
+    if (result == null) return;
+    if (result.isEmpty) {
+      await FirestoreService.deleteManagerPin(name);
+    } else {
+      await FirestoreService.setManagerPin(name, result);
+    }
+    await _loadPins();
+  }
+
+  Future<void> _addManager() async {
+    final nameCtrl = TextEditingController();
+    final pinCtrl = TextEditingController();
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        title: const Text('Adicionar Gerente'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameCtrl,
+              autofocus: true,
+              textCapitalization: TextCapitalization.words,
+              decoration: const InputDecoration(
+                labelText: 'Nome do gerente',
+                prefixIcon: Icon(Icons.person_outline),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: pinCtrl,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              maxLength: 6,
+              decoration: const InputDecoration(
+                hintText: 'PIN (4–6 dígitos)',
+                prefixIcon: Icon(Icons.lock_outline),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancelar')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1E3A5F),
+                foregroundColor: Colors.white),
+            child: const Text('Adicionar'),
+          ),
+        ],
+      ),
+    );
+
+    if (result != true) return;
+    final name = nameCtrl.text.trim();
+    if (name.isEmpty) return;
+    await FirestoreService.setManagerPin(name, pinCtrl.text);
+    await _loadPins();
+  }
+
+  Future<void> _deleteManager(String name) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        title: const Text('Remover Gerente'),
+        content: Text('Remover "$name" da lista de gerentes?'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancelar')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white),
+            child: const Text('Remover'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await FirestoreService.deleteManagerPin(name);
     await _loadPins();
   }
 
@@ -933,6 +1077,103 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 onPressed: _addLeader,
                 icon: const Icon(Icons.person_add_outlined),
                 label: const Text('Adicionar Líder de Equipe'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF1E3A5F),
+                  side: const BorderSide(color: Color(0xFF1E3A5F)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 24),
+
+            // Manager PINs
+            const Text('PINs DOS GERENTES',
+                style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey,
+                    letterSpacing: 1)),
+            const SizedBox(height: 4),
+            const Text(
+                'O gerente pode criar pendências e ver todas as informações, mas não pode criar novas feiras.',
+                style: TextStyle(fontSize: 12, color: Colors.grey)),
+            const SizedBox(height: 10),
+            if (_managerNames.isEmpty)
+              Card(
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+                child: const Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Text(
+                      'Nenhum gerente cadastrado. Use o botão abaixo para adicionar.',
+                      style: TextStyle(color: Colors.grey)),
+                ),
+              )
+            else
+              Card(
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+                child: Column(
+                  children: _managerNames.asMap().entries.map((entry) {
+                    final i = entry.key;
+                    final name = entry.value;
+                    final pin = _managerPins[name];
+                    final hasPin = pin != null && pin.isNotEmpty;
+                    return Column(
+                      children: [
+                        if (i > 0) const Divider(height: 1, indent: 16),
+                        ListTile(
+                          leading: CircleAvatar(
+                            backgroundColor: hasPin
+                                ? Colors.green.shade100
+                                : Colors.grey.shade100,
+                            child: Icon(
+                                hasPin ? Icons.lock : Icons.lock_open,
+                                color: hasPin ? Colors.green : Colors.grey,
+                                size: 20),
+                          ),
+                          title: Text(name,
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.w600)),
+                          subtitle: Text(
+                            hasPin ? 'PIN configurado' : 'Sem PIN',
+                            style: TextStyle(
+                                fontSize: 12,
+                                color: hasPin ? Colors.green : Colors.grey),
+                          ),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              TextButton(
+                                onPressed: () => _editManagerPin(name),
+                                child: Text(hasPin ? 'Alterar' : 'Definir PIN',
+                                    style: const TextStyle(
+                                        color: Color(0xFF1E3A5F))),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.delete_outline,
+                                    color: Colors.red, size: 20),
+                                tooltip: 'Remover',
+                                onPressed: () => _deleteManager(name),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    );
+                  }).toList(),
+                ),
+              ),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _addManager,
+                icon: const Icon(Icons.person_add_outlined),
+                label: const Text('Adicionar Gerente'),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: const Color(0xFF1E3A5F),
                   side: const BorderSide(color: Color(0xFF1E3A5F)),

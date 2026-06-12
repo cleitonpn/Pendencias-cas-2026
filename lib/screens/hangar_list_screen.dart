@@ -12,7 +12,8 @@ import 'producer_pending_screen.dart';
 import 'pending_board_screen.dart';
 
 class HangarListScreen extends StatelessWidget {
-  const HangarListScreen({super.key});
+  final bool canManage;
+  const HangarListScreen({super.key, this.canManage = true});
 
   @override
   Widget build(BuildContext context) {
@@ -67,16 +68,17 @@ class HangarListScreen extends StatelessWidget {
                 ? null
                 : () => context.read<AppProvider>().syncFromSheets(),
           ),
-          IconButton(
-            icon: const Icon(Icons.settings_outlined, color: Colors.white),
-            onPressed: () async {
-              final ok = await requireAdminPin(context);
-              if (ok && context.mounted) {
-                Navigator.push(context,
-                    MaterialPageRoute(builder: (_) => const SettingsScreen()));
-              }
-            },
-          ),
+          if (canManage)
+            IconButton(
+              icon: const Icon(Icons.settings_outlined, color: Colors.white),
+              onPressed: () async {
+                final ok = await requireAdminPin(context);
+                if (ok && context.mounted) {
+                  Navigator.push(context,
+                      MaterialPageRoute(builder: (_) => const SettingsScreen()));
+                }
+              },
+            ),
         ],
       ),
       body: Column(
