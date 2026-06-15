@@ -102,7 +102,7 @@ class _AddPendingScreenState extends State<AddPendingScreen> {
     }
 
     final newItem = PendingItem(
-      clientId: widget.client.rowId,
+      clientId: widget.client.firestoreId,
       clientName: widget.client.displayName,
       producerName: widget.client.produtor,
       local: widget.client.local,
