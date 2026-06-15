@@ -552,18 +552,46 @@ class FirestoreService {
   // ─── New Client Broadcast ─────────────────────────────────────────────────
 
   /// Writes to new_client_broadcasts → CF sends to `new_clients` FCM topic.
+  /// Uses clientId as the stable document ID so the CF onCreate trigger only
+  /// fires once per client, preventing duplicate notifications on every sync.
   static void writeNewClientBroadcast({
     required String clientId,
     required String clientName,
     required String fairName,
   }) {
-    _db.collection('new_client_broadcasts').add({
+    _db.collection('new_client_broadcasts').doc(clientId).set({
       'clientId': clientId,
       'clientName': clientName,
       'fairName': fairName,
       'notifyTopic': 'new_clients',
       'createdAt': DateTime.now().toIso8601String(),
     }).catchError((_) {});
+  }
+
+  // ─── Circulares ───────────────────────────────────────────────────────────
+
+  static Future<void> writeCircular({
+    required String title,
+    required String body,
+    required String createdBy,
+  }) async {
+    await _db.collection('circulares').add({
+      'title': title,
+      'body': body,
+      'createdBy': createdBy,
+      'createdAt': DateTime.now().toIso8601String(),
+    });
+  }
+
+  static Stream<List<Map<String, dynamic>>> streamCirculares() {
+    return _db
+        .collection('circulares')
+        .orderBy('createdAt', descending: true)
+        .limit(100)
+        .snapshots()
+        .map((snap) => snap.docs
+            .map((d) => <String, dynamic>{'id': d.id, ...d.data()})
+            .toList());
   }
 
   // ─── Gallery ──────────────────────────────────────────────────────────────

@@ -6,6 +6,7 @@ import '../models/pending_item.dart';
 import '../services/sheets_service.dart';
 import '../services/database_service.dart';
 import '../services/firestore_service.dart';
+import '../services/notification_service.dart';
 
 class AppProvider extends ChangeNotifier {
   List<Fair> _fairs = [];
@@ -19,6 +20,9 @@ class AppProvider extends ChangeNotifier {
   DateTime? _lastGlobalSync;
   StreamSubscription? _pendingSubscription;
   StreamSubscription? _fairsSubscription;
+  StreamSubscription? _circularSubscription;
+  bool _circularInitialized = false;
+  String? _lastCircularId;
   Timer? _autoSyncTimer;
   Map<String, int> _pendingCounts = {}; // clientId → open pending count
 
@@ -77,6 +81,7 @@ class AppProvider extends ChangeNotifier {
     _fairs = await DatabaseService.getFairs();
     notifyListeners();
     _startFairsStream();
+    _startCircularStream();
   }
 
   /// Listens to Firestore fair changes so mode updates propagate to all devices.
@@ -111,6 +116,42 @@ class AppProvider extends ChangeNotifier {
         }
         notifyListeners();
       }
+    }, onError: (_) {});
+  }
+
+  void _startCircularStream() {
+    _circularSubscription?.cancel();
+    _circularInitialized = false;
+    _circularSubscription = FirestoreService.streamCirculares().listen((list) {
+      if (!_circularInitialized) {
+        _circularInitialized = true;
+        _lastCircularId = list.isNotEmpty ? list.first['id'] as String? : null;
+        return;
+      }
+      if (list.isEmpty) return;
+      final latest = list.first;
+      final newId = latest['id'] as String?;
+      if (newId == _lastCircularId) return;
+      _lastCircularId = newId;
+      final title = (latest['title'] as String?) ?? 'Circular';
+      final body = (latest['body'] as String?) ?? '';
+      NotificationService.messengerKey.currentState?.showSnackBar(SnackBar(
+        duration: const Duration(seconds: 8),
+        backgroundColor: const Color(0xFF1E3A5F),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('📢 $title',
+                style: const TextStyle(
+                    color: Colors.white, fontWeight: FontWeight.bold)),
+            if (body.isNotEmpty)
+              Text(body,
+                  style:
+                      const TextStyle(color: Colors.white70, fontSize: 13)),
+          ],
+        ),
+      ));
     }, onError: (_) {});
   }
 
@@ -160,6 +201,7 @@ class AppProvider extends ChangeNotifier {
   void dispose() {
     _pendingSubscription?.cancel();
     _fairsSubscription?.cancel();
+    _circularSubscription?.cancel();
     _autoSyncTimer?.cancel();
     super.dispose();
   }
@@ -377,8 +419,15 @@ class AppProvider extends ChangeNotifier {
       List<Client> sheetClients,
       Map<String, Client> existingMap,
       String fairName) {
+    // Secondary index by firestoreId to handle rowId shifts (e.g. master sheet rows reordered)
+    final existingByFirestoreId = <String, Client>{};
+    for (final c in existingMap.values) {
+      if (c.firestoreId.isNotEmpty) existingByFirestoreId[c.firestoreId] = c;
+    }
+
     for (final nc in sheetClients) {
-      final existing = existingMap[nc.rowId];
+      final existing = existingMap[nc.rowId] ??
+          (nc.firestoreId.isNotEmpty ? existingByFirestoreId[nc.firestoreId] : null);
       final isNewClient = existing == null;
       final newProducer =
           (isNewClient || existing!.produtor.isEmpty) && nc.produtor.isNotEmpty;

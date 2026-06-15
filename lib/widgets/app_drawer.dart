@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../screens/cronograma_screen.dart';
 import '../screens/gallery_screen.dart';
+import '../screens/circular_list_screen.dart';
 
 class AppDrawer extends StatelessWidget {
   final bool showGallery;
@@ -53,6 +54,18 @@ class AppDrawer extends StatelessWidget {
                     MaterialPageRoute(builder: (_) => const GalleryScreen()));
               },
             ),
+          ListTile(
+            leading: const Icon(Icons.campaign_outlined,
+                color: Color(0xFF1E3A5F)),
+            title: const Text('Circulares',
+                style: TextStyle(fontWeight: FontWeight.w500)),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(context,
+                  MaterialPageRoute(
+                      builder: (_) => const CircularListScreen()));
+            },
+          ),
         ],
       ),
     );
