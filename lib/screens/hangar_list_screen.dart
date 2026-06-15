@@ -84,7 +84,7 @@ class HangarListScreen extends StatelessWidget {
       body: Column(
         children: [
           _SyncBar(provider: provider),
-          FairInfoHeader(clients: provider.clients),
+          FairInfoHeader(clients: provider.clients, showDriveLink: true),
           if (provider.error != null)
             _ErrorBanner(message: provider.error!),
           Expanded(child: _Body(provider: provider)),

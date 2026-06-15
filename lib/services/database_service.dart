@@ -15,7 +15,7 @@ class DatabaseService {
 
   static Future<Database> _initDb() async {
     final path = join(await getDatabasesPath(), 'cas2026.db');
-    return openDatabase(path, version: 15, onCreate: _onCreate, onUpgrade: _onUpgrade);
+    return openDatabase(path, version: 16, onCreate: _onCreate, onUpgrade: _onUpgrade);
   }
 
   static Future<void> _onCreate(Database db, int version) async {
@@ -51,6 +51,7 @@ class DatabaseService {
         data_evento TEXT DEFAULT '',
         data_desmontagem TEXT DEFAULT '',
         link_planta TEXT DEFAULT '',
+        link_drive TEXT DEFAULT '',
         is_completed INTEGER DEFAULT 0, completed_at TEXT
       )
     ''');
@@ -217,6 +218,11 @@ class DatabaseService {
         await db.execute("ALTER TABLE clients ADD COLUMN link_memorial TEXT DEFAULT ''");
       } catch (_) {}
     }
+    if (oldV < 16) {
+      try {
+        await db.execute("ALTER TABLE clients ADD COLUMN link_drive TEXT DEFAULT ''");
+      } catch (_) {}
+    }
   }
 
   /// SQL fragment: items hidden from producer/leader because they are organizer
@@ -230,6 +236,34 @@ class DatabaseService {
     final database = await db;
     final maps = await database.query('fairs', orderBy: 'id');
     return maps.map(Fair.fromMap).toList();
+  }
+
+  /// Returns the first non-empty pavilhao / date values found across all clients
+  /// of each fair. Shape: { fairId: { 'dataMontagem': '...', 'dataEvento': '...',
+  /// 'dataDesmontagem': '...', 'pavilhao': '...' } }
+  static Future<Map<int, Map<String, String>>> getFairEventDates() async {
+    final database = await db;
+    final rows = await database.rawQuery('''
+      SELECT fair_id,
+        MAX(NULLIF(pavilhao, ''))         AS pavilhao,
+        MAX(NULLIF(data_montagem, ''))    AS dataMontagem,
+        MAX(NULLIF(data_evento, ''))      AS dataEvento,
+        MAX(NULLIF(data_desmontagem, '')) AS dataDesmontagem
+      FROM clients
+      GROUP BY fair_id
+    ''');
+    final result = <int, Map<String, String>>{};
+    for (final r in rows) {
+      final id = r['fair_id'] as int?;
+      if (id == null) continue;
+      result[id] = {
+        'pavilhao': (r['pavilhao'] as String?) ?? '',
+        'dataMontagem': (r['dataMontagem'] as String?) ?? '',
+        'dataEvento': (r['dataEvento'] as String?) ?? '',
+        'dataDesmontagem': (r['dataDesmontagem'] as String?) ?? '',
+      };
+    }
+    return result;
   }
 
   static Future<int> insertFair(Fair fair) async {

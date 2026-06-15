@@ -4,6 +4,7 @@ import '../providers/app_provider.dart';
 import '../models/fair.dart';
 import '../services/session_service.dart';
 import '../utils/admin_pin.dart';
+import '../widgets/app_drawer.dart';
 import 'hangar_list_screen.dart';
 import 'add_fair_screen.dart';
 import 'login_screen.dart';
@@ -24,6 +25,7 @@ class FairSelectionScreen extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF0F2F5),
+      drawer: const AppDrawer(),
       appBar: AppBar(
         backgroundColor: const Color(0xFF1E3A5F),
         title: const Text('Selecionar Feira',

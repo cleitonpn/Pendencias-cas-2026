@@ -163,6 +163,8 @@ class SheetsService {
         'data de desmontagem', 'desmontagem', 'dt desmontagem']);
     final linkPlantaIdx     = findCol(['link planta', 'link da planta',
         'planta baixa', 'mapa', 'planta']);
+    final linkDriveIdx      = findCol(['link drive', 'drive',
+        'link pasta', 'link do drive']);
 
     if (nomeIdx < 0) {
       throw Exception(
@@ -228,6 +230,7 @@ class SheetsService {
         dataEvento: s(dataEventoIdx),
         dataDesmontagem: s(dataDesmontagemIdx),
         linkPlanta: s(linkPlantaIdx),
+        linkDrive: s(linkDriveIdx),
       ));
     }
 
@@ -295,6 +298,8 @@ class SheetsService {
         'mobiliário', 'mobiliario']);
     final linkPlantaIdx    = findCol(['link planta', 'link da planta',
         'planta baixa', 'planta', 'mapa']);
+    final linkDriveIdx     = findCol(['link drive', 'drive',
+        'link pasta', 'link do drive']);
 
     if (feiraIdx < 0) {
       throw Exception(
@@ -365,6 +370,7 @@ class SheetsService {
         dataEvento: s(dataEventoIdx),
         dataDesmontagem: s(dataDesmontagemIdx),
         linkPlanta: s(linkPlantaIdx),
+        linkDrive: s(linkDriveIdx),
       );
 
       grouped.putIfAbsent(feiraNome, () => []).add(client);

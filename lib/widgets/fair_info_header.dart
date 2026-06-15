@@ -7,7 +7,9 @@ import '../models/client.dart';
 /// values). Hidden when no client data is available.
 class FairInfoHeader extends StatelessWidget {
   final List<Client> clients;
-  const FairInfoHeader({super.key, required this.clients});
+  final bool showDriveLink;
+  const FairInfoHeader(
+      {super.key, required this.clients, this.showDriveLink = false});
 
   @override
   Widget build(BuildContext context) {
@@ -19,8 +21,9 @@ class FairInfoHeader extends StatelessWidget {
         c.dataDesmontagem.isNotEmpty;
     final hasPavilhao = c.pavilhao.isNotEmpty;
     final hasPlanta = c.linkPlanta.isNotEmpty;
+    final hasDrive = showDriveLink && c.linkDrive.isNotEmpty;
 
-    if (!hasDates && !hasPavilhao && !hasPlanta) return const SizedBox.shrink();
+    if (!hasDates && !hasPavilhao && !hasPlanta && !hasDrive) return const SizedBox.shrink();
 
     return Container(
       color: const Color(0xFF1E3A5F).withOpacity(0.04),
@@ -63,33 +66,29 @@ class FairInfoHeader extends StatelessWidget {
                       value: c.dataDesmontagem),
               ],
             ),
-          if (hasPlanta) ...[
+          if (hasPlanta || hasDrive) ...[
             if (hasDates || hasPavilhao) const SizedBox(height: 6),
-            InkWell(
-              onTap: () => _launch(context, c.linkPlanta),
-              borderRadius: BorderRadius.circular(8),
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.teal.shade50,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.teal.shade200),
-                ),
-                child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  Icon(Icons.map_outlined,
-                      color: Colors.teal.shade700, size: 15),
-                  const SizedBox(width: 6),
-                  Text('Ver planta do evento',
-                      style: TextStyle(
-                          color: Colors.teal.shade700,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600)),
-                  const SizedBox(width: 4),
-                  Icon(Icons.open_in_new,
-                      color: Colors.teal.shade400, size: 12),
-                ]),
-              ),
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: [
+                if (hasPlanta)
+                  _LinkButton(
+                    icon: Icons.map_outlined,
+                    label: 'Ver planta do evento',
+                    color: Colors.teal,
+                    url: c.linkPlanta,
+                    onTap: (url) => _launch(context, url),
+                  ),
+                if (hasDrive)
+                  _LinkButton(
+                    icon: Icons.folder_open_outlined,
+                    label: 'Abrir pasta do Drive',
+                    color: Colors.indigo,
+                    url: c.linkDrive,
+                    onTap: (url) => _launch(context, url),
+                  ),
+              ],
             ),
           ],
         ],
@@ -112,6 +111,47 @@ class FairInfoHeader extends StatelessWidget {
             const SnackBar(content: Text('Não foi possível abrir o link.')));
       }
     }
+  }
+}
+
+class _LinkButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final MaterialColor color;
+  final String url;
+  final void Function(String) onTap;
+  const _LinkButton(
+      {required this.icon,
+      required this.label,
+      required this.color,
+      required this.url,
+      required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: () => onTap(url),
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: color.shade50,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: color.shade200),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(icon, color: color.shade700, size: 15),
+          const SizedBox(width: 6),
+          Text(label,
+              style: TextStyle(
+                  color: color.shade700,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600)),
+          const SizedBox(width: 4),
+          Icon(Icons.open_in_new, color: color.shade400, size: 12),
+        ]),
+      ),
+    );
   }
 }
 

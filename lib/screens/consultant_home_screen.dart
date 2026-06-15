@@ -4,6 +4,7 @@ import '../models/fair.dart';
 import '../providers/app_provider.dart';
 import '../services/database_service.dart';
 import '../services/session_service.dart';
+import '../widgets/app_drawer.dart';
 import 'login_screen.dart';
 import 'consultant_hangar_list_screen.dart';
 
@@ -52,6 +53,7 @@ class _ConsultantHomeScreenState extends State<ConsultantHomeScreen> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF0F2F5),
+      drawer: const AppDrawer(),
       appBar: AppBar(
         backgroundColor: const Color(0xFF1E3A5F),
         title: Column(

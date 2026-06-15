@@ -30,6 +30,7 @@ class Client {
   final String dataEvento;
   final String dataDesmontagem;
   final String linkPlanta;
+  final String linkDrive;
 
   bool isCompleted;
   DateTime? completedAt;
@@ -63,6 +64,7 @@ class Client {
     this.dataEvento = '',
     this.dataDesmontagem = '',
     this.linkPlanta = '',
+    this.linkDrive = '',
     this.isCompleted = false,
     this.completedAt,
   });
@@ -98,6 +100,7 @@ class Client {
         dataEvento: dataEvento,
         dataDesmontagem: dataDesmontagem,
         linkPlanta: linkPlanta,
+        linkDrive: linkDrive,
         isCompleted: isCompleted,
         completedAt: completedAt,
       );
@@ -131,6 +134,7 @@ class Client {
         'data_evento': dataEvento,
         'data_desmontagem': dataDesmontagem,
         'link_planta': linkPlanta,
+        'link_drive': linkDrive,
         'is_completed': isCompleted ? 1 : 0,
         'completed_at': completedAt?.toIso8601String(),
       };
@@ -164,6 +168,7 @@ class Client {
         dataEvento: map['data_evento'] ?? '',
         dataDesmontagem: map['data_desmontagem'] ?? '',
         linkPlanta: map['link_planta'] ?? '',
+        linkDrive: map['link_drive'] ?? '',
         isCompleted: (map['is_completed'] as int? ?? 0) == 1,
         completedAt: map['completed_at'] != null
             ? DateTime.tryParse(map['completed_at'] as String)

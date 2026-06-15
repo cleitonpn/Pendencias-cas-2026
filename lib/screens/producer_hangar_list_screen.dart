@@ -138,7 +138,7 @@ class _ProducerHangarListScreenState
                 ],
               ),
             ),
-          FairInfoHeader(clients: clients),
+          FairInfoHeader(clients: clients, showDriveLink: true),
           if (clients.isEmpty && !provider.isLoading)
             Expanded(
               child: Center(
