@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../providers/app_provider.dart';
 import '../widgets/fair_info_header.dart';
+import '../widgets/app_drawer.dart';
 import 'analyst_client_detail_screen.dart';
 
 class AnalystHangarListScreen extends StatelessWidget {
@@ -17,6 +18,7 @@ class AnalystHangarListScreen extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF0F2F5),
+      drawer: const AppDrawer(showGallery: true),
       appBar: AppBar(
         backgroundColor: const Color(0xFF1E3A5F),
         elevation: 0,
