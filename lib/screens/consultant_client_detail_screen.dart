@@ -76,7 +76,7 @@ class _ConsultantClientDetailScreenState
   }
 
   Future<void> _loadSpecs() async {
-    final specs = await FirestoreService.getClientSpecs(widget.client.rowId);
+    final specs = await FirestoreService.getClientSpecs(widget.client.firestoreId);
     if (!mounted) return;
     if (specs == null) return;
     setState(() {
@@ -99,7 +99,7 @@ class _ConsultantClientDetailScreenState
   Future<void> _saveSpecs() async {
     setState(() => _savingSpecs = true);
     try {
-      await FirestoreService.saveClientSpecs(widget.client.rowId, {
+      await FirestoreService.saveClientSpecs(widget.client.firestoreId, {
         'revestimento': _revestimento,
         'corRevestimento': _corRevestimentoCtrl.text.trim(),
         'iluminacao': _iluminacao,
@@ -114,11 +114,11 @@ class _ConsultantClientDetailScreenState
         'locked': false,
         'editRequested': false,
       });
-      await FirestoreService.lockClientSpecs(widget.client.rowId);
+      await FirestoreService.lockClientSpecs(widget.client.firestoreId);
       FirestoreService.writeSpecChangeEvent(
-        clientId: widget.client.rowId,
+        clientId: widget.client.firestoreId,
         clientName: widget.client.displayName,
-        fairName: widget.client.rowId.split('_').first,
+        fairName: widget.client.firestoreId.split('_').first,
         consultantName: widget.consultantName,
       );
       if (mounted) {
@@ -144,9 +144,9 @@ class _ConsultantClientDetailScreenState
   Future<void> _requestEdit() async {
     try {
       await FirestoreService.requestSpecEdit(
-        widget.client.rowId,
+        widget.client.firestoreId,
         widget.client.displayName,
-        widget.client.rowId.split('_').first,
+        widget.client.firestoreId.split('_').first,
         widget.consultantName,
       );
       if (mounted) {
@@ -166,7 +166,7 @@ class _ConsultantClientDetailScreenState
     List<PendingItem> awaiting = [];
     try {
       awaiting =
-          await FirestoreService.getAwaitingItemsByClientId(widget.client.rowId);
+          await FirestoreService.getAwaitingItemsByClientId(widget.client.firestoreId);
     } catch (_) {}
     if (mounted) {
       setState(() {
@@ -451,7 +451,7 @@ class _ConsultantClientDetailScreenState
             ),
 
             // Analyst notes (read-only for consultant)
-            AnalystNotesWidget(clientId: widget.client.rowId, canEdit: false),
+            AnalystNotesWidget(clientId: widget.client.firestoreId, canEdit: false),
 
             // Create pending button (the only action available)
             Padding(

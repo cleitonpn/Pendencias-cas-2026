@@ -1,6 +1,7 @@
 class Client {
   final int fairId;          // which fair this client belongs to
   final String rowId;
+  final String firestoreId;  // stable cross-device key: normalizedFairName_rowNum
   final String nome;
   final String montagem;
   final String local;
@@ -38,6 +39,7 @@ class Client {
   Client({
     this.fairId = 1,
     required this.rowId,
+    this.firestoreId = '',
     required this.nome,
     required this.montagem,
     required this.local,
@@ -69,11 +71,12 @@ class Client {
     this.completedAt,
   });
 
-  /// Returns a new Client with updated fairId and rowId (used when assigning
-  /// derived fair IDs after reading from a master sheet).
-  Client reidentify(int newFairId, String newRowId) => Client(
+  /// Returns a new Client with updated fairId, rowId and firestoreId (used when
+  /// assigning derived fair IDs after reading from a master sheet).
+  Client reidentify(int newFairId, String newRowId, {String newFirestoreId = ''}) => Client(
         fairId: newFairId,
         rowId: newRowId,
+        firestoreId: newFirestoreId.isNotEmpty ? newFirestoreId : firestoreId,
         nome: nome,
         montagem: montagem,
         local: local,
@@ -108,6 +111,7 @@ class Client {
   Map<String, dynamic> toMap() => {
         'fair_id': fairId,
         'row_id': rowId,
+        'firestore_id': firestoreId,
         'nome': nome,
         'montagem': montagem,
         'local': local,
@@ -142,6 +146,9 @@ class Client {
   factory Client.fromMap(Map<String, dynamic> map) => Client(
         fairId: map['fair_id'] as int? ?? 1,
         rowId: map['row_id'] as String,
+        firestoreId: (map['firestore_id'] as String?)?.isNotEmpty == true
+            ? map['firestore_id'] as String
+            : map['row_id'] as String,
         nome: map['nome'] ?? '',
         montagem: map['montagem'] ?? '',
         local: map['local'] ?? '',

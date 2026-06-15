@@ -107,12 +107,22 @@ class SheetsService {
     return -1;
   }
 
+  /// Normalises a fair name to a stable, device-independent string suitable for
+  /// use as a Firestore document key prefix:
+  /// "CAS 2026 – Módulos" → "cas_2026__mdulos"  (lowercased, spaces→_, non-alnum stripped)
+  static String _normalize(String name) => name
+      .toLowerCase()
+      .trim()
+      .replaceAll(' ', '_')
+      .replaceAll(RegExp(r'[^a-z0-9_]'), '');
+
   /// Reads a wide range (A:BZ) and auto-detects column positions from the header
   /// row, so it works for CAS 2026, Forum, PetVet and any future fair layout.
   static Future<List<Client>> fetchClients({
     required String spreadsheetId,
     required String sheetName,
     required int fairId,
+    required String fairName,
   }) async {
     final table = await _fetchTable(spreadsheetId, sheetName, 'A:BZ');
     final dataRows = table.rows;
@@ -204,6 +214,7 @@ class SheetsService {
       clients.add(Client(
         fairId: fairId,
         rowId: '${fairId}_${i + 1}',
+        firestoreId: '${_normalize(fairName)}_${i + 1}',
         nome: nome,
         montagem: s(montagemIdx),
         local: s(localIdx),
@@ -341,9 +352,11 @@ class SheetsService {
         if (m != null) hangar = m.group(1)!;
       }
 
+      final rowNumInFair = (grouped[feiraNome]?.length ?? 0) + 1;
       final client = Client(
         fairId: 0,           // placeholder — caller calls reidentify()
         rowId: '0_${i + 1}', // placeholder row id
+        firestoreId: '${_normalize(feiraNome)}_$rowNumInFair',
         nome: nome,
         montagem: s(tipoIdx), // master sheet "TIPO" = stand assembly type
         local: s(localIdx),

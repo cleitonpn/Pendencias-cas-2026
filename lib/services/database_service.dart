@@ -15,7 +15,7 @@ class DatabaseService {
 
   static Future<Database> _initDb() async {
     final path = join(await getDatabasesPath(), 'cas2026.db');
-    return openDatabase(path, version: 16, onCreate: _onCreate, onUpgrade: _onUpgrade);
+    return openDatabase(path, version: 17, onCreate: _onCreate, onUpgrade: _onUpgrade);
   }
 
   static Future<void> _onCreate(Database db, int version) async {
@@ -38,6 +38,7 @@ class DatabaseService {
       CREATE TABLE clients (
         row_id TEXT PRIMARY KEY,
         fair_id INTEGER DEFAULT 1,
+        firestore_id TEXT DEFAULT '',
         nome TEXT, montagem TEXT, local TEXT, hangar TEXT,
         area TEXT, deck TEXT, total_area TEXT, mezanino TEXT,
         produtor TEXT, atendimento TEXT DEFAULT '', organizadora TEXT DEFAULT '', pin TEXT DEFAULT '', marceneiro TEXT, tapeceiro TEXT,
@@ -221,6 +222,11 @@ class DatabaseService {
     if (oldV < 16) {
       try {
         await db.execute("ALTER TABLE clients ADD COLUMN link_drive TEXT DEFAULT ''");
+      } catch (_) {}
+    }
+    if (oldV < 17) {
+      try {
+        await db.execute("ALTER TABLE clients ADD COLUMN firestore_id TEXT DEFAULT ''");
       } catch (_) {}
     }
   }

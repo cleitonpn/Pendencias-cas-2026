@@ -45,7 +45,7 @@ class _AnalystClientDetailScreenState
     List<PendingItem> awaitingItems = [];
     try {
       awaitingItems = await FirestoreService.getAwaitingItemsByClientId(
-          widget.client.rowId);
+          widget.client.firestoreId);
     } catch (_) {}
     if (mounted) {
       setState(() {
@@ -211,18 +211,18 @@ class _AnalystClientDetailScreenState
             ],
 
             // Specs (read-only)
-            ClientSpecsCard(clientId: c.rowId),
+            ClientSpecsCard(clientId: c.firestoreId),
 
             // Analyst notes (editable by analyst)
             AnalystNotesWidget(
-              clientId: c.rowId,
+              clientId: c.firestoreId,
               canEdit: true,
               editorName: widget.analystName,
             ),
 
             // Montage photos (view-only)
             MontageSection(
-              clientId: c.rowId,
+              clientId: c.firestoreId,
               fairId: c.fairId,
               fairName: provider.currentFairName,
               canAdd: false,

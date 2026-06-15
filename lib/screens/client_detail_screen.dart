@@ -56,7 +56,7 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
     List<PendingItem> awaitingItems = [];
     try {
       awaitingItems = await FirestoreService.getAwaitingItemsByClientId(
-          widget.client.rowId);
+          widget.client.firestoreId);
     } catch (_) {}
     if (mounted) {
       setState(() {
@@ -84,7 +84,7 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
         widget.client.rowId,
         resolvedOnly: true);
     final montage =
-        await FirestoreService.getMontageUpdates(widget.client.rowId);
+        await FirestoreService.getMontageUpdates(widget.client.firestoreId);
     if (!context.mounted) return;
     await PdfService.generateAndShow(
       context,
@@ -429,10 +429,10 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
             ],
 
             // Stand specifications (filled by consultant, read-only here)
-            ClientSpecsCard(clientId: c.rowId),
+            ClientSpecsCard(clientId: c.firestoreId),
 
             // Analyst notes (read-only for admin)
-            AnalystNotesWidget(clientId: c.rowId, canEdit: false),
+            AnalystNotesWidget(clientId: c.firestoreId, canEdit: false),
 
             // Botões de ação
             Padding(
@@ -498,7 +498,7 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
 
             // Montage progress photos (admin only views)
             MontageSection(
-              clientId: c.rowId,
+              clientId: c.firestoreId,
               fairId: c.fairId,
               fairName: context.read<AppProvider>().currentFairName,
               canAdd: false,

@@ -55,7 +55,7 @@ class _ProducerClientDetailScreenState
     final items = await DatabaseService.getPendingItemsByClient(
         widget.client.rowId, excludeUnapproved: true);
     final awaitingItems = await FirestoreService.getAwaitingItemsByClientId(
-        widget.client.rowId);
+        widget.client.firestoreId);
     if (mounted) {
       setState(() {
         _items = items;
@@ -400,14 +400,14 @@ class _ProducerClientDetailScreenState
                   ],
 
                   // Stand specifications (filled by consultant, read-only)
-                  ClientSpecsCard(clientId: c.rowId),
+                  ClientSpecsCard(clientId: c.firestoreId),
 
                   // Analyst notes (read-only for producer)
-                  AnalystNotesWidget(clientId: c.rowId, canEdit: false),
+                  AnalystNotesWidget(clientId: c.firestoreId, canEdit: false),
 
                   // Montage progress photos (producer can add)
                   MontageSection(
-                    clientId: c.rowId,
+                    clientId: c.firestoreId,
                     fairId: c.fairId,
                     fairName:
                         context.read<AppProvider>().currentFairName,

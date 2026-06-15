@@ -235,6 +235,7 @@ class AppProvider extends ChangeNotifier {
       spreadsheetId: _currentFair!.spreadsheetId,
       sheetName: _currentFair!.sheetName,
       fairId: _currentFair!.id!,
+      fairName: _currentFair!.name,
     );
 
     _preserveCompletion(sheetClients, existingClients);
@@ -279,7 +280,7 @@ class AppProvider extends ChangeNotifier {
         sheetName: _currentFair!.sheetName,
       );
 
-      // Assign real fairId / rowId
+      // Assign real fairId / rowId, keeping the already-computed firestoreId
       final finalClients = tempClients.map((c) {
         final rowNum = c.rowId.split('_').last;
         return c.reidentify(derivedId, '${derivedId}_$rowNum');
@@ -340,7 +341,7 @@ class AppProvider extends ChangeNotifier {
     final finalClients = tempClients.map((c) {
       final rowNum = c.rowId.split('_').last;
       return c.reidentify(fairId, '${fairId}_$rowNum');
-    }).toList();
+    }).toList(); // firestoreId is already set on each client from fetchClientsGroupedByFair
 
     final existingClients = await DatabaseService.getClients(fairId: fairId);
     final existingMap = {for (final c in existingClients) c.rowId: c};
@@ -385,7 +386,7 @@ class AppProvider extends ChangeNotifier {
           (isNewClient || existing.atendimento.isEmpty) && nc.atendimento.isNotEmpty;
       if (newProducer || newConsultant) {
         FirestoreService.writeSyncEvent(
-          clientId: nc.rowId,
+          clientId: nc.firestoreId,
           clientName: nc.nome,
           fairName: fairName,
           producerName: newProducer ? nc.produtor : '',
@@ -394,7 +395,7 @@ class AppProvider extends ChangeNotifier {
       }
       if (isNewClient) {
         FirestoreService.writeNewClientBroadcast(
-          clientId: nc.rowId,
+          clientId: nc.firestoreId,
           clientName: nc.nome,
           fairName: fairName,
         );
