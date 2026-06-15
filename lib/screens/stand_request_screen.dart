@@ -131,6 +131,7 @@ class _StandRequestScreenState extends State<StandRequestScreen> {
         spreadsheetId: _fair!.spreadsheetId,
         sheetName: _fair!.sheetName,
         fairId: _fair!.id!,
+        fairName: _fair!.name,
       );
       _clients = clients;
       // Pre-select the stand if it came in the URL.

@@ -39,6 +39,7 @@ class _StickerGeneratorScreenState extends State<StickerGeneratorScreen> {
         spreadsheetId: widget.fair.spreadsheetId,
         sheetName: widget.fair.sheetName,
         fairId: widget.fair.id!,
+        fairName: widget.fair.name,
       );
       setState(() {
         _all = clients;

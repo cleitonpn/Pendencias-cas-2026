@@ -123,6 +123,7 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
             spreadsheetId: f.spreadsheetId,
             sheetName: f.sheetName,
             fairId: f.id!,
+            fairName: f.name,
           );
           if (clients
               .any((c) => c.organizadora.toLowerCase().trim() == name)) {
@@ -216,6 +217,7 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
         spreadsheetId: _fair!.spreadsheetId,
         sheetName: _fair!.sheetName,
         fairId: _fair!.id!,
+        fairName: _fair!.name,
       );
       _clientCache[_fair!.id!] = _clients;
       _setStep(_Step.pickStand);
