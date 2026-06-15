@@ -2,21 +2,43 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/fair.dart';
 import '../providers/app_provider.dart';
+import '../services/database_service.dart';
 import '../services/session_service.dart';
 import '../widgets/app_drawer.dart';
 import 'login_screen.dart';
 import 'team_leader_hangar_list_screen.dart';
 
-class TeamLeaderHomeScreen extends StatelessWidget {
+class TeamLeaderHomeScreen extends StatefulWidget {
   final String leaderName;
   final String team;
   const TeamLeaderHomeScreen(
       {super.key, required this.leaderName, required this.team});
 
   @override
+  State<TeamLeaderHomeScreen> createState() => _TeamLeaderHomeScreenState();
+}
+
+class _TeamLeaderHomeScreenState extends State<TeamLeaderHomeScreen> {
+  List<int> _fairIds = [];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadFairs());
+  }
+
+  Future<void> _loadFairs() async {
+    final ids = await DatabaseService.getFairIdsWithLeader(
+        widget.leaderName, widget.team);
+    if (mounted) setState(() => _fairIds = ids);
+  }
+
+  @override
   Widget build(BuildContext context) {
     final provider = context.watch<AppProvider>();
-    final fairs = provider.fairs.where((f) => f.sheetMode != 'mestra').toList();
+    final fairs = provider.fairs
+        .where((f) => f.sheetMode != 'mestra' && _fairIds.contains(f.id))
+        .toList();
     final isSyncing = provider.isLoading;
 
     return Scaffold(
@@ -27,12 +49,12 @@ class TeamLeaderHomeScreen extends StatelessWidget {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(leaderName,
+            Text(widget.leaderName,
                 style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.bold,
                     fontSize: 17)),
-            Text(team,
+            Text(widget.team,
                 style: const TextStyle(color: Colors.white70, fontSize: 12)),
           ],
         ),
@@ -52,9 +74,12 @@ class TeamLeaderHomeScreen extends StatelessWidget {
               : IconButton(
                   icon: const Icon(Icons.sync, color: Colors.white),
                   tooltip: 'Sincronizar todas as feiras',
-                  onPressed: fairs.isEmpty
+                  onPressed: fairs.isEmpty && _fairIds.isEmpty
                       ? null
-                      : () => context.read<AppProvider>().syncAllFairs(),
+                      : () async {
+                          await context.read<AppProvider>().syncAllFairs();
+                          await _loadFairs();
+                        },
                 ),
           IconButton(
             icon: const Icon(Icons.logout, color: Colors.white),
@@ -86,7 +111,7 @@ class TeamLeaderHomeScreen extends StatelessWidget {
                         context,
                         MaterialPageRoute(
                           builder: (_) => TeamLeaderHangarListScreen(
-                              leaderName: leaderName, team: team),
+                              leaderName: widget.leaderName, team: widget.team),
                         ),
                       );
                     }

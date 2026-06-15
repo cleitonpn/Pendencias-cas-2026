@@ -399,6 +399,39 @@ class DatabaseService {
     return rows.map((r) => r['fair_id'] as int).toList();
   }
 
+  /// Fair IDs that have at least one client where the leader's team column
+  /// matches [leaderName]. The team-to-column mapping mirrors the hangar screen.
+  static Future<List<int>> getFairIdsWithLeader(
+      String leaderName, String team) async {
+    final database = await db;
+    final col = _teamColumn(team);
+    if (col == null) return [];
+    final rows = await database.rawQuery(
+      "SELECT DISTINCT fair_id FROM clients WHERE $col = ? AND $col != ''",
+      [leaderName],
+    );
+    return rows.map((r) => r['fair_id'] as int).toList();
+  }
+
+  static String? _teamColumn(String team) {
+    switch (team.toLowerCase().trim()) {
+      case 'elétrica':
+      case 'eletrica':
+        return 'eletricista';
+      case 'limpeza':
+        return 'faxineira';
+      case 'marcenaria':
+        return 'marceneiro';
+      case 'tapeçaria':
+      case 'tapecaria':
+        return 'tapeceiro';
+      case 'teto 50':
+        return 'teto50';
+      default:
+        return null;
+    }
+  }
+
   /// Fair IDs that have at least one client assigned to [consultantName].
   static Future<List<int>> getFairIdsWithConsultant(String consultantName) async {
     final database = await db;
