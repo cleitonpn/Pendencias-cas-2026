@@ -136,6 +136,42 @@ exports.onNewClientSynced = onDocumentCreated(
       } catch (_) {}
     });
 
+// New client broadcast → notifies all users subscribed to the `new_clients` topic.
+// Uses the clientId as the document ID (set by the app), so this onCreate trigger
+// fires exactly once per unique client across all syncs.
+exports.onNewClientBroadcast = onDocumentCreated(
+    "new_client_broadcasts/{docId}", async (event) => {
+      const data = event.data && event.data.data();
+      if (!data) return;
+
+      const client = data.clientName || "Novo cliente";
+      const fair = data.fairName || "";
+      const title = "Novo cliente na planilha";
+      const body = fair
+          ? `${client} foi adicionado à feira "${fair}".`
+          : `${client} foi adicionado à planilha.`;
+
+      await sendToTopics(["new_clients"], title, body);
+    });
+
+// New circular published by admin → notifies all users subscribed to `new_clients`.
+exports.onCircularCreated = onDocumentCreated(
+    "circulares/{docId}", async (event) => {
+      const data = event.data && event.data.data();
+      if (!data) return;
+
+      const title = data.title || "Circular";
+      const body = data.body || "";
+      const author = data.createdBy || "";
+
+      const notifTitle = `📢 ${title}`;
+      const notifBody = body.length > 200
+          ? body.substring(0, 197) + "..."
+          : (body || (author ? `Por ${author}` : "Nova mensagem da coordenação."));
+
+      await sendToTopics(["new_clients"], notifTitle, notifBody);
+    });
+
 // Daily 18:00 BRT reminder to producers who haven't sent a montage photo yet.
 exports.dailyMontageReminder = onSchedule(
     {schedule: "0 18 * * *", timeZone: "America/Sao_Paulo"},
