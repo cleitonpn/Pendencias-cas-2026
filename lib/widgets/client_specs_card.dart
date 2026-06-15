@@ -29,15 +29,26 @@ class _ClientSpecsCardState extends State<ClientSpecsCard> {
   @override
   Widget build(BuildContext context) {
     if (!_loaded || _specs == null) return const SizedBox.shrink();
+    final s = _specs!;
 
-    final bagum = (_specs!['corBagum'] as String?) ?? '';
-    final piso = (_specs!['corPiso'] as String?) ?? '';
-    final pisoElevado = (_specs!['pisoElevado'] as bool?) ?? false;
-    final elevacao = (_specs!['elevacao'] as String?) ?? '';
+    final revestimento = (s['revestimento'] as String?) ?? '';
+    final corRevestimento = (s['corRevestimento'] as String?) ?? '';
+    final iluminacao = (s['iluminacao'] as String?) ?? '';
+    final paredes = (s['paredes'] as String?) ?? '';
+    final teto = (s['teto'] as String?) ?? '';
+    final testeira = (s['testeira'] as String?) ?? '';
+    final pisoElevado = (s['pisoElevado'] as bool?) ?? false;
+    final alturaElevacao = (s['alturaElevacao'] as String?) ?? '';
+    final tipoPiso = (s['tipoPiso'] as String?) ?? '';
+    final corPiso = (s['corPiso'] as String?) ?? '';
+    final anotacoes = (s['anotacoes'] as String?) ?? '';
 
-    if (bagum.isEmpty && piso.isEmpty && !pisoElevado) {
-      return const SizedBox.shrink();
-    }
+    final hasAny = revestimento.isNotEmpty || corRevestimento.isNotEmpty ||
+        iluminacao.isNotEmpty || paredes.isNotEmpty || teto.isNotEmpty ||
+        testeira.isNotEmpty || pisoElevado || tipoPiso.isNotEmpty ||
+        corPiso.isNotEmpty || anotacoes.isNotEmpty;
+
+    if (!hasAny) return const SizedBox.shrink();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -53,56 +64,125 @@ class _ClientSpecsCardState extends State<ClientSpecsCard> {
         ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Card(
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10)),
-            child: Padding(
-              padding: const EdgeInsets.all(14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (bagum.isNotEmpty)
-                    _SpecRow(label: 'Cor Bagum', value: bagum),
-                  if (piso.isNotEmpty) ...[
-                    if (bagum.isNotEmpty) const Divider(height: 16),
-                    _SpecRow(label: 'Cor Piso', value: piso),
-                  ],
-                  const Divider(height: 16),
-                  _SpecRow(
-                    label: 'Piso Elevado',
-                    value: pisoElevado ? 'Sim' : 'Não',
-                    valueColor:
-                        pisoElevado ? Colors.orange : Colors.grey,
-                  ),
-                  if (pisoElevado && elevacao.isNotEmpty) ...[
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Balcões
+              if (revestimento.isNotEmpty || corRevestimento.isNotEmpty) ...[
+                _sectionLabel('BALCÕES'),
+                _SpecCard(children: [
+                  if (revestimento.isNotEmpty)
+                    _SpecRow(label: 'Revestimento',
+                        value: revestimento == 'napa' ? 'Napa' : 'Formica'),
+                  if (revestimento.isNotEmpty && corRevestimento.isNotEmpty)
                     const Divider(height: 16),
-                    _SpecRow(label: 'Elevação', value: elevacao),
-                  ],
+                  if (corRevestimento.isNotEmpty)
+                    _SpecRow(label: 'Cor do revestimento', value: corRevestimento),
+                ]),
+                const SizedBox(height: 10),
+              ],
+              // Iluminação
+              if (iluminacao.isNotEmpty) ...[
+                _sectionLabel('ILUMINAÇÃO'),
+                _SpecCard(children: [
+                  _SpecRow(label: 'Tipo',
+                      value: iluminacao == 'branca' ? 'Branca' : 'Quente'),
+                ]),
+                const SizedBox(height: 10),
+              ],
+              // Cores
+              if (paredes.isNotEmpty || teto.isNotEmpty || testeira.isNotEmpty) ...[
+                _sectionLabel('CORES'),
+                _SpecCard(children: [
+                  if (paredes.isNotEmpty) _SpecRow(label: 'Paredes', value: paredes),
+                  if (paredes.isNotEmpty && teto.isNotEmpty) const Divider(height: 16),
+                  if (teto.isNotEmpty) _SpecRow(label: 'Teto', value: teto),
+                  if ((paredes.isNotEmpty || teto.isNotEmpty) && testeira.isNotEmpty)
+                    const Divider(height: 16),
+                  if (testeira.isNotEmpty) _SpecRow(label: 'Testeira', value: testeira),
+                ]),
+                const SizedBox(height: 10),
+              ],
+              // Piso
+              _sectionLabel('PISO'),
+              _SpecCard(children: [
+                _SpecRow(label: 'Piso elevado', value: pisoElevado ? 'Sim' : 'Não',
+                    valueColor: pisoElevado ? Colors.orange : Colors.grey),
+                if (pisoElevado && alturaElevacao.isNotEmpty) ...[
+                  const Divider(height: 16),
+                  _SpecRow(label: 'Altura da elevação', value: alturaElevacao),
                 ],
-              ),
-            ),
+                if (tipoPiso.isNotEmpty) ...[
+                  const Divider(height: 16),
+                  _SpecRow(label: 'Tipo do piso', value: tipoPiso),
+                ],
+                if (corPiso.isNotEmpty) ...[
+                  const Divider(height: 16),
+                  _SpecRow(label: 'Cor do piso', value: corPiso),
+                ],
+              ]),
+              // Anotações
+              if (anotacoes.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                _sectionLabel('ANOTAÇÕES DIVERSAS'),
+                Card(
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Text(anotacoes,
+                        style: const TextStyle(fontSize: 13, color: Colors.black87)),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 4),
+            ],
           ),
         ),
       ],
     );
   }
+
+  Widget _sectionLabel(String text) => Padding(
+        padding: const EdgeInsets.only(bottom: 4),
+        child: Text(text,
+            style: const TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey,
+                letterSpacing: 1)),
+      );
+}
+
+class _SpecCard extends StatelessWidget {
+  final List<Widget> children;
+  const _SpecCard({required this.children});
+
+  @override
+  Widget build(BuildContext context) => Card(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: children,
+          ),
+        ),
+      );
 }
 
 class _SpecRow extends StatelessWidget {
   final String label;
   final String value;
   final Color? valueColor;
-  const _SpecRow(
-      {required this.label, required this.value, this.valueColor});
+  const _SpecRow({required this.label, required this.value, this.valueColor});
 
   @override
   Widget build(BuildContext context) => Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label,
-              style: const TextStyle(
-                  fontSize: 13, color: Colors.grey)),
+          Text(label, style: const TextStyle(fontSize: 13, color: Colors.grey)),
           const SizedBox(width: 8),
           Flexible(
             child: Text(value,
