@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import '../screens/cronograma_screen.dart';
+import '../screens/gallery_screen.dart';
 
 class AppDrawer extends StatelessWidget {
-  const AppDrawer({super.key});
+  final bool showGallery;
+  const AppDrawer({super.key, this.showGallery = false});
 
   @override
   Widget build(BuildContext context) {
@@ -39,6 +41,18 @@ class AppDrawer extends StatelessWidget {
                   MaterialPageRoute(builder: (_) => const CronogramaScreen()));
             },
           ),
+          if (showGallery)
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined,
+                  color: Color(0xFF1E3A5F)),
+              title: const Text('Galeria',
+                  style: TextStyle(fontWeight: FontWeight.w500)),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => const GalleryScreen()));
+              },
+            ),
         ],
       ),
     );

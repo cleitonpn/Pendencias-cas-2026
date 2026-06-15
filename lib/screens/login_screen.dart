@@ -8,6 +8,7 @@ import 'fair_selection_screen.dart';
 import 'producer_home_screen.dart';
 import 'team_leader_home_screen.dart';
 import 'consultant_home_screen.dart';
+import 'analyst_home_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -17,7 +18,7 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  String _role = 'producer'; // 'producer' | 'consultant' | 'manager' | 'leader' | 'admin'
+  String _role = 'producer'; // 'producer'|'consultant'|'manager'|'leader'|'analyst'|'admin'
 
   // Producer
   List<String> _producers = [];
@@ -39,6 +40,11 @@ class _LoginScreenState extends State<LoginScreen> {
   String? _selectedLeader;
   bool _loadingLeaders = true;
 
+  // Analyst
+  List<String> _analysts = [];
+  String? _selectedAnalyst;
+  bool _loadingAnalysts = true;
+
   final _pinCtrl = TextEditingController();
   bool _verifying = false;
   String? _error;
@@ -50,6 +56,7 @@ class _LoginScreenState extends State<LoginScreen> {
     _loadConsultants();
     _loadManagers();
     _loadLeaders();
+    _loadAnalysts();
   }
 
   @override
@@ -94,6 +101,15 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  Future<void> _loadAnalysts() async {
+    try {
+      final list = await FirestoreService.getAnalystsWithPins();
+      if (mounted) setState(() { _analysts = list; _loadingAnalysts = false; });
+    } catch (_) {
+      if (mounted) setState(() => _loadingAnalysts = false);
+    }
+  }
+
   void _setRole(String role) {
     setState(() {
       _role = role;
@@ -103,6 +119,7 @@ class _LoginScreenState extends State<LoginScreen> {
       if (role != 'consultant') _selectedConsultant = null;
       if (role != 'manager') _selectedManager = null;
       if (role != 'leader') _selectedLeader = null;
+      if (role != 'analyst') _selectedAnalyst = null;
     });
   }
 
@@ -117,6 +134,8 @@ class _LoginScreenState extends State<LoginScreen> {
         await _enterConsultant();
       } else if (_role == 'manager') {
         await _enterManager();
+      } else if (_role == 'analyst') {
+        await _enterAnalyst();
       } else {
         await _enterLeader();
       }
@@ -230,6 +249,35 @@ class _LoginScreenState extends State<LoginScreen> {
     Navigator.pushReplacement(context,
         MaterialPageRoute(
             builder: (_) => const FairSelectionScreen(canManage: false)));
+  }
+
+  Future<void> _enterAnalyst() async {
+    if (_selectedAnalyst == null) {
+      setState(() => _error = 'Selecione seu nome.');
+      return;
+    }
+    if (_pinCtrl.text.isEmpty) {
+      setState(() => _error = 'Digite seu PIN.');
+      return;
+    }
+    final savedPin = await FirestoreService.getAnalystPin(_selectedAnalyst!);
+    if (!mounted) return;
+    if (savedPin == null) {
+      setState(() => _error = 'PIN não configurado. Contate o administrador.');
+      return;
+    }
+    if (_pinCtrl.text != savedPin) {
+      setState(() => _error = 'PIN incorreto.');
+      _pinCtrl.clear();
+      return;
+    }
+    if (!mounted) return;
+    await NotificationService.subscribeAnalyst(_selectedAnalyst!);
+    await SessionService.save(role: 'analyst', name: _selectedAnalyst!);
+    if (!mounted) return;
+    Navigator.pushReplacement(context,
+        MaterialPageRoute(
+            builder: (_) => AnalystHomeScreen(analystName: _selectedAnalyst!)));
   }
 
   Future<void> _enterLeader() async {
@@ -347,6 +395,11 @@ class _LoginScreenState extends State<LoginScreen> {
                             icon: Icons.groups_outlined,
                             active: _role == 'leader',
                             onTap: () => _setRole('leader')),
+                        _ToggleBtn(
+                            label: 'Analista',
+                            icon: Icons.analytics_outlined,
+                            active: _role == 'analyst',
+                            onTap: () => _setRole('analyst')),
                         _ToggleBtn(
                             label: 'Admin',
                             icon: Icons.admin_panel_settings_outlined,
@@ -588,6 +641,67 @@ class _LoginScreenState extends State<LoginScreen> {
                                   _selectedLeader = v;
                                   _error = null;
                                 }),
+                              ),
+                    const SizedBox(height: 16),
+                  ],
+
+                  // Analyst name pills
+                  if (_role == 'analyst') ...[
+                    const Text('SEU NOME',
+                        style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.grey,
+                            letterSpacing: 1)),
+                    const SizedBox(height: 10),
+                    _loadingAnalysts
+                        ? const Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(8),
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ))
+                        : _analysts.isEmpty
+                            ? Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                    color: Colors.orange.shade50,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: Colors.orange.shade200)),
+                                child: const Text(
+                                    'Nenhum analista cadastrado.\nContate o administrador.',
+                                    style: TextStyle(color: Colors.orange, fontSize: 13)),
+                              )
+                            : Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: _analysts.map((p) {
+                                  final sel = _selectedAnalyst == p;
+                                  return GestureDetector(
+                                    onTap: () => setState(() {
+                                      _selectedAnalyst = p;
+                                      _error = null;
+                                    }),
+                                    child: AnimatedContainer(
+                                      duration: const Duration(milliseconds: 150),
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 14, vertical: 8),
+                                      decoration: BoxDecoration(
+                                        color: sel ? const Color(0xFF1E3A5F) : Colors.white,
+                                        borderRadius: BorderRadius.circular(20),
+                                        border: Border.all(
+                                          color: sel
+                                              ? const Color(0xFF1E3A5F)
+                                              : Colors.grey.shade300,
+                                        ),
+                                      ),
+                                      child: Text(p,
+                                          style: TextStyle(
+                                              fontWeight: FontWeight.w600,
+                                              color: sel ? Colors.white : Colors.black87,
+                                              fontSize: 13)),
+                                    ),
+                                  );
+                                }).toList(),
                               ),
                     const SizedBox(height: 16),
                   ],

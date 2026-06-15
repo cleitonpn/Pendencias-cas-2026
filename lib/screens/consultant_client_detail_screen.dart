@@ -8,6 +8,7 @@ import '../models/pending_item.dart';
 import '../services/database_service.dart';
 import '../services/firestore_service.dart';
 import '../widgets/photo_gallery.dart';
+import '../widgets/analyst_notes_widget.dart';
 import 'add_pending_screen.dart';
 
 /// Read-only client detail for the Consultant role.
@@ -37,6 +38,8 @@ class _ConsultantClientDetailScreenState
   final _elevacaoCtrl = TextEditingController();
   bool _pisoElevado = false;
   bool _savingSpecs = false;
+  bool _specsLocked = false;
+  bool _editRequested = false;
 
   @override
   void initState() {
@@ -63,12 +66,15 @@ class _ConsultantClientDetailScreenState
   Future<void> _loadSpecs() async {
     final specs =
         await FirestoreService.getClientSpecs(widget.client.rowId);
-    if (!mounted || specs == null) return;
+    if (!mounted) return;
+    if (specs == null) return;
     setState(() {
       _corBagumCtrl.text = (specs['corBagum'] as String?) ?? '';
       _corPisoCtrl.text = (specs['corPiso'] as String?) ?? '';
       _pisoElevado = (specs['pisoElevado'] as bool?) ?? false;
       _elevacaoCtrl.text = (specs['elevacao'] as String?) ?? '';
+      _specsLocked = (specs['locked'] as bool?) ?? false;
+      _editRequested = (specs['editRequested'] as bool?) ?? false;
     });
   }
 
@@ -80,11 +86,21 @@ class _ConsultantClientDetailScreenState
         'corPiso': _corPisoCtrl.text.trim(),
         'pisoElevado': _pisoElevado,
         'elevacao': _pisoElevado ? _elevacaoCtrl.text.trim() : '',
+        'locked': false,
+        'editRequested': false,
       });
+      await FirestoreService.lockClientSpecs(widget.client.rowId);
+      FirestoreService.writeSpecChangeEvent(
+        clientId: widget.client.rowId,
+        clientName: widget.client.displayName,
+        fairName: widget.client.rowId.split('_').first,
+        consultantName: widget.consultantName,
+      );
       if (mounted) {
+        setState(() { _specsLocked = true; _editRequested = false; });
         ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-                content: Text('Especificações salvas.'),
+                content: Text('Especificações salvas e bloqueadas.'),
                 backgroundColor: Colors.green,
                 duration: Duration(seconds: 2)));
       }
@@ -98,6 +114,24 @@ class _ConsultantClientDetailScreenState
     } finally {
       if (mounted) setState(() => _savingSpecs = false);
     }
+  }
+
+  Future<void> _requestEdit() async {
+    try {
+      await FirestoreService.requestSpecEdit(
+        widget.client.rowId,
+        widget.client.displayName,
+        widget.client.rowId.split('_').first,
+        widget.consultantName,
+      );
+      if (mounted) {
+        setState(() => _editRequested = true);
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+                content: Text('Pedido de edição enviado ao administrador.'),
+                duration: Duration(seconds: 3)));
+      }
+    } catch (_) {}
   }
 
   Future<void> _load({bool silent = false}) async {
@@ -370,73 +404,135 @@ class _ConsultantClientDetailScreenState
             ],
 
             // Especificações do stand
-            const _SectionTitle(
-                text: 'ESPECIFICAÇÕES DO STAND', color: Color(0xFF1E3A5F)),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+              child: Row(children: [
+                const Text('ESPECIFICAÇÕES DO STAND',
+                    style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF1E3A5F),
+                        letterSpacing: 1)),
+                const SizedBox(width: 8),
+                if (_specsLocked)
+                  const Icon(Icons.lock, size: 14, color: Colors.orange),
+              ]),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
               child: Card(
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10)),
                 child: Padding(
                   padding: const EdgeInsets.all(14),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _SpecField(
-                          label: 'Cor Bagum',
-                          controller: _corBagumCtrl),
-                      const SizedBox(height: 12),
-                      _SpecField(
-                          label: 'Cor Piso',
-                          controller: _corPisoCtrl),
-                      const SizedBox(height: 12),
-                      Row(children: [
-                        const Expanded(
-                            child: Text('Piso Elevado',
-                                style: TextStyle(fontSize: 14))),
-                        Switch(
-                          value: _pisoElevado,
-                          activeColor: const Color(0xFF1E3A5F),
-                          onChanged: (v) =>
-                              setState(() => _pisoElevado = v),
+                  child: _specsLocked
+                      ? Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (_corBagumCtrl.text.isNotEmpty)
+                              _SpecReadRow('Cor Bagum', _corBagumCtrl.text),
+                            if (_corPisoCtrl.text.isNotEmpty) ...[
+                              const Divider(height: 14),
+                              _SpecReadRow('Cor Piso', _corPisoCtrl.text),
+                            ],
+                            const Divider(height: 14),
+                            _SpecReadRow('Piso Elevado',
+                                _pisoElevado ? 'Sim' : 'Não'),
+                            if (_pisoElevado &&
+                                _elevacaoCtrl.text.isNotEmpty) ...[
+                              const Divider(height: 14),
+                              _SpecReadRow('Elevação', _elevacaoCtrl.text),
+                            ],
+                            const SizedBox(height: 12),
+                            SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton.icon(
+                                onPressed:
+                                    _editRequested ? null : _requestEdit,
+                                icon: const Icon(Icons.edit_outlined,
+                                    size: 16),
+                                label: Text(_editRequested
+                                    ? 'Pedido enviado ao admin'
+                                    : 'Pedir Edição'),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: Colors.orange,
+                                  side: const BorderSide(
+                                      color: Colors.orange),
+                                  padding: const EdgeInsets.symmetric(
+                                      vertical: 10),
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius:
+                                          BorderRadius.circular(8)),
+                                ),
+                              ),
+                            ),
+                          ],
+                        )
+                      : Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _SpecField(
+                                label: 'Cor Bagum',
+                                controller: _corBagumCtrl),
+                            const SizedBox(height: 12),
+                            _SpecField(
+                                label: 'Cor Piso',
+                                controller: _corPisoCtrl),
+                            const SizedBox(height: 12),
+                            Row(children: [
+                              const Expanded(
+                                  child: Text('Piso Elevado',
+                                      style: TextStyle(fontSize: 14))),
+                              Switch(
+                                value: _pisoElevado,
+                                activeColor: const Color(0xFF1E3A5F),
+                                onChanged: (v) =>
+                                    setState(() => _pisoElevado = v),
+                              ),
+                            ]),
+                            if (_pisoElevado) ...[
+                              const SizedBox(height: 8),
+                              _SpecField(
+                                  label: 'Elevação (ex: 10 cm)',
+                                  controller: _elevacaoCtrl),
+                            ],
+                            const SizedBox(height: 14),
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton.icon(
+                                onPressed:
+                                    _savingSpecs ? null : _saveSpecs,
+                                icon: _savingSpecs
+                                    ? const SizedBox(
+                                        width: 16,
+                                        height: 16,
+                                        child: CircularProgressIndicator(
+                                            color: Colors.white,
+                                            strokeWidth: 2))
+                                    : const Icon(Icons.save_outlined,
+                                        size: 18),
+                                label: Text(_savingSpecs
+                                    ? 'Salvando...'
+                                    : 'Salvar Especificações'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF1E3A5F),
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(
+                                      vertical: 12),
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius:
+                                          BorderRadius.circular(8)),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                      ]),
-                      if (_pisoElevado) ...[
-                        const SizedBox(height: 8),
-                        _SpecField(
-                            label: 'Elevação (ex: 10 cm)',
-                            controller: _elevacaoCtrl),
-                      ],
-                      const SizedBox(height: 14),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton.icon(
-                          onPressed: _savingSpecs ? null : _saveSpecs,
-                          icon: _savingSpecs
-                              ? const SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(
-                                      color: Colors.white, strokeWidth: 2))
-                              : const Icon(Icons.save_outlined, size: 18),
-                          label: Text(_savingSpecs
-                              ? 'Salvando...'
-                              : 'Salvar Especificações'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF1E3A5F),
-                            foregroundColor: Colors.white,
-                            padding:
-                                const EdgeInsets.symmetric(vertical: 12),
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8)),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
                 ),
               ),
             ),
+
+            // Analyst notes (read-only for consultant)
+            AnalystNotesWidget(clientId: widget.client.rowId, canEdit: false),
 
             // Create pending button (the only action available)
             Padding(
@@ -671,6 +767,29 @@ class _PendingCard extends StatelessWidget {
   String _fmt(DateTime dt) =>
       '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')} '
       '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+}
+
+class _SpecReadRow extends StatelessWidget {
+  final String label;
+  final String value;
+  const _SpecReadRow(this.label, this.value);
+
+  @override
+  Widget build(BuildContext context) => Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label,
+              style: const TextStyle(fontSize: 13, color: Colors.grey)),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(value,
+                textAlign: TextAlign.right,
+                style: const TextStyle(
+                    fontSize: 13, fontWeight: FontWeight.w600)),
+          ),
+        ],
+      );
 }
 
 class _SpecField extends StatelessWidget {

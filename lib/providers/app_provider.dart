@@ -378,18 +378,27 @@ class AppProvider extends ChangeNotifier {
       String fairName) {
     for (final nc in sheetClients) {
       final existing = existingMap[nc.rowId];
+      final isNewClient = existing == null;
       final newProducer =
-          (existing == null || existing.produtor.isEmpty) && nc.produtor.isNotEmpty;
+          (isNewClient || existing!.produtor.isEmpty) && nc.produtor.isNotEmpty;
       final newConsultant =
-          (existing == null || existing.atendimento.isEmpty) && nc.atendimento.isNotEmpty;
-      if (!newProducer && !newConsultant) continue;
-      FirestoreService.writeSyncEvent(
-        clientId: nc.rowId,
-        clientName: nc.nome,
-        fairName: fairName,
-        producerName: newProducer ? nc.produtor : '',
-        consultantName: newConsultant ? nc.atendimento : '',
-      );
+          (isNewClient || existing.atendimento.isEmpty) && nc.atendimento.isNotEmpty;
+      if (newProducer || newConsultant) {
+        FirestoreService.writeSyncEvent(
+          clientId: nc.rowId,
+          clientName: nc.nome,
+          fairName: fairName,
+          producerName: newProducer ? nc.produtor : '',
+          consultantName: newConsultant ? nc.atendimento : '',
+        );
+      }
+      if (isNewClient) {
+        FirestoreService.writeNewClientBroadcast(
+          clientId: nc.rowId,
+          clientName: nc.nome,
+          fairName: fairName,
+        );
+      }
     }
   }
 

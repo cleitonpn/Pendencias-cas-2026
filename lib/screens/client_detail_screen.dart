@@ -11,6 +11,7 @@ import '../services/pdf_service.dart';
 import '../widgets/photo_gallery.dart';
 import '../widgets/montage_section.dart';
 import '../widgets/client_specs_card.dart';
+import '../widgets/analyst_notes_widget.dart';
 import '../services/session_service.dart';
 import 'add_pending_screen.dart';
 import 'edit_pending_screen.dart';
@@ -429,6 +430,9 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
 
             // Stand specifications (filled by consultant, read-only here)
             ClientSpecsCard(clientId: c.rowId),
+
+            // Analyst notes (read-only for admin)
+            AnalystNotesWidget(clientId: c.rowId, canEdit: false),
 
             // Botões de ação
             Padding(

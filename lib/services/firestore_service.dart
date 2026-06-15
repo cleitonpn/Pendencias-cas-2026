@@ -376,11 +376,6 @@ class FirestoreService {
     }
   }
 
-  static Future<void> saveClientSpecs(
-      String clientId, Map<String, dynamic> specs) async {
-    await _db.collection('client_specs').doc(clientId).set(specs);
-  }
-
   // ─── Sync Events (new-client notifications) ──────────────────────────────────
 
   /// Writes a transient event document that triggers the `onNewClientSynced`
@@ -434,6 +429,161 @@ class FirestoreService {
     final snapshot = await _db.collection('manager_pins').get();
     final names = snapshot.docs.map((d) => d.id).toList()..sort();
     return names;
+  }
+
+  // ─── Analyst PINs ────────────────────────────────────────────────────────────
+
+  static Future<String?> getAnalystPin(String name) async {
+    final doc = await _db.collection('analyst_pins').doc(name).get();
+    if (!doc.exists) return null;
+    return doc.data()?['pin'] as String?;
+  }
+
+  static Future<void> setAnalystPin(String name, String pin) async {
+    await _db.collection('analyst_pins').doc(name).set({'pin': pin});
+  }
+
+  static Future<void> deleteAnalystPin(String name) async {
+    await _db.collection('analyst_pins').doc(name).delete();
+  }
+
+  static Future<List<String>> getAnalystsWithPins() async {
+    final snapshot = await _db.collection('analyst_pins').get();
+    final names = snapshot.docs.map((d) => d.id).toList()..sort();
+    return names;
+  }
+
+  // ─── Spec Locking ─────────────────────────────────────────────────────────
+
+  static Future<void> saveClientSpecs(
+      String clientId, Map<String, dynamic> specs) async {
+    await _db
+        .collection('client_specs')
+        .doc(clientId)
+        .set(specs, SetOptions(merge: true));
+  }
+
+  static Future<void> lockClientSpecs(String clientId) async {
+    await _db.collection('client_specs').doc(clientId).set(
+      {'locked': true, 'lockedAt': DateTime.now().toIso8601String()},
+      SetOptions(merge: true),
+    );
+  }
+
+  static Future<void> unlockClientSpecs(String clientId) async {
+    await _db.collection('client_specs').doc(clientId).set(
+      {'locked': false, 'editRequested': false},
+      SetOptions(merge: true),
+    );
+  }
+
+  /// Consultant requests permission to edit — sets editRequested flag and
+  /// writes a spec_edit_requests doc so admins get notified via CF.
+  static Future<void> requestSpecEdit(String clientId, String clientName,
+      String fairName, String byName) async {
+    await _db.collection('client_specs').doc(clientId).set(
+      {'editRequested': true},
+      SetOptions(merge: true),
+    );
+    _db.collection('spec_edit_requests').doc(clientId).set({
+      'clientId': clientId,
+      'clientName': clientName,
+      'fairName': fairName,
+      'requestedBy': byName,
+      'requestedAt': DateTime.now().toIso8601String(),
+    }).catchError((_) {});
+  }
+
+  static Future<List<Map<String, dynamic>>> getPendingSpecEditRequests() async {
+    try {
+      final snap = await _db.collection('spec_edit_requests').get();
+      return snap.docs.map((d) => {'id': d.id, ...d.data()}).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  static Future<void> approveSpecEditRequest(String clientId) async {
+    await unlockClientSpecs(clientId);
+    try {
+      await _db.collection('spec_edit_requests').doc(clientId).delete();
+    } catch (_) {}
+  }
+
+  /// Writes a spec_change_events doc → Cloud Function sends to `admins` topic.
+  static void writeSpecChangeEvent({
+    required String clientId,
+    required String clientName,
+    required String fairName,
+    required String consultantName,
+  }) {
+    _db.collection('spec_change_events').add({
+      'clientId': clientId,
+      'clientName': clientName,
+      'fairName': fairName,
+      'consultantName': consultantName,
+      'notifyTopic': 'admins',
+      'createdAt': DateTime.now().toIso8601String(),
+    }).catchError((_) {});
+  }
+
+  // ─── Analyst Notes ────────────────────────────────────────────────────────
+
+  static Future<Map<String, dynamic>?> getAnalystNote(String clientId) async {
+    try {
+      final doc = await _db.collection('analyst_notes').doc(clientId).get();
+      if (!doc.exists) return null;
+      return doc.data();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<void> saveAnalystNote(
+      String clientId, String text, String link, String by) async {
+    await _db.collection('analyst_notes').doc(clientId).set({
+      'text': text,
+      'link': link,
+      'updatedBy': by,
+      'updatedAt': DateTime.now().toIso8601String(),
+    });
+  }
+
+  // ─── New Client Broadcast ─────────────────────────────────────────────────
+
+  /// Writes to new_client_broadcasts → CF sends to `new_clients` FCM topic.
+  static void writeNewClientBroadcast({
+    required String clientId,
+    required String clientName,
+    required String fairName,
+  }) {
+    _db.collection('new_client_broadcasts').add({
+      'clientId': clientId,
+      'clientName': clientName,
+      'fairName': fairName,
+      'notifyTopic': 'new_clients',
+      'createdAt': DateTime.now().toIso8601String(),
+    }).catchError((_) {});
+  }
+
+  // ─── Gallery ──────────────────────────────────────────────────────────────
+
+  /// Returns all montage photos for [fairName] on [date] (e.g. "2026-06-15").
+  static Future<List<Map<String, dynamic>>> getMontagePhotosByDate(
+      String fairName, String date) async {
+    try {
+      final snap = await _db
+          .collection('montage_updates')
+          .where('fairName', isEqualTo: fairName)
+          .get();
+      return snap.docs
+          .map((d) => d.data())
+          .where((d) =>
+              ((d['createdAt'] as String?) ?? '').startsWith(date))
+          .toList();
+    } catch (_) {
+      return [];
+    }
   }
 
   // ─── Team ────────────────────────────────────────────────────────────────────
