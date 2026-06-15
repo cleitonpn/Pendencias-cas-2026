@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../providers/app_provider.dart';
 import '../widgets/fair_info_header.dart';
-import '../widgets/app_drawer.dart';
 import 'analyst_client_detail_screen.dart';
 
 class AnalystHangarListScreen extends StatelessWidget {
@@ -18,7 +17,6 @@ class AnalystHangarListScreen extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF0F2F5),
-      drawer: const AppDrawer(showGallery: true),
       appBar: AppBar(
         backgroundColor: const Color(0xFF1E3A5F),
         elevation: 0,
@@ -28,51 +26,28 @@ class AnalystHangarListScreen extends StatelessWidget {
                 fontWeight: FontWeight.bold,
                 fontSize: 20)),
         actions: [
-          IconButton(
-            icon: provider.isLoading
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                        color: Colors.white, strokeWidth: 2))
-                : const Icon(Icons.sync, color: Colors.white),
-            tooltip: 'Sincronizar',
-            onPressed: provider.isLoading
-                ? null
-                : () => context.read<AppProvider>().syncFromSheets(),
-          ),
+          provider.isLoading
+              ? const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 14),
+                  child: Center(
+                    child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                          color: Colors.white, strokeWidth: 2),
+                    ),
+                  ),
+                )
+              : IconButton(
+                  icon: const Icon(Icons.sync, color: Colors.white),
+                  tooltip: 'Sincronizar',
+                  onPressed: () => context.read<AppProvider>().syncFromSheets(),
+                ),
         ],
       ),
       body: Column(
         children: [
-          if (provider.lastSync == null)
-            Container(
-              color: Colors.orange.shade100,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-              child: const Row(
-                children: [
-                  Icon(Icons.cloud_off, size: 14, color: Colors.orange),
-                  SizedBox(width: 6),
-                  Text('Dados não sincronizados.',
-                      style: TextStyle(fontSize: 12, color: Colors.orange)),
-                ],
-              ),
-            )
-          else
-            Container(
-              color: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-              child: Row(
-                children: [
-                  const Icon(Icons.cloud_done, size: 14, color: Colors.green),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Última sync: ${DateFormat('dd/MM HH:mm').format(provider.lastSync!)}',
-                    style: const TextStyle(fontSize: 12, color: Colors.grey),
-                  ),
-                ],
-              ),
-            ),
+          _SyncBar(provider: provider),
           FairInfoHeader(clients: clients, showDriveLink: true),
           if (hangars.isEmpty)
             const Expanded(
@@ -88,11 +63,10 @@ class AnalystHangarListScreen extends StatelessWidget {
                 itemCount: hangars.length,
                 itemBuilder: (context, i) {
                   final hangar = hangars[i];
-                  final hangarClients =
-                      provider.getClientsByHangar(hangar);
+                  final hangarClients = provider.getClientsByHangar(hangar);
                   return _HangarCard(
                     hangar: hangar,
-                    count: hangarClients.length,
+                    clients: hangarClients,
                     onTap: () => Navigator.push(
                       context,
                       MaterialPageRoute(
@@ -113,12 +87,56 @@ class AnalystHangarListScreen extends StatelessWidget {
   }
 }
 
+class _SyncBar extends StatelessWidget {
+  final AppProvider provider;
+  const _SyncBar({required this.provider});
+
+  @override
+  Widget build(BuildContext context) {
+    if (provider.lastSync == null) {
+      return Container(
+        color: Colors.orange.shade100,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        child: const Row(
+          children: [
+            Icon(Icons.cloud_off, size: 14, color: Colors.orange),
+            SizedBox(width: 6),
+            Text('Dados não sincronizados. Toque em sincronizar.',
+                style: TextStyle(fontSize: 12, color: Colors.orange)),
+          ],
+        ),
+      );
+    }
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      child: Row(
+        children: [
+          const Icon(Icons.cloud_done, size: 14, color: Colors.green),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              'Última sync: ${DateFormat('dd/MM HH:mm').format(provider.lastSync!)}',
+              style: const TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+          ),
+          if (provider.isLoading)
+            const SizedBox(
+                width: 12,
+                height: 12,
+                child: CircularProgressIndicator(strokeWidth: 2)),
+        ],
+      ),
+    );
+  }
+}
+
 class _HangarCard extends StatelessWidget {
   final String hangar;
-  final int count;
+  final List<dynamic> clients;
   final VoidCallback onTap;
   const _HangarCard(
-      {required this.hangar, required this.count, required this.onTap});
+      {required this.hangar, required this.clients, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -150,7 +168,7 @@ class _HangarCard extends StatelessWidget {
                     Text('Hangar $hangar',
                         style: const TextStyle(
                             fontSize: 17, fontWeight: FontWeight.bold)),
-                    Text('$count clientes',
+                    Text('${clients.length} clientes',
                         style: const TextStyle(
                             fontSize: 12, color: Colors.grey)),
                   ],

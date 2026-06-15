@@ -4,7 +4,6 @@ import 'package:intl/intl.dart';
 import '../providers/app_provider.dart';
 import '../utils/admin_pin.dart';
 import '../widgets/fair_info_header.dart';
-import '../widgets/app_drawer.dart';
 import 'client_list_screen.dart';
 import 'settings_screen.dart';
 import 'reports_screen.dart';
@@ -22,7 +21,6 @@ class HangarListScreen extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF0F2F5),
-      drawer: const AppDrawer(showGallery: true),
       appBar: AppBar(
         backgroundColor: const Color(0xFF1E3A5F),
         elevation: 0,
