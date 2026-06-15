@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../providers/app_provider.dart';
 import '../widgets/fair_info_header.dart';
-import 'analyst_client_detail_screen.dart';
+import 'analyst_client_list_screen.dart';
 
 class AnalystHangarListScreen extends StatelessWidget {
   final String analystName;
@@ -70,8 +70,7 @@ class AnalystHangarListScreen extends StatelessWidget {
                     onTap: () => Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => AnalystClientDetailScreen(
-                          clients: hangarClients,
+                        builder: (_) => AnalystClientListScreen(
                           hangar: hangar,
                           analystName: analystName,
                         ),
