@@ -71,6 +71,19 @@ class _ProducerClientDetailScreenState
       item.firestoreId != null &&
       _awaitingFirestoreIds.contains(item.firestoreId);
 
+  Future<void> _toggleComplete() async {
+    final newVal = !widget.client.isCompleted;
+    await context.read<AppProvider>().markClientCompleted(widget.client, newVal);
+    setState(() {});
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(newVal
+              ? 'Stand marcado como concluído!'
+              : 'Stand reaberto.'),
+          backgroundColor: newVal ? Colors.green : Colors.orange));
+    }
+  }
+
   Future<void> _addPending() async {
     final added = await Navigator.push<PendingItem>(
       context,
@@ -144,10 +157,20 @@ class _ProducerClientDetailScreenState
     return Scaffold(
       backgroundColor: const Color(0xFFF0F2F5),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1E3A5F),
+        backgroundColor: c.isCompleted ? Colors.green : const Color(0xFF1E3A5F),
         title: Text(c.local.isNotEmpty ? 'Stand ${c.local}' : c.displayName,
             style: const TextStyle(
                 color: Colors.white, fontWeight: FontWeight.bold)),
+        actions: [
+          IconButton(
+            icon: Icon(
+              c.isCompleted ? Icons.check_circle : Icons.check_circle_outline,
+              color: c.isCompleted ? Colors.white : Colors.white,
+            ),
+            tooltip: c.isCompleted ? 'Reabrir Stand' : 'Concluir Stand',
+            onPressed: _toggleComplete,
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _addPending,
@@ -189,6 +212,28 @@ class _ProducerClientDetailScreenState
                       ],
                     ),
                   ),
+
+                  // Completed banner
+                  if (c.isCompleted)
+                    Container(
+                      width: double.infinity,
+                      color: Colors.green,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 10),
+                      child: const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.check_circle,
+                              color: Colors.white, size: 18),
+                          SizedBox(width: 8),
+                          Text('✓ Stand concluído',
+                              style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14)),
+                        ],
+                      ),
+                    ),
 
                   // Team responsibles
                   const _SectionTitle(

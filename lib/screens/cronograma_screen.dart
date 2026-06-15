@@ -227,8 +227,66 @@ class _CronogramaScreenState extends State<CronogramaScreen> {
                 _dateRow(Icons.event, _green, 'Evento', evento),
               if (desmontagem.isNotEmpty)
                 _dateRow(Icons.local_shipping, _red, 'Desmontagem', desmontagem),
+              _buildCountdownChip(montagem, desmontagem),
             ],
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCountdownChip(String montagem, String desmontagem) {
+    final montagemRange = parseFairDateRange(montagem);
+    final desmontagemRange = parseFairDateRange(desmontagem.isNotEmpty ? desmontagem : montagem);
+    if (montagemRange == null) return const SizedBox.shrink();
+
+    final today = DateTime.now();
+    final todayDate = DateTime(today.year, today.month, today.day);
+    final startDate = montagemRange[0];
+    final endDate = desmontagemRange != null ? desmontagemRange[1] : montagemRange[1];
+
+    String label;
+    Color chipColor;
+
+    if (todayDate.isAfter(endDate)) {
+      label = 'Encerrada';
+      chipColor = Colors.grey;
+    } else if (!todayDate.isBefore(startDate) && !todayDate.isAfter(endDate)) {
+      label = 'Em andamento';
+      chipColor = Colors.green;
+    } else {
+      final diff = startDate.difference(todayDate).inDays;
+      if (diff == 0) {
+        label = 'Hoje!';
+        chipColor = Colors.amber.shade700;
+      } else if (diff == 1) {
+        label = 'Amanhã';
+        chipColor = Colors.orange;
+      } else {
+        label = 'Em $diff dias';
+        chipColor = Colors.blue;
+      }
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Align(
+        alignment: Alignment.centerRight,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: chipColor.withOpacity(0.12),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: chipColor.withOpacity(0.5)),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: chipColor,
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
         ),
       ),
     );

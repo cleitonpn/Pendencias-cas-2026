@@ -4,12 +4,15 @@ import 'package:intl/intl.dart';
 import '../providers/app_provider.dart';
 import '../utils/admin_pin.dart';
 import '../widgets/fair_info_header.dart';
+import '../models/client.dart';
+import 'client_detail_screen.dart';
 import 'client_list_screen.dart';
 import 'settings_screen.dart';
 import 'reports_screen.dart';
 import 'dashboard_screen.dart';
 import 'producer_pending_screen.dart';
 import 'pending_board_screen.dart';
+import 'producer_performance_screen.dart';
 
 class HangarListScreen extends StatelessWidget {
   final bool canManage;
@@ -18,6 +21,7 @@ class HangarListScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AppProvider>();
+    final allClients = provider.clients;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF0F2F5),
@@ -30,6 +34,21 @@ class HangarListScreen extends StatelessWidget {
                 fontWeight: FontWeight.bold,
                 fontSize: 20)),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.search, color: Colors.white),
+            tooltip: 'Buscar cliente, stand ou produtor',
+            onPressed: () => showSearch(
+              context: context,
+              delegate: _ClientSearchDelegate(allClients),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.people_outlined, color: Colors.white),
+            tooltip: 'Desempenho por Produtor',
+            onPressed: () => Navigator.push(context,
+                MaterialPageRoute(
+                    builder: (_) => const ProducerPerformanceScreen())),
+          ),
           IconButton(
             icon: const Icon(Icons.dashboard_outlined, color: Colors.white),
             tooltip: 'Painel operacional',
@@ -348,4 +367,96 @@ class _HangarCard extends StatelessWidget {
       ),
     );
   }
+}
+
+class _ClientSearchDelegate extends SearchDelegate<Client?> {
+  final List<Client> clients;
+
+  _ClientSearchDelegate(this.clients);
+
+  @override
+  String get searchFieldLabel => 'Buscar cliente, stand ou produtor...';
+
+  @override
+  List<Widget> buildActions(BuildContext context) => [
+        IconButton(
+          icon: const Icon(Icons.clear),
+          onPressed: () {
+            query = '';
+            showSuggestions(context);
+          },
+        ),
+      ];
+
+  @override
+  Widget buildLeading(BuildContext context) => IconButton(
+        icon: const Icon(Icons.arrow_back),
+        onPressed: () => close(context, null),
+      );
+
+  List<Client> _filter() {
+    if (query.isEmpty) return [];
+    final q = query.toLowerCase();
+    return clients.where((c) {
+      return c.nome.toLowerCase().contains(q) ||
+          c.local.toLowerCase().contains(q) ||
+          c.montagem.toLowerCase().contains(q) ||
+          c.produtor.toLowerCase().contains(q);
+    }).toList();
+  }
+
+  Widget _buildResults(BuildContext context) {
+    final results = _filter();
+    if (results.isEmpty) {
+      return const Center(
+        child: Text('Nenhum resultado encontrado.',
+            style: TextStyle(color: Colors.grey)),
+      );
+    }
+    return ListView.builder(
+      itemCount: results.length,
+      itemBuilder: (context, i) {
+        final c = results[i];
+        return ListTile(
+          leading: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1E3A5F).withOpacity(0.1),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              c.local.isNotEmpty ? c.local : '-',
+              style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
+                  color: Color(0xFF1E3A5F)),
+            ),
+          ),
+          title: Text(c.displayName,
+              style: const TextStyle(fontWeight: FontWeight.w600)),
+          subtitle: Text(
+            [
+              if (c.hangar.isNotEmpty) 'Hangar ${c.hangar}',
+              if (c.montagem.isNotEmpty) c.montagem,
+            ].join(' · '),
+            style: const TextStyle(fontSize: 12, color: Colors.grey),
+          ),
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                  builder: (_) => ClientDetailScreen(client: c)),
+            );
+            close(context, null);
+          },
+        );
+      },
+    );
+  }
+
+  @override
+  Widget buildResults(BuildContext context) => _buildResults(context);
+
+  @override
+  Widget buildSuggestions(BuildContext context) => _buildResults(context);
 }
