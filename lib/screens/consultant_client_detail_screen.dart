@@ -88,20 +88,21 @@ class _ConsultantClientDetailScreenState
     }
     if (!mounted) return;
     if (specs == null) return;
+    final s = specs;
     setState(() {
-      _revestimento = (specs['revestimento'] as String?) ?? '';
-      _corRevestimentoCtrl.text = (specs['corRevestimento'] as String?) ?? '';
-      _iluminacao = (specs['iluminacao'] as String?) ?? '';
-      _paredesCtrl.text = (specs['paredes'] as String?) ?? '';
-      _tetoCtrl.text = (specs['teto'] as String?) ?? '';
-      _testeiraCtrl.text = (specs['testeira'] as String?) ?? '';
-      _pisoElevado = (specs['pisoElevado'] as bool?) ?? false;
-      _alturaElevacaoCtrl.text = (specs['alturaElevacao'] as String?) ?? '';
-      _tipoPisoCtrl.text = (specs['tipoPiso'] as String?) ?? '';
-      _corPisoCtrl.text = (specs['corPiso'] as String?) ?? '';
-      _anotacoesCtrl.text = (specs['anotacoes'] as String?) ?? '';
-      _specsLocked = (specs['locked'] as bool?) ?? false;
-      _editRequested = (specs['editRequested'] as bool?) ?? false;
+      _revestimento = (s['revestimento'] as String?) ?? '';
+      _corRevestimentoCtrl.text = (s['corRevestimento'] as String?) ?? '';
+      _iluminacao = (s['iluminacao'] as String?) ?? '';
+      _paredesCtrl.text = (s['paredes'] as String?) ?? '';
+      _tetoCtrl.text = (s['teto'] as String?) ?? '';
+      _testeiraCtrl.text = (s['testeira'] as String?) ?? '';
+      _pisoElevado = (s['pisoElevado'] as bool?) ?? false;
+      _alturaElevacaoCtrl.text = (s['alturaElevacao'] as String?) ?? '';
+      _tipoPisoCtrl.text = (s['tipoPiso'] as String?) ?? '';
+      _corPisoCtrl.text = (s['corPiso'] as String?) ?? '';
+      _anotacoesCtrl.text = (s['anotacoes'] as String?) ?? '';
+      _specsLocked = (s['locked'] as bool?) ?? false;
+      _editRequested = (s['editRequested'] as bool?) ?? false;
     });
   }
 
