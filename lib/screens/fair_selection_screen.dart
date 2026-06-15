@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../providers/app_provider.dart';
 import '../models/fair.dart';
 import '../services/session_service.dart';
+import '../services/firestore_service.dart';
 import '../utils/admin_pin.dart';
 import '../widgets/app_drawer.dart';
 import 'hangar_list_screen.dart';
@@ -11,6 +12,7 @@ import 'login_screen.dart';
 import 'producer_login_screen.dart';
 import 'settings_screen.dart';
 import 'sticker_generator_screen.dart';
+import 'spec_edit_requests_screen.dart';
 
 class FairSelectionScreen extends StatelessWidget {
   final bool canManage;
@@ -25,7 +27,7 @@ class FairSelectionScreen extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF0F2F5),
-      drawer: const AppDrawer(),
+      drawer: const AppDrawer(showGallery: true),
       appBar: AppBar(
         backgroundColor: const Color(0xFF1E3A5F),
         title: const Text('Selecionar Feira',
@@ -113,6 +115,7 @@ class FairSelectionScreen extends StatelessWidget {
                 style: const TextStyle(fontSize: 12, color: Colors.red),
               ),
             ),
+          if (canManage) const _SpecEditRequestsBanner(),
           Expanded(
             child: fairs.isEmpty
                 ? const _EmptyState()
@@ -364,6 +367,74 @@ class _EmptyState extends StatelessWidget {
           Text('Toque em "Nova Feira" para começar',
               style: TextStyle(color: Colors.grey)),
         ],
+      ),
+    );
+  }
+}
+
+/// Loads pending spec-edit requests from Firestore and shows a tappable
+/// banner when there are any. Hides itself when count == 0.
+class _SpecEditRequestsBanner extends StatefulWidget {
+  const _SpecEditRequestsBanner();
+
+  @override
+  State<_SpecEditRequestsBanner> createState() =>
+      _SpecEditRequestsBannerState();
+}
+
+class _SpecEditRequestsBannerState extends State<_SpecEditRequestsBanner> {
+  int _count = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final list = await FirestoreService.getPendingSpecEditRequests();
+    if (mounted) setState(() => _count = list.length);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_count == 0) return const SizedBox.shrink();
+    return GestureDetector(
+      onTap: () async {
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+              builder: (_) => const SpecEditRequestsScreen()),
+        );
+        _load();
+      },
+      child: Container(
+        color: Colors.orange.shade50,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: Colors.orange.shade100,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(Icons.edit_note,
+                  color: Colors.orange.shade800, size: 18),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                '$_count solicitaç${_count == 1 ? 'ão' : 'ões'} de edição pendente${_count == 1 ? '' : 's'}',
+                style: TextStyle(
+                    color: Colors.orange.shade800,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13),
+              ),
+            ),
+            Icon(Icons.chevron_right, color: Colors.orange.shade600),
+          ],
+        ),
       ),
     );
   }
