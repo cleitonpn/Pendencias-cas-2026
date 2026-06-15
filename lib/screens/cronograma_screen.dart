@@ -47,15 +47,11 @@ class _CronogramaScreenState extends State<CronogramaScreen> {
   bool _showAgenda = false;
   Map<int, Map<String, String>> _eventDates = {};
   bool _loading = true;
-  late AppProvider _provider;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _provider = context.read<AppProvider>();
-      _loadDates();
-    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadDates());
   }
 
   Future<void> _loadDates() async {
@@ -153,7 +149,7 @@ class _CronogramaScreenState extends State<CronogramaScreen> {
       itemCount: fairs.length,
       itemBuilder: (context, index) {
         final fair = fairs[index];
-        final dates = fair.id != null ? (_eventDates[fair.id] ?? {}) : {};
+        final dates = fair.id != null ? (_eventDates[fair.id] ?? <String, String>{}) : <String, String>{};
         return _buildFairCard(fair, dates);
       },
     );
