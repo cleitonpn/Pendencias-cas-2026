@@ -76,7 +76,16 @@ class _ConsultantClientDetailScreenState
   }
 
   Future<void> _loadSpecs() async {
-    final specs = await FirestoreService.getClientSpecs(widget.client.firestoreId);
+    var specs = await FirestoreService.getClientSpecs(widget.client.firestoreId);
+    // Migration: old versions saved specs under the device-local rowId.
+    // If nothing found at the new stable key, try the old key and move the data.
+    if (specs == null && widget.client.firestoreId != widget.client.rowId) {
+      final legacy = await FirestoreService.getClientSpecs(widget.client.rowId);
+      if (legacy != null) {
+        await FirestoreService.saveClientSpecs(widget.client.firestoreId, legacy);
+        specs = legacy;
+      }
+    }
     if (!mounted) return;
     if (specs == null) return;
     setState(() {

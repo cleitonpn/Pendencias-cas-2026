@@ -5,7 +5,10 @@ import '../services/firestore_service.dart';
 /// Handles its own async loading. Shows nothing while loading or when empty.
 class ClientSpecsCard extends StatefulWidget {
   final String clientId;
-  const ClientSpecsCard({super.key, required this.clientId});
+  // Legacy rowId key used before stable firestoreId was introduced.
+  // If set and clientId yields no data, this key is tried as fallback.
+  final String? legacyClientId;
+  const ClientSpecsCard({super.key, required this.clientId, this.legacyClientId});
 
   @override
   State<ClientSpecsCard> createState() => _ClientSpecsCardState();
@@ -22,7 +25,11 @@ class _ClientSpecsCardState extends State<ClientSpecsCard> {
   }
 
   Future<void> _load() async {
-    final specs = await FirestoreService.getClientSpecs(widget.clientId);
+    var specs = await FirestoreService.getClientSpecs(widget.clientId);
+    if (specs == null && widget.legacyClientId != null &&
+        widget.legacyClientId != widget.clientId) {
+      specs = await FirestoreService.getClientSpecs(widget.legacyClientId!);
+    }
     if (mounted) setState(() { _specs = specs; _loaded = true; });
   }
 

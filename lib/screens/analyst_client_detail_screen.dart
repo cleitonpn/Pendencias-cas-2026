@@ -211,7 +211,7 @@ class _AnalystClientDetailScreenState
             ],
 
             // Specs (read-only)
-            ClientSpecsCard(clientId: c.firestoreId),
+            ClientSpecsCard(clientId: c.firestoreId, legacyClientId: c.rowId),
 
             // Analyst notes (editable by analyst)
             AnalystNotesWidget(

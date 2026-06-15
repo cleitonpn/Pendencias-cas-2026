@@ -400,7 +400,7 @@ class _ProducerClientDetailScreenState
                   ],
 
                   // Stand specifications (filled by consultant, read-only)
-                  ClientSpecsCard(clientId: c.firestoreId),
+                  ClientSpecsCard(clientId: c.firestoreId, legacyClientId: c.rowId),
 
                   // Analyst notes (read-only for producer)
                   AnalystNotesWidget(clientId: c.firestoreId, canEdit: false),
