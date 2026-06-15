@@ -67,7 +67,17 @@ class _CronogramaScreenState extends State<CronogramaScreen> {
   @override
   Widget build(BuildContext context) {
     final allFairs = context.watch<AppProvider>().fairs;
-    final fairs = allFairs.where((f) => f.sheetMode != 'mestra').toList();
+    final fairs = allFairs.where((f) => f.sheetMode != 'mestra').toList()
+      ..sort((a, b) {
+        final da = _eventDates[a.id];
+        final db = _eventDates[b.id];
+        final ra = da != null ? parseFairDateRange((da['dataMontagem'] ?? '').trim()) : null;
+        final rb = db != null ? parseFairDateRange((db['dataMontagem'] ?? '').trim()) : null;
+        if (ra == null && rb == null) return 0;
+        if (ra == null) return 1;
+        if (rb == null) return -1;
+        return ra.first.compareTo(rb.first);
+      });
 
     return Scaffold(
       backgroundColor: const Color(0xFFF1F5F9),
