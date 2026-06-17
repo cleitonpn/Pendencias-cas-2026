@@ -27,7 +27,9 @@ class _SplashScreenState extends State<SplashScreen> {
     await Future.delayed(const Duration(milliseconds: 1200));
     if (!mounted) return;
 
-    await context.read<AppProvider>().init();
+    try {
+      await context.read<AppProvider>().init();
+    } catch (_) {}
     if (!mounted) return;
 
     final session = await SessionService.get();

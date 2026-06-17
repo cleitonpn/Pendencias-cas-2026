@@ -27,7 +27,8 @@ class DatabaseService {
         sheet_name TEXT NOT NULL,
         created_at TEXT NOT NULL,
         mode TEXT DEFAULT 'producao',
-        sheet_mode TEXT DEFAULT 'individual'
+        sheet_mode TEXT DEFAULT 'individual',
+        archived INTEGER DEFAULT 0
       )
     ''');
     await db.execute('''
