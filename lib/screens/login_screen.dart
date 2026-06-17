@@ -45,6 +45,11 @@ class _LoginScreenState extends State<LoginScreen> {
   String? _selectedAnalyst;
   bool _loadingAnalysts = true;
 
+  // Admin
+  List<String> _admins = [];
+  String? _selectedAdmin;
+  bool _loadingAdmins = true;
+
   final _pinCtrl = TextEditingController();
   bool _verifying = false;
   String? _error;
@@ -57,6 +62,7 @@ class _LoginScreenState extends State<LoginScreen> {
     _loadManagers();
     _loadLeaders();
     _loadAnalysts();
+    _loadAdmins();
   }
 
   @override
@@ -110,6 +116,15 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  Future<void> _loadAdmins() async {
+    try {
+      final list = await FirestoreService.getAdminUsers();
+      if (mounted) setState(() { _admins = list; _loadingAdmins = false; });
+    } catch (_) {
+      if (mounted) setState(() => _loadingAdmins = false);
+    }
+  }
+
   void _setRole(String role) {
     setState(() {
       _role = role;
@@ -120,6 +135,7 @@ class _LoginScreenState extends State<LoginScreen> {
       if (role != 'manager') _selectedManager = null;
       if (role != 'leader') _selectedLeader = null;
       if (role != 'analyst') _selectedAnalyst = null;
+      if (role != 'admin') _selectedAdmin = null;
     });
   }
 
@@ -145,21 +161,43 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _enterAdmin() async {
+    if (_admins.isNotEmpty && _selectedAdmin == null) {
+      setState(() => _error = 'Selecione seu nome.');
+      return;
+    }
     if (_pinCtrl.text.isEmpty) {
       setState(() => _error = 'Digite o PIN de administrador.');
       return;
     }
-    final adminPin = await getAdminPin();
-    if (_pinCtrl.text != adminPin) {
+
+    bool pinValid = false;
+    String adminName = _selectedAdmin ?? 'Admin';
+
+    if (_admins.isNotEmpty && _selectedAdmin != null) {
+      final savedPin = await FirestoreService.getAdminUserPin(_selectedAdmin!);
+      if (savedPin != null) {
+        pinValid = _pinCtrl.text == savedPin;
+      } else {
+        // Fallback to SharedPreferences PIN if no Firestore PIN found
+        final adminPin = await getAdminPin();
+        pinValid = _pinCtrl.text == adminPin;
+      }
+    } else {
+      // No admins in Firestore — use SharedPreferences PIN
+      final adminPin = await getAdminPin();
+      pinValid = _pinCtrl.text == adminPin;
+    }
+
+    if (!pinValid) {
       setState(() => _error = 'PIN incorreto.');
       _pinCtrl.clear();
       return;
     }
     if (!mounted) return;
     await NotificationService.subscribeAdmin();
-    await SessionService.save(role: 'admin');
+    await SessionService.save(role: 'admin', name: adminName);
     await FirestoreService.updatePresence(
-      name: 'Admin',
+      name: adminName,
       role: 'admin',
       team: '',
       online: true,
@@ -739,6 +777,59 @@ class _LoginScreenState extends State<LoginScreen> {
                                   );
                                 }).toList(),
                               ),
+                    const SizedBox(height: 16),
+                  ],
+
+                  // Admin name pills
+                  if (_role == 'admin' && !_loadingAdmins && _admins.isNotEmpty) ...[
+                    const Text('SEU NOME',
+                        style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.grey,
+                            letterSpacing: 1)),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: _admins.map((p) {
+                        final sel = _selectedAdmin == p;
+                        return GestureDetector(
+                          onTap: () => setState(() {
+                            _selectedAdmin = p;
+                            _error = null;
+                          }),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 150),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: sel ? const Color(0xFF1E3A5F) : Colors.white,
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: sel
+                                    ? const Color(0xFF1E3A5F)
+                                    : Colors.grey.shade300,
+                              ),
+                            ),
+                            child: Text(p,
+                                style: TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    color: sel ? Colors.white : Colors.black87,
+                                    fontSize: 13)),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                  if (_role == 'admin' && _loadingAdmins) ...[
+                    const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(8),
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    ),
                     const SizedBox(height: 16),
                   ],
 

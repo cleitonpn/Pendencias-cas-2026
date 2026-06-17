@@ -154,7 +154,7 @@ exports.onNewClientBroadcast = onDocumentCreated(
       await sendToTopics(["new_clients"], title, body);
     });
 
-// New aviso published by admin → notifies selected target groups via FCM.
+// New aviso published by admin → notifies selected target groups or users via FCM.
 exports.onAvisoCreated = onDocumentCreated(
     "avisos/{docId}", async (event) => {
       const data = event.data && event.data.data();
@@ -162,20 +162,40 @@ exports.onAvisoCreated = onDocumentCreated(
 
       const title = data.title || "Aviso";
       const body = data.body || "";
-      const groups = Array.isArray(data.targetGroups) && data.targetGroups.length > 0
-          ? data.targetGroups
-          : ["todos"];
 
-      const groupToTopic = {
-        todos: "new_clients",
-        produtores: "group_produtores",
-        consultores: "group_consultores",
-        lideres: "group_lideres",
-        analistas: "group_analistas",
-        admins: "admins",
-      };
+      const targetType = data.targetType || "groups";
+      let topics = [];
 
-      const topics = [...new Set(groups.map((g) => groupToTopic[g]).filter(Boolean))];
+      if (targetType === "users" && Array.isArray(data.targetUsers) && data.targetUsers.length > 0) {
+        // Send to each user's individual FCM topic
+        for (const user of data.targetUsers) {
+          const name = user.name || "";
+          const role = user.role || "";
+          const team = user.team || "";
+          if (!name || !role) continue;
+          if (role === "producer") topics.push(sanitize("producer", name));
+          else if (role === "consultant") topics.push(sanitize("consultant", name));
+          else if (role === "analyst") topics.push(sanitize("analyst", name));
+          else if (role === "leader") topics.push(sanitize("team", team || name));
+          else if (role === "admin" || role === "manager") topics.push("admins");
+        }
+      } else {
+        // existing group logic
+        const groupToTopic = {
+          todos: "new_clients",
+          produtores: "group_produtores",
+          consultores: "group_consultores",
+          lideres: "group_lideres",
+          analistas: "group_analistas",
+          admins: "admins",
+        };
+        const groups = Array.isArray(data.targetGroups) && data.targetGroups.length > 0
+            ? data.targetGroups
+            : ["todos"];
+        topics = [...new Set(groups.map((g) => groupToTopic[g]).filter(Boolean))];
+      }
+
+      topics = [...new Set(topics)];
       if (topics.length === 0) return;
 
       const notifTitle = `⚠️ ${title}`;

@@ -9,6 +9,7 @@ class Fair {
   final String mode;
   // 'individual' | 'mestra' | 'mestra_child'
   final String sheetMode;
+  final bool archived;
 
   const Fair({
     this.id,
@@ -18,6 +19,7 @@ class Fair {
     required this.createdAt,
     this.mode = 'producao',
     this.sheetMode = 'individual',
+    this.archived = false,
   });
 
   bool get isMaintenance => mode == 'manutencao';
@@ -27,7 +29,7 @@ class Fair {
   bool get isMestra => sheetMode == 'mestra';
   bool get isMestraChild => sheetMode == 'mestra_child';
 
-  Fair copyWith({String? mode, String? sheetMode}) => Fair(
+  Fair copyWith({String? mode, String? sheetMode, bool? archived}) => Fair(
         id: id,
         name: name,
         spreadsheetId: spreadsheetId,
@@ -35,6 +37,7 @@ class Fair {
         createdAt: createdAt,
         mode: mode ?? this.mode,
         sheetMode: sheetMode ?? this.sheetMode,
+        archived: archived ?? this.archived,
       );
 
   Map<String, dynamic> toMap() => {
@@ -45,6 +48,7 @@ class Fair {
     'created_at': createdAt.toIso8601String(),
     'mode': mode,
     'sheet_mode': sheetMode,
+    'archived': archived ? 1 : 0,
   };
 
   factory Fair.fromMap(Map<String, dynamic> map) => Fair(
@@ -57,5 +61,6 @@ class Fair {
     sheetMode: ((map['sheet_mode'] as String?) ?? '').isNotEmpty
         ? map['sheet_mode'] as String
         : 'individual',
+    archived: (map['archived'] as int? ?? 0) == 1,
   );
 }

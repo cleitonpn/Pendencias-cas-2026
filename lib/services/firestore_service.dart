@@ -364,6 +364,18 @@ class FirestoreService {
     } catch (_) {}
   }
 
+  static Future<void> archiveFairInCloud(int id, bool archived) async {
+    try {
+      final snap = await _db.collection('fairs').where('id', isEqualTo: id).limit(1).get();
+      if (snap.docs.isNotEmpty) {
+        await snap.docs.first.reference.update({'archived': archived});
+      } else {
+        // Also try by doc id directly
+        await _db.collection('fairs').doc(id.toString()).set({'archived': archived}, SetOptions(merge: true));
+      }
+    } catch (_) {}
+  }
+
   // ─── Client Specs ────────────────────────────────────────────────────────────
 
   static Future<Map<String, dynamic>?> getClientSpecs(String clientId) async {
@@ -568,6 +580,37 @@ class FirestoreService {
     }).catchError((_) {});
   }
 
+  // ─── Admin Users ──────────────────────────────────────────────────────────
+
+  static Future<List<String>> getAdminUsers() async {
+    try {
+      final snap = await _db.collection('admin_users').orderBy('name').get();
+      return snap.docs.map((d) => (d.data()['name'] as String?) ?? '').where((s) => s.isNotEmpty).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  static Future<String?> getAdminUserPin(String name) async {
+    try {
+      final snap = await _db.collection('admin_users').where('name', isEqualTo: name).limit(1).get();
+      if (snap.docs.isEmpty) return null;
+      return snap.docs.first.data()['pin'] as String?;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<void> saveAdminUser(String name, String pin) async {
+    final key = name.toLowerCase().trim().replaceAll(' ', '_').replaceAll(RegExp(r'[^a-z0-9_]'), '');
+    await _db.collection('admin_users').doc(key).set({'name': name, 'pin': pin});
+  }
+
+  static Future<void> deleteAdminUser(String name) async {
+    final key = name.toLowerCase().trim().replaceAll(' ', '_').replaceAll(RegExp(r'[^a-z0-9_]'), '');
+    await _db.collection('admin_users').doc(key).delete();
+  }
+
   // ─── Avisos ───────────────────────────────────────────────────────────────
 
   static Future<void> writeAviso({
@@ -575,14 +618,22 @@ class FirestoreService {
     required String body,
     required String createdBy,
     required List<String> targetGroups,
+    String targetType = 'groups',
+    List<Map<String, dynamic>> targetUsers = const [],
   }) async {
     await _db.collection('avisos').add({
       'title': title,
       'body': body,
       'createdBy': createdBy,
       'targetGroups': targetGroups,
+      'targetType': targetType,
+      'targetUsers': targetUsers,
       'createdAt': DateTime.now().toIso8601String(),
     });
+  }
+
+  static Future<void> deleteAviso(String docId) async {
+    await _db.collection('avisos').doc(docId).delete();
   }
 
   static Stream<List<Map<String, dynamic>>> streamAvisos() {

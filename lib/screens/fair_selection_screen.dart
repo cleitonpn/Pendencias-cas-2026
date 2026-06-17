@@ -13,6 +13,7 @@ import 'producer_login_screen.dart';
 import 'settings_screen.dart';
 import 'sticker_generator_screen.dart';
 import 'spec_edit_requests_screen.dart';
+import 'archived_fairs_screen.dart';
 
 class FairSelectionScreen extends StatelessWidget {
   final bool canManage;
@@ -41,6 +42,12 @@ class FairSelectionScreen extends StatelessWidget {
               onPressed: () => Navigator.push(context,
                   MaterialPageRoute(
                       builder: (_) => const ProducerLoginScreen())),
+            ),
+            IconButton(
+              icon: const Icon(Icons.archive_outlined, color: Colors.white),
+              tooltip: 'Feiras Arquivadas',
+              onPressed: () => Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => const ArchivedFairsScreen())),
             ),
             IconButton(
               icon: const Icon(Icons.settings_outlined, color: Colors.white),
@@ -227,11 +234,17 @@ class _FairCard extends StatelessWidget {
                             builder: (_) =>
                                 StickerGeneratorScreen(fair: fair))),
                   ),
-                  if (canManage)
+                  if (canManage) ...[
+                    IconButton(
+                      icon: const Icon(Icons.archive_outlined, color: Colors.blueGrey),
+                      tooltip: 'Arquivar feira',
+                      onPressed: () => _confirmArchive(context),
+                    ),
                     IconButton(
                       icon: const Icon(Icons.delete_outline, color: Colors.red),
                       onPressed: () => _confirmDelete(context),
                     ),
+                  ],
                   const Icon(Icons.chevron_right, color: Colors.grey),
                 ],
               ),
@@ -244,6 +257,31 @@ class _FairCard extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _confirmArchive(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Arquivar feira?'),
+        content: Text(
+            '"${fair.name}" será ocultada da lista principal. Você pode restaurá-la depois.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancelar')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blueGrey, foregroundColor: Colors.white),
+            child: const Text('Arquivar'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && context.mounted) {
+      await context.read<AppProvider>().archiveFair(fair);
+    }
   }
 
   Future<void> _confirmDelete(BuildContext context) async {

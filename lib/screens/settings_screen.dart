@@ -40,6 +40,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   List<String> _analystNames = [];
   Map<String, String?> _analystPins = {};
 
+  // Admins
+  List<String> _adminUsers = [];
+  Map<String, String?> _adminPins = {};
+
   static const _availableTeams = [
     'Elétrica',
     'Marcenaria',
@@ -113,6 +117,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
       analystPins[name] = await FirestoreService.getAnalystPin(name);
     }
 
+    final adminList = await FirestoreService.getAdminUsers();
+    final adminPins = <String, String?>{};
+    for (final name in adminList) {
+      adminPins[name] = await FirestoreService.getAdminUserPin(name);
+    }
+
     if (mounted) {
       setState(() {
         _producers = allProducers;
@@ -128,6 +138,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _managerPins = mgrPins;
         _analystNames = analystList;
         _analystPins = analystPins;
+        _adminUsers = adminList;
+        _adminPins = adminPins;
       });
     }
   }
@@ -743,6 +755,129 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
     if (confirmed != true) return;
     await FirestoreService.deleteAnalystPin(name);
+    await _loadPins();
+  }
+
+  Future<void> _addAdminUser() async {
+    final nameCtrl = TextEditingController();
+    final pinCtrl = TextEditingController();
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        title: const Text('Adicionar Administrador'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameCtrl,
+              autofocus: true,
+              textCapitalization: TextCapitalization.words,
+              decoration: const InputDecoration(
+                labelText: 'Nome do administrador',
+                prefixIcon: Icon(Icons.person_outline),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: pinCtrl,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              maxLength: 6,
+              decoration: const InputDecoration(
+                hintText: 'PIN (4–6 dígitos)',
+                prefixIcon: Icon(Icons.lock_outline),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancelar')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1E3A5F),
+                foregroundColor: Colors.white),
+            child: const Text('Adicionar'),
+          ),
+        ],
+      ),
+    );
+
+    if (result != true) return;
+    final name = nameCtrl.text.trim();
+    if (name.isEmpty) return;
+    await FirestoreService.saveAdminUser(name, pinCtrl.text);
+    await _loadPins();
+  }
+
+  Future<void> _deleteAdminUser(String name) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        title: const Text('Remover Administrador'),
+        content: Text('Remover "$name" da lista de administradores?'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancelar')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white),
+            child: const Text('Remover'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await FirestoreService.deleteAdminUser(name);
+    await _loadPins();
+  }
+
+  Future<void> _editAdminUserPin(String name) async {
+    final currentPin = _adminPins[name];
+    final ctrl = TextEditingController(text: currentPin ?? '');
+
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        title: Text('PIN — $name'),
+        content: TextField(
+          controller: ctrl,
+          keyboardType: TextInputType.number,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          maxLength: 6,
+          autofocus: true,
+          decoration: const InputDecoration(
+            hintText: 'Digite o PIN (4–6 dígitos)',
+            prefixIcon: Icon(Icons.lock_outline),
+          ),
+          onSubmitted: (_) => Navigator.pop(ctx, ctrl.text),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancelar')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, ctrl.text),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1E3A5F),
+                foregroundColor: Colors.white),
+            child: const Text('Salvar'),
+          ),
+        ],
+      ),
+    );
+
+    if (result == null) return;
+    await FirestoreService.saveAdminUser(name, result);
     await _loadPins();
   }
 
@@ -1459,7 +1594,99 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
             const SizedBox(height: 24),
 
-            // Admin PIN management
+            // Admin Users
+            const Text('ADMINISTRADORES',
+                style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey,
+                    letterSpacing: 1)),
+            const SizedBox(height: 4),
+            const Text(
+                'Cada administrador tem seu próprio nome e PIN para login.',
+                style: TextStyle(fontSize: 12, color: Colors.grey)),
+            const SizedBox(height: 10),
+            if (_adminUsers.isEmpty)
+              Card(
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+                child: const Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Text(
+                      'Nenhum administrador individual cadastrado. Use o botão abaixo para adicionar.',
+                      style: TextStyle(color: Colors.grey)),
+                ),
+              )
+            else
+              Card(
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+                child: Column(
+                  children: _adminUsers.asMap().entries.map((entry) {
+                    final i = entry.key;
+                    final name = entry.value;
+                    final pin = _adminPins[name];
+                    final hasPin = pin != null && pin.isNotEmpty;
+                    return Column(
+                      children: [
+                        if (i > 0) const Divider(height: 1, indent: 16),
+                        ListTile(
+                          leading: CircleAvatar(
+                            backgroundColor: const Color(0xFF1E3A5F).withOpacity(0.15),
+                            child: const Icon(Icons.admin_panel_settings,
+                                color: Color(0xFF1E3A5F), size: 20),
+                          ),
+                          title: Text(name,
+                              style: const TextStyle(fontWeight: FontWeight.w600)),
+                          subtitle: Text(
+                            hasPin ? 'PIN configurado' : 'Sem PIN',
+                            style: TextStyle(
+                                fontSize: 12,
+                                color: hasPin ? Colors.green : Colors.grey),
+                          ),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              TextButton(
+                                onPressed: () => _editAdminUserPin(name),
+                                child: Text(hasPin ? 'Alterar' : 'Definir PIN',
+                                    style: const TextStyle(
+                                        color: Color(0xFF1E3A5F))),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.delete_outline,
+                                    color: Colors.red, size: 20),
+                                tooltip: 'Remover',
+                                onPressed: () => _deleteAdminUser(name),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    );
+                  }).toList(),
+                ),
+              ),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _addAdminUser,
+                icon: const Icon(Icons.person_add_outlined),
+                label: const Text('Adicionar Administrador'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF1E3A5F),
+                  side: const BorderSide(color: Color(0xFF1E3A5F)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 24),
+
+            // Admin PIN management (legacy shared PIN)
             const Text('ADMINISTRADOR',
                 style: TextStyle(
                     fontSize: 11,

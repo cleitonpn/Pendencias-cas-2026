@@ -29,6 +29,12 @@ class _CircularComposeScreenState extends State<CircularComposeScreen> {
 
   final Set<String> _selected = {'todos'};
 
+  // User targeting
+  String _targetType = 'groups'; // 'groups' | 'users'
+  List<Map<String, dynamic>> _allUsers = [];
+  final Set<String> _selectedUserKeys = {};
+  bool _loadingUsers = false;
+
   @override
   void initState() {
     super.initState();
@@ -61,6 +67,13 @@ class _CircularComposeScreenState extends State<CircularComposeScreen> {
     });
   }
 
+  Future<void> _loadUsers() async {
+    setState(() => _loadingUsers = true);
+    final stream = FirestoreService.streamPresence();
+    final users = await stream.first;
+    if (mounted) setState(() { _allUsers = users; _loadingUsers = false; });
+  }
+
   Future<void> _send() async {
     final title = _titleCtrl.text.trim();
     final body = _bodyCtrl.text.trim();
@@ -72,12 +85,33 @@ class _CircularComposeScreenState extends State<CircularComposeScreen> {
     }
     setState(() => _sending = true);
     try {
-      await FirestoreService.writeAviso(
-        title: title,
-        body: body,
-        createdBy: _authorName,
-        targetGroups: _selected.toList(),
-      );
+      if (_targetType == 'users') {
+        final users = _allUsers
+            .where((u) => _selectedUserKeys.contains('${u['role']}_${u['name']}'))
+            .map((u) => {
+                  'name': u['name'] as String,
+                  'role': u['role'] as String,
+                  'team': (u['team'] as String?) ?? '',
+                })
+            .toList();
+        await FirestoreService.writeAviso(
+          title: title,
+          body: body,
+          createdBy: _authorName,
+          targetGroups: [],
+          targetType: 'users',
+          targetUsers: users,
+        );
+      } else {
+        await FirestoreService.writeAviso(
+          title: title,
+          body: body,
+          createdBy: _authorName,
+          targetGroups: _selected.toList(),
+          targetType: 'groups',
+          targetUsers: [],
+        );
+      }
       if (mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -189,26 +223,102 @@ class _CircularComposeScreenState extends State<CircularComposeScreen> {
                     color: _navy,
                     fontSize: 13)),
             const SizedBox(height: 8),
-            Card(
-              margin: EdgeInsets.zero,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
-              child: Column(
-                children: _allGroups.map((entry) {
-                  final key = entry.$1;
-                  final label = entry.$2;
-                  final isSelected = _selected.contains(key);
-                  return CheckboxListTile(
-                    dense: true,
-                    title: Text(label,
-                        style: const TextStyle(fontSize: 14)),
-                    value: isSelected,
-                    activeColor: _navy,
-                    onChanged: (_) => _toggleGroup(key),
-                  );
-                }).toList(),
-              ),
+            Row(
+              children: [
+                ChoiceChip(
+                  label: const Text('Por grupo'),
+                  selected: _targetType == 'groups',
+                  selectedColor: _navy,
+                  labelStyle: TextStyle(
+                    color: _targetType == 'groups' ? Colors.white : Colors.black87,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  onSelected: (_) => setState(() => _targetType = 'groups'),
+                ),
+                const SizedBox(width: 8),
+                ChoiceChip(
+                  label: const Text('Por usuário'),
+                  selected: _targetType == 'users',
+                  selectedColor: _navy,
+                  labelStyle: TextStyle(
+                    color: _targetType == 'users' ? Colors.white : Colors.black87,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  onSelected: (_) {
+                    setState(() => _targetType = 'users');
+                    if (_allUsers.isEmpty) _loadUsers();
+                  },
+                ),
+              ],
             ),
+            const SizedBox(height: 8),
+            if (_targetType == 'groups')
+              Card(
+                margin: EdgeInsets.zero,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+                child: Column(
+                  children: _allGroups.map((entry) {
+                    final key = entry.$1;
+                    final label = entry.$2;
+                    final isSelected = _selected.contains(key);
+                    return CheckboxListTile(
+                      dense: true,
+                      title: Text(label,
+                          style: const TextStyle(fontSize: 14)),
+                      value: isSelected,
+                      activeColor: _navy,
+                      onChanged: (_) => _toggleGroup(key),
+                    );
+                  }).toList(),
+                ),
+              )
+            else if (_loadingUsers)
+              const Center(child: Padding(
+                padding: EdgeInsets.all(16),
+                child: CircularProgressIndicator(),
+              ))
+            else if (_allUsers.isEmpty)
+              Card(
+                margin: EdgeInsets.zero,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+                child: const Padding(
+                  padding: EdgeInsets.all(14),
+                  child: Text('Nenhum usuário online encontrado.',
+                      style: TextStyle(color: Colors.grey)),
+                ),
+              )
+            else
+              Card(
+                margin: EdgeInsets.zero,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+                child: Column(
+                  children: _allUsers.map((u) {
+                    final name = (u['name'] as String?) ?? '';
+                    final role = (u['role'] as String?) ?? '';
+                    final key = '${role}_$name';
+                    final isSelected = _selectedUserKeys.contains(key);
+                    return CheckboxListTile(
+                      dense: true,
+                      title: Text(name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                      subtitle: Text(role, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                      value: isSelected,
+                      activeColor: _navy,
+                      onChanged: (_) {
+                        setState(() {
+                          if (isSelected) {
+                            _selectedUserKeys.remove(key);
+                          } else {
+                            _selectedUserKeys.add(key);
+                          }
+                        });
+                      },
+                    );
+                  }).toList(),
+                ),
+              ),
             const SizedBox(height: 28),
             SizedBox(
               width: double.infinity,

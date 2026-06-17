@@ -15,7 +15,7 @@ class DatabaseService {
 
   static Future<Database> _initDb() async {
     final path = join(await getDatabasesPath(), 'cas2026.db');
-    return openDatabase(path, version: 17, onCreate: _onCreate, onUpgrade: _onUpgrade);
+    return openDatabase(path, version: 18, onCreate: _onCreate, onUpgrade: _onUpgrade);
   }
 
   static Future<void> _onCreate(Database db, int version) async {
@@ -229,6 +229,11 @@ class DatabaseService {
         await db.execute("ALTER TABLE clients ADD COLUMN firestore_id TEXT DEFAULT ''");
       } catch (_) {}
     }
+    if (oldV < 18) {
+      try {
+        await db.execute("ALTER TABLE fairs ADD COLUMN archived INTEGER DEFAULT 0");
+      } catch (_) {}
+    }
   }
 
   /// SQL fragment: items hidden from producer/leader because they are organizer
@@ -240,7 +245,27 @@ class DatabaseService {
 
   static Future<List<Fair>> getFairs() async {
     final database = await db;
-    final maps = await database.query('fairs', orderBy: 'id');
+    final maps = await database.query('fairs',
+        where: '(archived IS NULL OR archived = 0)',
+        orderBy: 'id');
+    return maps.map(Fair.fromMap).toList();
+  }
+
+  static Future<void> archiveFair(int id) async {
+    final database = await db;
+    await database.update('fairs', {'archived': 1}, where: 'id = ?', whereArgs: [id]);
+  }
+
+  static Future<void> restoreFair(int id) async {
+    final database = await db;
+    await database.update('fairs', {'archived': 0}, where: 'id = ?', whereArgs: [id]);
+  }
+
+  static Future<List<Fair>> getArchivedFairs() async {
+    final database = await db;
+    final maps = await database.query('fairs',
+        where: 'archived = 1',
+        orderBy: 'id');
     return maps.map(Fair.fromMap).toList();
   }
 

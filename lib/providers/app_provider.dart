@@ -650,4 +650,25 @@ class AppProvider extends ChangeNotifier {
     _fairs = await DatabaseService.getFairs();
     notifyListeners();
   }
+
+  Future<void> archiveFair(Fair fair) async {
+    if (fair.id == null) return;
+    await DatabaseService.archiveFair(fair.id!);
+    await FirestoreService.archiveFairInCloud(fair.id!, true);
+    if (_currentFair?.id == fair.id) {
+      _currentFair = null;
+      _clients = [];
+      _hangars = [];
+    }
+    _fairs = await DatabaseService.getFairs();
+    notifyListeners();
+  }
+
+  Future<void> restoreFair(Fair fair) async {
+    if (fair.id == null) return;
+    await DatabaseService.restoreFair(fair.id!);
+    await FirestoreService.archiveFairInCloud(fair.id!, false);
+    _fairs = await DatabaseService.getFairs();
+    notifyListeners();
+  }
 }

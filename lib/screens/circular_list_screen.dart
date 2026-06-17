@@ -13,6 +13,7 @@ class CircularListScreen extends StatefulWidget {
 class _CircularListScreenState extends State<CircularListScreen> {
   static const _navy = Color(0xFF1E3A5F);
   bool _canCompose = false;
+  String? _userRole;
 
   @override
   void initState() {
@@ -24,7 +25,10 @@ class _CircularListScreenState extends State<CircularListScreen> {
     final session = await SessionService.get();
     if (!mounted) return;
     final role = session?['role'] ?? '';
-    setState(() => _canCompose = role == 'admin' || role == 'manager');
+    setState(() {
+      _userRole = role;
+      _canCompose = role == 'admin' || role == 'manager' || role == 'analyst';
+    });
   }
 
   String _formatDate(String? iso) {
@@ -35,6 +39,30 @@ class _CircularListScreenState extends State<CircularListScreen> {
     } catch (_) {
       return iso;
     }
+  }
+
+  Future<void> _confirmDelete(BuildContext context, String docId, String title) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Excluir aviso?'),
+        content: const Text('Esta ação não pode ser desfeita.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red, foregroundColor: Colors.white),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Excluir'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    await FirestoreService.deleteAviso(docId);
   }
 
   String _groupLabel(String g) {
@@ -101,14 +129,23 @@ class _CircularListScreenState extends State<CircularListScreen> {
             itemCount: avisos.length,
             itemBuilder: (context, i) {
               final c = avisos[i];
+              final docId = (c['id'] as String?) ?? '';
               final title = (c['title'] as String?) ?? '';
               final body = (c['body'] as String?) ?? '';
               final createdBy = (c['createdBy'] as String?) ?? '';
               final createdAt = _formatDate(c['createdAt'] as String?);
-              final groups = (c['targetGroups'] as List?)
-                      ?.map((g) => _groupLabel(g.toString()))
-                      .toList() ??
-                  ['Todos'];
+              final targetType = (c['targetType'] as String?) ?? 'groups';
+              final List<String> chips;
+              if (targetType == 'users') {
+                final users = (c['targetUsers'] as List?) ?? [];
+                chips = users.map((u) => (u['name'] as String?) ?? '').where((s) => s.isNotEmpty).toList();
+                if (chips.isEmpty) chips.add('Usuários específicos');
+              } else {
+                chips = (c['targetGroups'] as List?)
+                        ?.map((g) => _groupLabel(g.toString()))
+                        .toList() ??
+                    ['Todos'];
+              }
               return Card(
                 margin: const EdgeInsets.only(bottom: 12),
                 elevation: 2,
@@ -135,6 +172,14 @@ class _CircularListScreenState extends State<CircularListScreen> {
                               ),
                             ),
                           ),
+                          if (_canCompose && docId.isNotEmpty)
+                            IconButton(
+                              icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
+                              tooltip: 'Excluir aviso',
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
+                              onPressed: () => _confirmDelete(context, docId, title),
+                            ),
                         ],
                       ),
                       if (body.isNotEmpty) ...[
@@ -146,7 +191,7 @@ class _CircularListScreenState extends State<CircularListScreen> {
                       const SizedBox(height: 10),
                       Wrap(
                         spacing: 6,
-                        children: groups
+                        children: chips
                             .map((g) => Chip(
                                   label: Text(g,
                                       style: const TextStyle(
