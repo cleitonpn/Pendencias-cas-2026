@@ -78,6 +78,9 @@ class FairSelectionScreen extends StatelessWidget {
             icon: const Icon(Icons.logout, color: Colors.white),
             tooltip: 'Sair',
             onPressed: () async {
+              final s = await SessionService.get();
+              await FirestoreService.clearPresence(
+                  s?['name'] ?? '', s?['role'] ?? '');
               await SessionService.clear();
               if (context.mounted) {
                 Navigator.of(context).pushAndRemoveUntil(

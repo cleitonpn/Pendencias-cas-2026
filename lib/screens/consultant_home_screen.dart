@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../models/fair.dart';
 import '../providers/app_provider.dart';
 import '../services/database_service.dart';
+import '../services/firestore_service.dart';
 import '../services/session_service.dart';
 import '../widgets/app_drawer.dart';
 import 'login_screen.dart';
@@ -90,6 +91,9 @@ class _ConsultantHomeScreenState extends State<ConsultantHomeScreen> {
             icon: const Icon(Icons.logout, color: Colors.white),
             tooltip: 'Sair',
             onPressed: () async {
+              final s = await SessionService.get();
+              await FirestoreService.clearPresence(
+                  s?['name'] ?? '', s?['role'] ?? '');
               await SessionService.clear();
               if (context.mounted) {
                 Navigator.of(context).pushAndRemoveUntil(

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../models/fair.dart';
 import '../providers/app_provider.dart';
 import '../services/database_service.dart';
+import '../services/firestore_service.dart';
 import '../services/notification_service.dart';
 import '../services/session_service.dart';
 import '../widgets/app_drawer.dart';
@@ -98,6 +99,9 @@ class _ProducerHomeScreenState extends State<ProducerHomeScreen> {
               try {
                 await NotificationService.syncMontageReminder([]);
               } catch (_) {}
+              final s = await SessionService.get();
+              await FirestoreService.clearPresence(
+                  s?['name'] ?? '', s?['role'] ?? '');
               await SessionService.clear();
               if (context.mounted) {
                 Navigator.of(context).pushAndRemoveUntil(
