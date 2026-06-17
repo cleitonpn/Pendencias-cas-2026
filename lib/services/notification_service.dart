@@ -136,19 +136,20 @@ class NotificationService {
 
   // ── FCM topic subscriptions ────────────────────────────────────────────────
 
-  static Future<void> subscribeAdmin() => _subscribe(['admins', 'new_clients']);
+  static Future<void> subscribeAdmin() =>
+      _subscribe(['admins', 'new_clients', 'group_admins']);
 
   static Future<void> subscribeProducer(String producerName) =>
-      _subscribe([fcmTopic('producer', producerName), 'new_clients']);
+      _subscribe([fcmTopic('producer', producerName), 'new_clients', 'group_produtores']);
 
   static Future<void> subscribeConsultant(String consultantName) =>
-      _subscribe([fcmTopic('consultant', consultantName), 'new_clients']);
+      _subscribe([fcmTopic('consultant', consultantName), 'new_clients', 'group_consultores']);
 
   static Future<void> subscribeTeam(String team) =>
-      _subscribe([fcmTopic('team', team), 'new_clients']);
+      _subscribe([fcmTopic('team', team), 'new_clients', 'group_lideres']);
 
   static Future<void> subscribeAnalyst(String analystName) =>
-      _subscribe([fcmTopic('analyst', analystName), 'new_clients']);
+      _subscribe([fcmTopic('analyst', analystName), 'new_clients', 'group_analistas']);
 
   static Future<void> _subscribe(List<String> topics) async {
     if (!_supported) return;

@@ -122,7 +122,7 @@ class AppProvider extends ChangeNotifier {
   void _startCircularStream() {
     _circularSubscription?.cancel();
     _circularInitialized = false;
-    _circularSubscription = FirestoreService.streamCirculares().listen((list) {
+    _circularSubscription = FirestoreService.streamAvisos().listen((list) {
       if (!_circularInitialized) {
         _circularInitialized = true;
         _lastCircularId = list.isNotEmpty ? list.first['id'] as String? : null;
@@ -133,7 +133,7 @@ class AppProvider extends ChangeNotifier {
       final newId = latest['id'] as String?;
       if (newId == _lastCircularId) return;
       _lastCircularId = newId;
-      final title = (latest['title'] as String?) ?? 'Circular';
+      final title = (latest['title'] as String?) ?? 'Aviso';
       final body = (latest['body'] as String?) ?? '';
       NotificationService.messengerKey.currentState?.showSnackBar(SnackBar(
         duration: const Duration(seconds: 8),

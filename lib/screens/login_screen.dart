@@ -158,6 +158,12 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!mounted) return;
     await NotificationService.subscribeAdmin();
     await SessionService.save(role: 'admin');
+    await FirestoreService.updatePresence(
+      name: 'Admin',
+      role: 'admin',
+      team: '',
+      online: true,
+    );
     if (!mounted) return;
     Navigator.pushReplacement(context,
         MaterialPageRoute(builder: (_) => const FairSelectionScreen()));
@@ -186,6 +192,12 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!mounted) return;
     await NotificationService.subscribeProducer(_selectedProducer!);
     await SessionService.save(role: 'producer', name: _selectedProducer!);
+    await FirestoreService.updatePresence(
+      name: _selectedProducer!,
+      role: 'producer',
+      team: '',
+      online: true,
+    );
     if (!mounted) return;
     Navigator.pushReplacement(context,
         MaterialPageRoute(
@@ -215,6 +227,12 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!mounted) return;
     await NotificationService.subscribeConsultant(_selectedConsultant!);
     await SessionService.save(role: 'consultant', name: _selectedConsultant!);
+    await FirestoreService.updatePresence(
+      name: _selectedConsultant!,
+      role: 'consultant',
+      team: '',
+      online: true,
+    );
     if (!mounted) return;
     Navigator.pushReplacement(context,
         MaterialPageRoute(
@@ -245,6 +263,12 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!mounted) return;
     await NotificationService.subscribeAdmin();
     await SessionService.save(role: 'manager', name: _selectedManager!);
+    await FirestoreService.updatePresence(
+      name: _selectedManager!,
+      role: 'manager',
+      team: '',
+      online: true,
+    );
     if (!mounted) return;
     Navigator.pushReplacement(context,
         MaterialPageRoute(
@@ -274,6 +298,12 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!mounted) return;
     await NotificationService.subscribeAnalyst(_selectedAnalyst!);
     await SessionService.save(role: 'analyst', name: _selectedAnalyst!);
+    await FirestoreService.updatePresence(
+      name: _selectedAnalyst!,
+      role: 'analyst',
+      team: '',
+      online: true,
+    );
     if (!mounted) return;
     Navigator.pushReplacement(context,
         MaterialPageRoute(
@@ -308,6 +338,12 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!mounted) return;
     await SessionService.save(
         role: 'leader', name: _selectedLeader!, team: team ?? '');
+    await FirestoreService.updatePresence(
+      name: _selectedLeader!,
+      role: 'leader',
+      team: team ?? '',
+      online: true,
+    );
     if (!mounted) return;
     Navigator.pushReplacement(context,
         MaterialPageRoute(

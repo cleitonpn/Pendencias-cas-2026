@@ -154,22 +154,36 @@ exports.onNewClientBroadcast = onDocumentCreated(
       await sendToTopics(["new_clients"], title, body);
     });
 
-// New circular published by admin → notifies all users subscribed to `new_clients`.
-exports.onCircularCreated = onDocumentCreated(
-    "circulares/{docId}", async (event) => {
+// New aviso published by admin → notifies selected target groups via FCM.
+exports.onAvisoCreated = onDocumentCreated(
+    "avisos/{docId}", async (event) => {
       const data = event.data && event.data.data();
       if (!data) return;
 
-      const title = data.title || "Circular";
+      const title = data.title || "Aviso";
       const body = data.body || "";
-      const author = data.createdBy || "";
+      const groups = Array.isArray(data.targetGroups) && data.targetGroups.length > 0
+          ? data.targetGroups
+          : ["todos"];
 
-      const notifTitle = `📢 ${title}`;
+      const groupToTopic = {
+        todos: "new_clients",
+        produtores: "group_produtores",
+        consultores: "group_consultores",
+        lideres: "group_lideres",
+        analistas: "group_analistas",
+        admins: "admins",
+      };
+
+      const topics = [...new Set(groups.map((g) => groupToTopic[g]).filter(Boolean))];
+      if (topics.length === 0) return;
+
+      const notifTitle = `⚠️ ${title}`;
       const notifBody = body.length > 200
           ? body.substring(0, 197) + "..."
-          : (body || (author ? `Por ${author}` : "Nova mensagem da coordenação."));
+          : (body || "Nova mensagem da coordenação.");
 
-      await sendToTopics(["new_clients"], notifTitle, notifBody);
+      await sendToTopics(topics, notifTitle, notifBody);
     });
 
 // Daily 18:00 BRT reminder to producers who haven't sent a montage photo yet.

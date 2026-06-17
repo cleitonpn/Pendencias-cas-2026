@@ -37,6 +37,18 @@ class _CircularListScreenState extends State<CircularListScreen> {
     }
   }
 
+  String _groupLabel(String g) {
+    switch (g) {
+      case 'todos': return 'Todos';
+      case 'produtores': return 'Produtores';
+      case 'consultores': return 'Consultores';
+      case 'lideres': return 'Líderes';
+      case 'analistas': return 'Analistas';
+      case 'admins': return 'Admins';
+      default: return g;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -44,7 +56,7 @@ class _CircularListScreenState extends State<CircularListScreen> {
       appBar: AppBar(
         backgroundColor: _navy,
         foregroundColor: Colors.white,
-        title: const Text('Circulares',
+        title: const Text('⚠️ Avisos',
             style: TextStyle(fontWeight: FontWeight.bold)),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
@@ -55,7 +67,7 @@ class _CircularListScreenState extends State<CircularListScreen> {
           ? FloatingActionButton.extended(
               backgroundColor: _navy,
               icon: const Icon(Icons.edit, color: Colors.white),
-              label: const Text('Nova Circular',
+              label: const Text('Novo Aviso',
                   style: TextStyle(color: Colors.white)),
               onPressed: () => Navigator.push(
                 context,
@@ -65,20 +77,20 @@ class _CircularListScreenState extends State<CircularListScreen> {
             )
           : null,
       body: StreamBuilder<List<Map<String, dynamic>>>(
-        stream: FirestoreService.streamCirculares(),
+        stream: FirestoreService.streamAvisos(),
         builder: (context, snap) {
           if (snap.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
-          final circulares = snap.data ?? [];
-          if (circulares.isEmpty) {
+          final avisos = snap.data ?? [];
+          if (avisos.isEmpty) {
             return const Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Icon(Icons.campaign_outlined, size: 64, color: Colors.grey),
                   SizedBox(height: 12),
-                  Text('Nenhuma circular publicada.',
+                  Text('Nenhum aviso publicado.',
                       style: TextStyle(color: Colors.grey, fontSize: 16)),
                 ],
               ),
@@ -86,13 +98,17 @@ class _CircularListScreenState extends State<CircularListScreen> {
           }
           return ListView.builder(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
-            itemCount: circulares.length,
+            itemCount: avisos.length,
             itemBuilder: (context, i) {
-              final c = circulares[i];
+              final c = avisos[i];
               final title = (c['title'] as String?) ?? '';
               final body = (c['body'] as String?) ?? '';
               final createdBy = (c['createdBy'] as String?) ?? '';
               final createdAt = _formatDate(c['createdAt'] as String?);
+              final groups = (c['targetGroups'] as List?)
+                      ?.map((g) => _groupLabel(g.toString()))
+                      .toList() ??
+                  ['Todos'];
               return Card(
                 margin: const EdgeInsets.only(bottom: 12),
                 elevation: 2,
@@ -107,8 +123,7 @@ class _CircularListScreenState extends State<CircularListScreen> {
                     children: [
                       Row(
                         children: [
-                          const Icon(Icons.campaign,
-                              color: _navy, size: 20),
+                          const Text('⚠️', style: TextStyle(fontSize: 18)),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
@@ -128,7 +143,23 @@ class _CircularListScreenState extends State<CircularListScreen> {
                             style: const TextStyle(
                                 fontSize: 14, color: Colors.black87)),
                       ],
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 6,
+                        children: groups
+                            .map((g) => Chip(
+                                  label: Text(g,
+                                      style: const TextStyle(
+                                          fontSize: 11,
+                                          color: _navy)),
+                                  backgroundColor:
+                                      const Color(0xFFDEEAFD),
+                                  padding: EdgeInsets.zero,
+                                  visualDensity: VisualDensity.compact,
+                                ))
+                            .toList(),
+                      ),
+                      const SizedBox(height: 8),
                       Row(
                         children: [
                           const Icon(Icons.person_outline,

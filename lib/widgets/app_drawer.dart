@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../screens/cronograma_screen.dart';
 import '../screens/gallery_screen.dart';
 import '../screens/circular_list_screen.dart';
+import '../screens/presence_screen.dart';
 
 class AppDrawer extends StatelessWidget {
   final bool showGallery;
@@ -57,13 +58,23 @@ class AppDrawer extends StatelessWidget {
           ListTile(
             leading: const Icon(Icons.campaign_outlined,
                 color: Color(0xFF1E3A5F)),
-            title: const Text('Circulares',
+            title: const Text('⚠️ Avisos',
                 style: TextStyle(fontWeight: FontWeight.w500)),
             onTap: () {
               Navigator.pop(context);
               Navigator.push(context,
                   MaterialPageRoute(
                       builder: (_) => const CircularListScreen()));
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.people_outline, color: Color(0xFF1E3A5F)),
+            title: const Text('Usuários Online',
+                style: TextStyle(fontWeight: FontWeight.w500)),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => const PresenceScreen()));
             },
           ),
         ],

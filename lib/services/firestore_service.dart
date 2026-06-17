@@ -568,26 +568,66 @@ class FirestoreService {
     }).catchError((_) {});
   }
 
-  // ─── Circulares ───────────────────────────────────────────────────────────
+  // ─── Avisos ───────────────────────────────────────────────────────────────
 
-  static Future<void> writeCircular({
+  static Future<void> writeAviso({
     required String title,
     required String body,
     required String createdBy,
+    required List<String> targetGroups,
   }) async {
-    await _db.collection('circulares').add({
+    await _db.collection('avisos').add({
       'title': title,
       'body': body,
       'createdBy': createdBy,
+      'targetGroups': targetGroups,
       'createdAt': DateTime.now().toIso8601String(),
     });
   }
 
-  static Stream<List<Map<String, dynamic>>> streamCirculares() {
+  static Stream<List<Map<String, dynamic>>> streamAvisos() {
     return _db
-        .collection('circulares')
+        .collection('avisos')
         .orderBy('createdAt', descending: true)
         .limit(100)
+        .snapshots()
+        .map((snap) => snap.docs
+            .map((d) => <String, dynamic>{'id': d.id, ...d.data()})
+            .toList());
+  }
+
+  // ─── Presence ─────────────────────────────────────────────────────────────
+
+  static Future<void> updatePresence({
+    required String name,
+    required String role,
+    required String team,
+    required bool online,
+  }) async {
+    if (name.isEmpty && role.isEmpty) return;
+    final key = '${role}_$name'
+        .toLowerCase()
+        .replaceAll(' ', '_')
+        .replaceAll(RegExp(r'[^a-z0-9_]'), '');
+    try {
+      await _db.collection('presence').doc(key).set({
+        'name': name,
+        'role': role,
+        'team': team,
+        'online': online,
+        'lastSeen': DateTime.now().toIso8601String(),
+      });
+    } catch (_) {}
+  }
+
+  static Future<void> clearPresence(String name, String role) async {
+    await updatePresence(name: name, role: role, team: '', online: false);
+  }
+
+  static Stream<List<Map<String, dynamic>>> streamPresence() {
+    return _db
+        .collection('presence')
+        .orderBy('lastSeen', descending: true)
         .snapshots()
         .map((snap) => snap.docs
             .map((d) => <String, dynamic>{'id': d.id, ...d.data()})
