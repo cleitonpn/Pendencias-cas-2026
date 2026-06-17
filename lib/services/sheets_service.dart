@@ -68,7 +68,7 @@ class SheetsService {
     final table = json['table'] as Map<String, dynamic>;
     final cols = (table['cols'] as List?) ?? [];
     final header = cols
-        .map((c) => ((c as Map)['label'] ?? '').toString())
+        .map((c) => _normalizeHeader(((c as Map)['label'] ?? '').toString()))
         .toList();
 
     final rawRows = (table['rows'] as List?) ?? [];
@@ -79,6 +79,20 @@ class SheetsService {
 
     return (header: header, rows: rows);
   }
+
+  /// Strips hidden Unicode chars (BOM, non-breaking spaces, zero-width chars)
+  /// that the gviz API occasionally embeds in column labels, then lowercases
+  /// and trims so header matching is reliable regardless of sheet formatting.
+  static String _normalizeHeader(String raw) => raw
+      .replaceAll('﻿', '')   // BOM
+      .replaceAll(' ', ' ')  // non-breaking space → regular space
+      .replaceAll('​', '')   // zero-width space
+      .replaceAll('‌', '')   // zero-width non-joiner
+      .replaceAll('‍', '')   // zero-width joiner
+      .replaceAll(' ', ' ')  // thin space → regular space
+      .replaceAll(' ', ' ')  // narrow no-break space → regular space
+      .toLowerCase()
+      .trim();
 
   /// Shared helper: builds a findCol closure from a normalised header list.
   static int Function(List<String>) _makeFindCol(List<String> header) {
@@ -138,7 +152,8 @@ class SheetsService {
 
     final nomeIdx        = findCol(['nome']);
     final montagemIdx    = findCol(['montagem']);
-    final localIdx       = findCol(['local']);
+    final localIdx       = findCol(['local', 'localização', 'localizacao',
+        'local stand', 'local do stand', 'localização stand']);
     final hangarIdx      = findCol(['hangar']);
     final areaIdx        = _findAreaCol(header);
     final produtorIdx    = findCol(['produtor']);
@@ -284,7 +299,8 @@ class SheetsService {
     final nomeIdx          = findCol(['nome']);
     final tipoIdx          = findCol(['tipo', 'type', 'tipo do stand',
         'tipo stand', 'tipo montagem']);
-    final localIdx         = findCol(['local']);
+    final localIdx         = findCol(['local', 'localização', 'localizacao',
+        'local stand', 'local do stand', 'localização stand']);
     final hangarIdx        = findCol(['hangar']);
     final areaIdx          = _findAreaCol(header);
     final produtorIdx      = findCol(['produtor']);
