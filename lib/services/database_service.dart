@@ -329,6 +329,27 @@ class DatabaseService {
     await database.delete('fairs', where: 'id = ?', whereArgs: [id]);
   }
 
+  /// Removes clients whose row_id is no longer in [activeRowIds], along with
+  /// their pending items. Called after a sheet sync to clean up deleted rows.
+  static Future<void> deleteStaleClients(
+      int fairId, Set<String> activeRowIds) async {
+    if (activeRowIds.isEmpty) return;
+    final database = await db;
+    final existing = await database.query('clients',
+        columns: ['row_id'], where: 'fair_id = ?', whereArgs: [fairId]);
+    final toDelete = existing
+        .map((r) => r['row_id'] as String)
+        .where((id) => !activeRowIds.contains(id))
+        .toList();
+    if (toDelete.isEmpty) return;
+    for (final rowId in toDelete) {
+      await database.delete('pending_items',
+          where: 'client_id = ?', whereArgs: [rowId]);
+      await database.delete('clients',
+          where: 'row_id = ?', whereArgs: [rowId]);
+    }
+  }
+
   // ─── Clients ────────────────────────────────────────────────────────────────
 
   static Future<void> upsertClients(List<Client> clients) async {

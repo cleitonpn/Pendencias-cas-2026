@@ -92,11 +92,13 @@ class AppProvider extends ChangeNotifier {
     _startCircularStream();
   }
 
-  /// Listens to Firestore fair changes so mode and archive updates propagate to all devices.
+  /// Listens to Firestore fair changes so mode, archive, and deletion propagate to all devices.
   void _startFairsStream() {
     _fairsSubscription?.cancel();
     _fairsSubscription = FirestoreService.streamFairs().listen((maps) async {
       bool changed = false;
+      final remoteIds = maps.map((m) => m['id'] as int?).whereType<int>().toSet();
+
       for (final m in maps) {
         final id = m['id'] as int?;
         if (id == null) continue;
@@ -120,6 +122,15 @@ class AppProvider extends ChangeNotifier {
           changed = true;
         }
       }
+
+      // Detect fairs deleted from Firestore and remove them locally too.
+      for (final local in List<Fair>.from(_fairs)) {
+        if (local.id != null && !remoteIds.contains(local.id)) {
+          await DatabaseService.deleteFair(local.id!);
+          changed = true;
+        }
+      }
+
       if (changed) {
         _fairs = await DatabaseService.getFairs();
         // Keep current fair in sync too
@@ -303,6 +314,9 @@ class AppProvider extends ChangeNotifier {
     _notifyAssignments(sheetClients, existingMap, _currentFair!.name);
 
     await DatabaseService.upsertClients(sheetClients);
+    // Remove clients whose rows were deleted from the spreadsheet.
+    final activeRowIds = sheetClients.map((c) => c.rowId).toSet();
+    await DatabaseService.deleteStaleClients(_currentFair!.id!, activeRowIds);
 
     await _loadLocal();
     _lastSync = DateTime.now();
@@ -355,6 +369,8 @@ class AppProvider extends ChangeNotifier {
       _notifyAssignments(finalClients, existingMap, feiraNome);
 
       await DatabaseService.upsertClients(finalClients);
+      final activeIds = finalClients.map((c) => c.rowId).toSet();
+      await DatabaseService.deleteStaleClients(derivedId, activeIds);
 
       // Push derived fair metadata to Firestore — mode is intentionally
       // omitted so that mode changes set via setFairMode() survive syncs.
@@ -411,6 +427,8 @@ class AppProvider extends ChangeNotifier {
     _notifyAssignments(finalClients, existingMap, _currentFair!.name);
 
     await DatabaseService.upsertClients(finalClients);
+    final activeIds = finalClients.map((c) => c.rowId).toSet();
+    await DatabaseService.deleteStaleClients(fairId, activeIds);
 
     await _loadLocal();
     _lastSync = DateTime.now();
