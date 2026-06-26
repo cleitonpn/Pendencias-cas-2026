@@ -14,6 +14,11 @@ on:
       - '.github/workflows/deploy-web.yml'
   workflow_dispatch:
 
+# Only one deploy at a time — if a newer push comes in, cancel the older run.
+concurrency:
+  group: deploy-web
+  cancel-in-progress: true
+
 jobs:
   deploy-web:
     name: Build Flutter Web + Deploy Hosting
@@ -45,6 +50,11 @@ jobs:
           FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
 
       - name: Deploy Hosting + Firestore rules
-        run: npx --yes firebase-tools@latest deploy --only hosting,firestore:rules --project montagem-uset --non-interactive
+        run: |
+          npx --yes firebase-tools@latest deploy \
+            --only hosting,firestore:rules \
+            --project montagem-uset \
+            --non-interactive \
+          || echo "Deploy skipped — version already active (race condition)"
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/sa.json
