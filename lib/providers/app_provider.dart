@@ -62,6 +62,7 @@ class AppProvider extends ChangeNotifier {
         final id = m['id'] as int?;
         final mode = (m['mode'] as String?) ?? 'producao';
         final sheetMode = (m['sheetMode'] as String?) ?? 'individual';
+        final remoteArchived = m['archived'] == true;
         final fair = Fair(
           id: id,
           name: m['name'] as String,
@@ -72,8 +73,15 @@ class AppProvider extends ChangeNotifier {
           sheetMode: sheetMode,
         );
         await DatabaseService.upsertFairById(fair);
-        // Keep local mode in sync with the cloud (upsert ignores existing rows)
-        if (id != null) await DatabaseService.updateFairMode(id, mode);
+        if (id != null) {
+          await DatabaseService.updateFairMode(id, mode);
+          // Sync archived state so all devices see the same list
+          if (remoteArchived) {
+            await DatabaseService.archiveFair(id);
+          } else {
+            await DatabaseService.restoreFair(id);
+          }
+        }
       }
     } catch (_) {
       // Firestore unavailable — continue with local fairs only
@@ -84,7 +92,7 @@ class AppProvider extends ChangeNotifier {
     _startCircularStream();
   }
 
-  /// Listens to Firestore fair changes so mode updates propagate to all devices.
+  /// Listens to Firestore fair changes so mode and archive updates propagate to all devices.
   void _startFairsStream() {
     _fairsSubscription?.cancel();
     _fairsSubscription = FirestoreService.streamFairs().listen((maps) async {
@@ -93,12 +101,22 @@ class AppProvider extends ChangeNotifier {
         final id = m['id'] as int?;
         if (id == null) continue;
         final mode = (m['mode'] as String?) ?? 'producao';
-        // Find local fair and check if mode changed
+        final remoteArchived = m['archived'] == true;
+        // Fair is in _fairs only if it's not archived locally
         final local = _fairs.firstWhere((f) => f.id == id,
             orElse: () => Fair(id: -1, name: '', spreadsheetId: '',
                 sheetName: '', createdAt: DateTime.now()));
+        final locallyArchived = local.id == -1; // not in active list → archived or unknown
         if (local.id == -1 || local.mode != mode) {
           await DatabaseService.updateFairMode(id, mode);
+          changed = true;
+        }
+        if (locallyArchived != remoteArchived) {
+          if (remoteArchived) {
+            await DatabaseService.archiveFair(id);
+          } else {
+            await DatabaseService.restoreFair(id);
+          }
           changed = true;
         }
       }
