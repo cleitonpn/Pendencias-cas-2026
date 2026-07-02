@@ -9,6 +9,8 @@ import '../services/session_service.dart';
 import '../widgets/app_drawer.dart';
 import 'login_screen.dart';
 import 'producer_hangar_list_screen.dart';
+import 'freight_request_form_screen.dart';
+import 'freight_requests_screen.dart';
 
 class ProducerHomeScreen extends StatefulWidget {
   final String producerName;
@@ -121,6 +123,7 @@ class _ProducerHomeScreenState extends State<ProducerHomeScreen> {
                 final fair = fairs[i];
                 return _FairCard(
                   fair: fair,
+                  producerName: widget.producerName,
                   onTap: () async {
                     await context.read<AppProvider>().selectFair(fair);
                     if (context.mounted) {
@@ -142,8 +145,9 @@ class _ProducerHomeScreenState extends State<ProducerHomeScreen> {
 
 class _FairCard extends StatelessWidget {
   final Fair fair;
+  final String producerName;
   final VoidCallback onTap;
-  const _FairCard({required this.fair, required this.onTap});
+  const _FairCard({required this.fair, required this.producerName, required this.onTap});
 
   Color get _modeColor {
     if (fair.isMaintenance) return Colors.orange;
@@ -171,31 +175,75 @@ class _FairCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         child: Padding(
           padding: const EdgeInsets.all(16),
-          child: Row(
+          child: Column(
             children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: _modeColor.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(Icons.event, color: _modeColor, size: 28),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: _modeColor.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(Icons.event, color: _modeColor, size: 28),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(fair.name,
+                            style: const TextStyle(
+                                fontSize: 18, fontWeight: FontWeight.bold)),
+                        Text(_modeLabel,
+                            style: TextStyle(
+                                fontSize: 12, color: _modeColor)),
+                      ],
+                    ),
+                  ),
+                  const Icon(Icons.chevron_right, color: Colors.grey),
+                ],
               ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(fair.name,
-                        style: const TextStyle(
-                            fontSize: 18, fontWeight: FontWeight.bold)),
-                    Text(_modeLabel,
-                        style: TextStyle(
-                            fontSize: 12, color: _modeColor)),
-                  ],
-                ),
+              const Divider(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      icon: const Icon(Icons.local_shipping_outlined, size: 18),
+                      label: const Text('Solicitar Logística'),
+                      onPressed: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => FreightRequestFormScreen(
+                              fairId: fair.id!,
+                              fairName: fair.name,
+                              requestedBy: producerName,
+                              requestedByRole: 'producer',
+                            ),
+                          )),
+                      style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFF1E3A5F)),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.list_alt, size: 18),
+                    label: const Text('Fretes'),
+                    onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => FreightRequestsScreen(
+                            fairId: fair.id!,
+                            fairName: fair.name,
+                            viewerRole: 'producer',
+                            viewerName: producerName,
+                          ),
+                        )),
+                    style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF1E3A5F)),
+                  ),
+                ],
               ),
-              const Icon(Icons.chevron_right, color: Colors.grey),
             ],
           ),
         ),

@@ -3,10 +3,43 @@ import '../screens/cronograma_screen.dart';
 import '../screens/gallery_screen.dart';
 import '../screens/circular_list_screen.dart';
 import '../screens/presence_screen.dart';
+import '../services/session_service.dart';
+import '../screens/freight_requests_screen.dart';
 
-class AppDrawer extends StatelessWidget {
+class AppDrawer extends StatefulWidget {
   final bool showGallery;
   const AppDrawer({super.key, this.showGallery = false});
+
+  @override
+  State<AppDrawer> createState() => _AppDrawerState();
+}
+
+class _AppDrawerState extends State<AppDrawer> {
+  String _role = '';
+  String _name = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSession();
+  }
+
+  Future<void> _loadSession() async {
+    final s = await SessionService.get();
+    if (mounted && s != null) {
+      setState(() {
+        _role = s['role'] ?? '';
+        _name = s['name'] ?? '';
+      });
+    }
+  }
+
+  bool get _showFreight =>
+      _role == 'admin' ||
+      _role == 'manager' ||
+      _role == 'logistica' ||
+      _role == 'producer' ||
+      _role == 'consultant';
 
   @override
   Widget build(BuildContext context) {
@@ -43,7 +76,7 @@ class AppDrawer extends StatelessWidget {
                   MaterialPageRoute(builder: (_) => const CronogramaScreen()));
             },
           ),
-          if (showGallery)
+          if (widget.showGallery)
             ListTile(
               leading: const Icon(Icons.photo_library_outlined,
                   color: Color(0xFF1E3A5F)),
@@ -58,7 +91,7 @@ class AppDrawer extends StatelessWidget {
           ListTile(
             leading: const Icon(Icons.campaign_outlined,
                 color: Color(0xFF1E3A5F)),
-            title: const Text('⚠️ Avisos',
+            title: const Text('Avisos',
                 style: TextStyle(fontWeight: FontWeight.w500)),
             onTap: () {
               Navigator.pop(context);
@@ -67,6 +100,27 @@ class AppDrawer extends StatelessWidget {
                       builder: (_) => const CircularListScreen()));
             },
           ),
+          if (_showFreight)
+            ListTile(
+              leading: const Icon(Icons.local_shipping_outlined,
+                  color: Color(0xFF1E3A5F)),
+              title: const Text('Solicitações de Frete',
+                  style: TextStyle(fontWeight: FontWeight.w500)),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => FreightRequestsScreen(
+                      fairId: -1,
+                      fairName: 'Todas as Feiras',
+                      viewerRole: _role,
+                      viewerName: _name,
+                    ),
+                  ),
+                );
+              },
+            ),
           ListTile(
             leading: const Icon(Icons.people_outline, color: Color(0xFF1E3A5F)),
             title: const Text('Usuários Online',

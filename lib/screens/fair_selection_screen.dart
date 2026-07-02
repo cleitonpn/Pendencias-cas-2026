@@ -14,6 +14,8 @@ import 'settings_screen.dart';
 import 'sticker_generator_screen.dart';
 import 'spec_edit_requests_screen.dart';
 import 'archived_fairs_screen.dart';
+import 'freight_requests_screen.dart';
+import 'freight_report_screen.dart';
 
 class FairSelectionScreen extends StatelessWidget {
   final bool canManage;
@@ -251,6 +253,54 @@ class _FairCard extends StatelessWidget {
               if (canManage) ...[
                 const Divider(height: 18),
                 _ModeToggle(fair: fair),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        icon: const Icon(Icons.local_shipping_outlined,
+                            size: 16),
+                        label: const Text('Fretes'),
+                        onPressed: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => FreightRequestsScreen(
+                                fairId: fair.id!,
+                                fairName: fair.name,
+                                viewerRole: 'admin',
+                                viewerName: 'Admin',
+                              ),
+                            )),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFF1E3A5F),
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        icon: const Icon(Icons.bar_chart_outlined, size: 16),
+                        label: const Text('Relatório'),
+                        onPressed: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => FreightReportScreen(
+                                fairId: fair.id!,
+                                fairName: fair.name,
+                              ),
+                            )),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.teal.shade700,
+                          side: BorderSide(color: Colors.teal.shade300),
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ],
             ],
           ),

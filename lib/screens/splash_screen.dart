@@ -8,6 +8,7 @@ import 'producer_home_screen.dart';
 import 'consultant_home_screen.dart';
 import 'team_leader_home_screen.dart';
 import 'analyst_home_screen.dart';
+import 'logistics_home_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -54,6 +55,8 @@ class _SplashScreenState extends State<SplashScreen> {
         destination = TeamLeaderHomeScreen(leaderName: name, team: team);
       } else if (role == 'analyst' && name.isNotEmpty) {
         destination = AnalystHomeScreen(analystName: name);
+      } else if (role == 'logistica' && name.isNotEmpty) {
+        destination = LogisticsHomeScreen(logisticsName: name);
       }
     }
 

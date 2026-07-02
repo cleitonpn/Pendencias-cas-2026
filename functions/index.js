@@ -206,6 +206,54 @@ exports.onAvisoCreated = onDocumentCreated(
       await sendToTopics(topics, notifTitle, notifBody);
     });
 
+// New freight request → notify logistics team (group_logistica)
+exports.onFreightRequestCreated = onDocumentCreated(
+    "freight_requests/{id}", async (event) => {
+      const data = event.data && event.data.data();
+      if (!data) return;
+
+      const fairName = data.fairName || "";
+      const number = data.number || "";
+      const priority = data.priority === "urgente" ? "🚨 URGENTE — " : "";
+      const title = `${priority}Nova solicitação de frete #${number}`;
+      const body = `${fairName}: ${data.items || ""}`.substring(0, 200);
+
+      await sendToTopics(["group_logistica"], title, body);
+    });
+
+// Freight request status changed → notify requester OR logistics
+exports.onFreightRequestUpdated = onDocumentUpdated(
+    "freight_requests/{id}", async (event) => {
+      const before = event.data && event.data.before.data();
+      const after = event.data && event.data.after.data();
+      if (!before || !after || before.status === after.status) return;
+
+      const number = after.number || "";
+      const fairName = after.fairName || "";
+      const handledBy = after.handledBy || "Logística";
+
+      if (after.status === "agendado") {
+        const topic = after.requesterTopic || "";
+        if (!topic) return;
+        await sendToTopics(
+            [topic],
+            `Frete #${number} agendado ✅`,
+            `${fairName} — ${handledBy} agendou seu frete.`);
+      } else if (after.status === "despachado") {
+        const topic = after.requesterTopic || "";
+        if (!topic) return;
+        await sendToTopics(
+            [topic],
+            `Frete #${number} despachado 🚚`,
+            `${fairName} — ${handledBy} despachou seu frete. Confirme o recebimento.`);
+      } else if (after.status === "finalizado") {
+        await sendToTopics(
+            ["group_logistica"],
+            `Frete #${number} recebido ✔️`,
+            `${fairName} — ${after.requestedBy || "Solicitante"} confirmou o recebimento.`);
+      }
+    });
+
 // Daily 18:00 BRT reminder to producers who haven't sent a montage photo yet.
 exports.dailyMontageReminder = onSchedule(
     {schedule: "0 18 * * *", timeZone: "America/Sao_Paulo"},

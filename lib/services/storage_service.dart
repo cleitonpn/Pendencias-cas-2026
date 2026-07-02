@@ -31,4 +31,19 @@ class StorageService {
     }
     return urls;
   }
+
+  /// Uploads a receipt photo for a freight request and returns the download URL.
+  /// Path: freight_receipts/<requestId>.jpg
+  static Future<String> uploadReceiptPhoto({
+    required String requestId,
+    required String filePath,
+  }) async {
+    final file = File(filePath);
+    final ref = _storage.ref('freight_receipts/$requestId.jpg');
+    final task = await ref.putFile(
+      file,
+      SettableMetadata(contentType: 'image/jpeg'),
+    );
+    return task.ref.getDownloadURL();
+  }
 }

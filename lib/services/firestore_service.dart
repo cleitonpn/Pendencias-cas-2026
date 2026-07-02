@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/pending_item.dart';
 import '../models/montage_update.dart';
+import '../models/freight_request.dart';
 
 class FirestoreService {
   static FirebaseFirestore get _db => FirebaseFirestore.instance;
@@ -723,5 +724,98 @@ class FirestoreService {
       return a.local.compareTo(b.local);
     });
     return items;
+  }
+
+  // ─── Logistics Users ──────────────────────────────────────────────────────
+
+  static Future<List<String>> getLogisticsUsers() async {
+    try {
+      final snap = await _db.collection('logistics_users').orderBy('name').get();
+      return snap.docs
+          .map((d) => (d.data()['name'] as String?) ?? '')
+          .where((s) => s.isNotEmpty)
+          .toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  static Future<String?> getLogisticsUserPin(String name) async {
+    try {
+      final key = name.toLowerCase().trim()
+          .replaceAll(' ', '_')
+          .replaceAll(RegExp(r'[^a-z0-9_]'), '');
+      final doc = await _db.collection('logistics_users').doc(key).get();
+      if (!doc.exists) return null;
+      return doc.data()?['pin'] as String?;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<void> saveLogisticsUser(String name, String pin) async {
+    final key = name.toLowerCase().trim()
+        .replaceAll(' ', '_')
+        .replaceAll(RegExp(r'[^a-z0-9_]'), '');
+    await _db.collection('logistics_users').doc(key).set({'name': name, 'pin': pin});
+  }
+
+  static Future<void> deleteLogisticsUser(String name) async {
+    final key = name.toLowerCase().trim()
+        .replaceAll(' ', '_')
+        .replaceAll(RegExp(r'[^a-z0-9_]'), '');
+    await _db.collection('logistics_users').doc(key).delete();
+  }
+
+  // ─── Freight Requests ─────────────────────────────────────────────────────
+
+  static Future<void> createFreightRequest(FreightRequest req) async {
+    final snap = await _db
+        .collection('freight_requests')
+        .where('fairId', isEqualTo: req.fairId)
+        .get();
+    final number = snap.docs.length + 1;
+    await _db.collection('freight_requests').add({...req.toMap(), 'number': number});
+  }
+
+  static Stream<List<FreightRequest>> streamFreightRequests(int fairId) {
+    Query q = _db.collection('freight_requests');
+    if (fairId >= 0) q = q.where('fairId', isEqualTo: fairId);
+    return q
+        .orderBy('requestedAt', descending: true)
+        .snapshots()
+        .map((snap) => snap.docs
+            .map((d) => FreightRequest.fromMap(d.id, d.data() as Map<String, dynamic>))
+            .toList());
+  }
+
+  static Future<void> updateFreightRequestStatus(
+      String id, String status, String handledBy,
+      {String note = '', String photoUrl = ''}) async {
+    final now = DateTime.now().toIso8601String();
+    final update = <String, dynamic>{'status': status, 'handledBy': handledBy};
+    if (note.isNotEmpty) update['statusNote'] = note;
+    if (status == 'agendado') update['scheduledAt'] = now;
+    if (status == 'despachado') update['dispatchedAt'] = now;
+    if (status == 'finalizado') {
+      update['finalizedAt'] = now;
+      if (photoUrl.isNotEmpty) update['receiptPhotoUrl'] = photoUrl;
+    }
+    await _db.collection('freight_requests').doc(id).update(update);
+  }
+
+  static Future<void> deleteFreightRequest(String id) async {
+    await _db.collection('freight_requests').doc(id).delete();
+  }
+
+  static Future<List<FreightRequest>> getFreightRequestsForReport(int fairId) async {
+    final snap = await _db
+        .collection('freight_requests')
+        .where('fairId', isEqualTo: fairId)
+        .where('status', isEqualTo: 'finalizado')
+        .get();
+    return snap.docs
+        .map((d) => FreightRequest.fromMap(d.id, d.data() as Map<String, dynamic>))
+        .toList();
   }
 }

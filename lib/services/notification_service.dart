@@ -151,6 +151,9 @@ class NotificationService {
   static Future<void> subscribeAnalyst(String analystName) =>
       _subscribe([fcmTopic('analyst', analystName), 'new_clients', 'group_analistas']);
 
+  static Future<void> subscribeLogistics(String name) =>
+      _subscribe([fcmTopic('logistica', name), 'group_logistica']);
+
   static Future<void> _subscribe(List<String> topics) async {
     if (!_supported) return;
     try {

@@ -9,6 +9,7 @@ import 'producer_home_screen.dart';
 import 'team_leader_home_screen.dart';
 import 'consultant_home_screen.dart';
 import 'analyst_home_screen.dart';
+import 'logistics_home_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -18,7 +19,7 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  String _role = 'producer'; // 'producer'|'consultant'|'manager'|'leader'|'analyst'|'admin'
+  String _role = 'producer'; // 'producer'|'consultant'|'manager'|'leader'|'analyst'|'admin'|'logistica'
 
   // Producer
   List<String> _producers = [];
@@ -50,6 +51,11 @@ class _LoginScreenState extends State<LoginScreen> {
   String? _selectedAdmin;
   bool _loadingAdmins = true;
 
+  // Logistics
+  List<String> _logistics = [];
+  String? _selectedLogistics;
+  bool _loadingLogistics = true;
+
   final _pinCtrl = TextEditingController();
   bool _verifying = false;
   String? _error;
@@ -63,6 +69,7 @@ class _LoginScreenState extends State<LoginScreen> {
     _loadLeaders();
     _loadAnalysts();
     _loadAdmins();
+    _loadLogistics();
   }
 
   @override
@@ -125,6 +132,15 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  Future<void> _loadLogistics() async {
+    try {
+      final list = await FirestoreService.getLogisticsUsers();
+      if (mounted) setState(() { _logistics = list; _loadingLogistics = false; });
+    } catch (_) {
+      if (mounted) setState(() => _loadingLogistics = false);
+    }
+  }
+
   void _setRole(String role) {
     setState(() {
       _role = role;
@@ -136,6 +152,7 @@ class _LoginScreenState extends State<LoginScreen> {
       if (role != 'leader') _selectedLeader = null;
       if (role != 'analyst') _selectedAnalyst = null;
       if (role != 'admin') _selectedAdmin = null;
+      if (role != 'logistica') _selectedLogistics = null;
     });
   }
 
@@ -152,6 +169,8 @@ class _LoginScreenState extends State<LoginScreen> {
         await _enterManager();
       } else if (_role == 'analyst') {
         await _enterAnalyst();
+      } else if (_role == 'logistica') {
+        await _enterLogistics();
       } else {
         await _enterLeader();
       }
@@ -348,6 +367,44 @@ class _LoginScreenState extends State<LoginScreen> {
             builder: (_) => AnalystHomeScreen(analystName: _selectedAnalyst!)));
   }
 
+  Future<void> _enterLogistics() async {
+    if (_selectedLogistics == null) {
+      setState(() => _error = 'Selecione seu nome.');
+      return;
+    }
+    if (_pinCtrl.text.isEmpty) {
+      setState(() => _error = 'Digite seu PIN.');
+      return;
+    }
+    final savedPin =
+        await FirestoreService.getLogisticsUserPin(_selectedLogistics!);
+    if (!mounted) return;
+    if (savedPin == null) {
+      setState(() => _error = 'PIN não configurado. Contate o administrador.');
+      return;
+    }
+    if (_pinCtrl.text != savedPin) {
+      setState(() => _error = 'PIN incorreto.');
+      _pinCtrl.clear();
+      return;
+    }
+    if (!mounted) return;
+    await NotificationService.subscribeLogistics(_selectedLogistics!);
+    await SessionService.save(role: 'logistica', name: _selectedLogistics!);
+    await FirestoreService.updatePresence(
+      name: _selectedLogistics!,
+      role: 'logistica',
+      team: '',
+      online: true,
+    );
+    if (!mounted) return;
+    Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+            builder: (_) =>
+                LogisticsHomeScreen(logisticsName: _selectedLogistics!)));
+  }
+
   Future<void> _enterLeader() async {
     if (_selectedLeader == null) {
       setState(() => _error = 'Selecione seu nome.');
@@ -479,6 +536,11 @@ class _LoginScreenState extends State<LoginScreen> {
                             icon: Icons.admin_panel_settings_outlined,
                             active: _role == 'admin',
                             onTap: () => _setRole('admin')),
+                        _ToggleBtn(
+                            label: 'Logística',
+                            icon: Icons.local_shipping_outlined,
+                            active: _role == 'logistica',
+                            onTap: () => _setRole('logistica')),
                       ],
                     ),
                   ),
@@ -833,6 +895,75 @@ class _LoginScreenState extends State<LoginScreen> {
                     const SizedBox(height: 16),
                   ],
 
+                  // Logistics name pills
+                  if (_role == 'logistica') ...[
+                    const Text('SEU NOME',
+                        style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.grey,
+                            letterSpacing: 1)),
+                    const SizedBox(height: 10),
+                    _loadingLogistics
+                        ? const Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(8),
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ))
+                        : _logistics.isEmpty
+                            ? Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                    color: Colors.orange.shade50,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                        color: Colors.orange.shade200)),
+                                child: const Text(
+                                    'Nenhum usuário de logística cadastrado.\nContate o administrador.',
+                                    style: TextStyle(
+                                        color: Colors.orange, fontSize: 13)),
+                              )
+                            : Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: _logistics.map((p) {
+                                  final sel = _selectedLogistics == p;
+                                  return GestureDetector(
+                                    onTap: () => setState(() {
+                                      _selectedLogistics = p;
+                                      _error = null;
+                                    }),
+                                    child: AnimatedContainer(
+                                      duration:
+                                          const Duration(milliseconds: 150),
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 14, vertical: 8),
+                                      decoration: BoxDecoration(
+                                        color: sel
+                                            ? const Color(0xFF1E3A5F)
+                                            : Colors.white,
+                                        borderRadius:
+                                            BorderRadius.circular(20),
+                                        border: Border.all(
+                                          color: sel
+                                              ? const Color(0xFF1E3A5F)
+                                              : Colors.grey.shade300,
+                                        ),
+                                      ),
+                                      child: Text(p,
+                                          style: TextStyle(
+                                              fontWeight: FontWeight.w600,
+                                              color: sel
+                                                  ? Colors.white
+                                                  : Colors.black87,
+                                              fontSize: 13)),
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
+                    const SizedBox(height: 16),
+                  ],
+
                   // PIN field
                   const Text('PIN',
                       style: TextStyle(
@@ -848,7 +979,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                     maxLength: 6,
                     decoration: InputDecoration(
-                      hintText: _role == 'admin' ? 'PIN de administrador' : 'Seu PIN',
+                      hintText: _role == 'admin' ? 'PIN de administrador' : 'Seu PIN de acesso',
                       prefixIcon: const Icon(Icons.lock_outline),
                       border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10)),

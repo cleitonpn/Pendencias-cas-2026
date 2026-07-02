@@ -44,6 +44,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   List<String> _adminUsers = [];
   Map<String, String?> _adminPins = {};
 
+  // Logistics
+  List<String> _logisticsUsers = [];
+  Map<String, String?> _logisticsPins = {};
+
   static const _availableTeams = [
     'Elétrica',
     'Marcenaria',
@@ -123,6 +127,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
       adminPins[name] = await FirestoreService.getAdminUserPin(name);
     }
 
+    final logisticsList = await FirestoreService.getLogisticsUsers();
+    final logisticsPins = <String, String?>{};
+    for (final name in logisticsList) {
+      logisticsPins[name] = await FirestoreService.getLogisticsUserPin(name);
+    }
+
     if (mounted) {
       setState(() {
         _producers = allProducers;
@@ -140,6 +150,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _analystPins = analystPins;
         _adminUsers = adminList;
         _adminPins = adminPins;
+        _logisticsUsers = logisticsList;
+        _logisticsPins = logisticsPins;
       });
     }
   }
@@ -878,6 +890,137 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     if (result == null) return;
     await FirestoreService.saveAdminUser(name, result);
+    await _loadPins();
+  }
+
+  Future<void> _addLogisticsUser() async {
+    final nameCtrl = TextEditingController();
+    final pinCtrl = TextEditingController();
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        title: const Text('Adicionar Usuário de Logística'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameCtrl,
+              autofocus: true,
+              textCapitalization: TextCapitalization.words,
+              decoration: const InputDecoration(
+                labelText: 'Nome',
+                prefixIcon: Icon(Icons.person_outline),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: pinCtrl,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              maxLength: 6,
+              decoration: const InputDecoration(
+                hintText: 'PIN (4–6 dígitos)',
+                prefixIcon: Icon(Icons.lock_outline),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancelar')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1E3A5F),
+                foregroundColor: Colors.white),
+            child: const Text('Adicionar'),
+          ),
+        ],
+      ),
+    );
+
+    if (result != true) return;
+    final name = nameCtrl.text.trim();
+    if (name.isEmpty) return;
+    await FirestoreService.saveLogisticsUser(name, pinCtrl.text);
+    await _loadPins();
+  }
+
+  Future<void> _editLogisticsPin(String name) async {
+    final currentPin = _logisticsPins[name];
+    final ctrl = TextEditingController(text: currentPin ?? '');
+
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        title: Text('PIN — $name'),
+        content: TextField(
+          controller: ctrl,
+          keyboardType: TextInputType.number,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          maxLength: 6,
+          autofocus: true,
+          decoration: const InputDecoration(
+            hintText: 'Digite o PIN (4–6 dígitos)',
+            prefixIcon: Icon(Icons.lock_outline),
+          ),
+          onSubmitted: (_) => Navigator.pop(ctx, ctrl.text),
+        ),
+        actions: [
+          if (currentPin != null)
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, ''),
+              child: const Text('Remover', style: TextStyle(color: Colors.red)),
+            ),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancelar')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, ctrl.text),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1E3A5F),
+                foregroundColor: Colors.white),
+            child: const Text('Salvar'),
+          ),
+        ],
+      ),
+    );
+
+    if (result == null) return;
+    if (result.isEmpty) {
+      await FirestoreService.deleteLogisticsUser(name);
+    } else {
+      await FirestoreService.saveLogisticsUser(name, result);
+    }
+    await _loadPins();
+  }
+
+  Future<void> _deleteLogisticsUser(String name) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        title: const Text('Remover Usuário de Logística'),
+        content: Text('Remover "$name" da lista de logística?'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancelar')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red, foregroundColor: Colors.white),
+            child: const Text('Remover'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await FirestoreService.deleteLogisticsUser(name);
     await _loadPins();
   }
 
@@ -1677,6 +1820,105 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 style: OutlinedButton.styleFrom(
                   foregroundColor: const Color(0xFF1E3A5F),
                   side: const BorderSide(color: Color(0xFF1E3A5F)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 24),
+
+            // Logistics Users
+            const Text('LOGÍSTICA',
+                style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey,
+                    letterSpacing: 1)),
+            const SizedBox(height: 4),
+            const Text(
+                'Usuários do time de logística que gerenciam solicitações de frete.',
+                style: TextStyle(fontSize: 12, color: Colors.grey)),
+            const SizedBox(height: 10),
+            if (_logisticsUsers.isEmpty)
+              Card(
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+                child: const Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Text(
+                      'Nenhum usuário de logística cadastrado. Use o botão abaixo para adicionar.',
+                      style: TextStyle(color: Colors.grey)),
+                ),
+              )
+            else
+              Card(
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+                child: Column(
+                  children: _logisticsUsers.asMap().entries.map((entry) {
+                    final i = entry.key;
+                    final name = entry.value;
+                    final pin = _logisticsPins[name];
+                    final hasPin = pin != null && pin.isNotEmpty;
+                    return Column(
+                      children: [
+                        if (i > 0) const Divider(height: 1, indent: 16),
+                        ListTile(
+                          leading: CircleAvatar(
+                            backgroundColor: hasPin
+                                ? Colors.teal.shade100
+                                : Colors.grey.shade100,
+                            child: Icon(
+                                hasPin
+                                    ? Icons.local_shipping
+                                    : Icons.local_shipping_outlined,
+                                color: hasPin ? Colors.teal : Colors.grey,
+                                size: 20),
+                          ),
+                          title: Text(name,
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.w600)),
+                          subtitle: Text(
+                            hasPin ? 'PIN configurado' : 'Sem PIN',
+                            style: TextStyle(
+                                fontSize: 12,
+                                color: hasPin ? Colors.teal : Colors.grey),
+                          ),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              TextButton(
+                                onPressed: () => _editLogisticsPin(name),
+                                child: Text(hasPin ? 'Alterar' : 'Definir PIN',
+                                    style: const TextStyle(
+                                        color: Color(0xFF1E3A5F))),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.delete_outline,
+                                    color: Colors.red, size: 20),
+                                tooltip: 'Remover',
+                                onPressed: () => _deleteLogisticsUser(name),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    );
+                  }).toList(),
+                ),
+              ),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _addLogisticsUser,
+                icon: const Icon(Icons.person_add_outlined),
+                label: const Text('Adicionar Usuário de Logística'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.teal.shade700,
+                  side: BorderSide(color: Colors.teal.shade300),
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10)),
                   padding: const EdgeInsets.symmetric(vertical: 12),
