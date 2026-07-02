@@ -11,6 +11,7 @@ on:
       - 'assets/**'
       - 'firebase.json'
       - 'firestore.rules'
+      - 'firestore.indexes.json'
       - '.github/workflows/deploy-web.yml'
   workflow_dispatch:
 
@@ -49,10 +50,10 @@ jobs:
         env:
           FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
 
-      - name: Deploy Hosting + Firestore rules
+      - name: Deploy Hosting + Firestore rules + indexes
         run: |
           npx --yes firebase-tools@latest deploy \
-            --only hosting,firestore:rules \
+            --only hosting,firestore:rules,firestore:indexes \
             --project montagem-uset \
             --non-interactive \
           || echo "Deploy skipped — version already active (race condition)"

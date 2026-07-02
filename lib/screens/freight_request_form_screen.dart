@@ -209,63 +209,15 @@ class _FreightRequestFormScreenState extends State<FreightRequestFormScreen> {
                 'Selecione stands específicos ou deixe em branco para toda a feira.',
                 style: TextStyle(fontSize: 12, color: Colors.grey)),
             const SizedBox(height: 8),
-            Card(
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: _loadingClients
-                    ? const Center(
-                        child: CircularProgressIndicator(strokeWidth: 2))
-                    : _clients.isEmpty
-                        ? const Text('Nenhum stand disponível.',
-                            style: TextStyle(color: Colors.grey))
-                        : Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              if (_selectedClientIds.isEmpty)
-                                const Padding(
-                                  padding: EdgeInsets.only(bottom: 8),
-                                  child: Text('Toda a feira',
-                                      style: TextStyle(
-                                          color: Colors.grey,
-                                          fontStyle: FontStyle.italic)),
-                                ),
-                              Wrap(
-                                spacing: 6,
-                                runSpacing: 4,
-                                children: _clients.map((c) {
-                                  final sel = _selectedClientIds
-                                      .contains(c.firestoreId);
-                                  return FilterChip(
-                                    label: Text(
-                                      '${c.displayName} (${c.local})',
-                                      style: TextStyle(
-                                          fontSize: 12,
-                                          color: sel
-                                              ? Colors.white
-                                              : Colors.black87),
-                                    ),
-                                    selected: sel,
-                                    selectedColor: const Color(0xFF1E3A5F),
-                                    checkmarkColor: Colors.white,
-                                    onSelected: (v) {
-                                      setState(() {
-                                        if (v) {
-                                          _selectedClientIds
-                                              .add(c.firestoreId);
-                                        } else {
-                                          _selectedClientIds
-                                              .remove(c.firestoreId);
-                                        }
-                                      });
-                                    },
-                                  );
-                                }).toList(),
-                              ),
-                            ],
-                          ),
-              ),
+            _StandsPicker(
+              clients: _clients,
+              loading: _loadingClients,
+              selectedIds: _selectedClientIds,
+              onChanged: (ids) => setState(() {
+                _selectedClientIds
+                  ..clear()
+                  ..addAll(ids);
+              }),
             ),
             const SizedBox(height: 16),
 
@@ -472,4 +424,247 @@ class _FreightRequestFormScreenState extends State<FreightRequestFormScreen> {
             color: Colors.grey,
             letterSpacing: 1),
       );
+}
+
+// ─── Stands picker ────────────────────────────────────────────────────────────
+
+class _StandsPicker extends StatefulWidget {
+  final List<Client> clients;
+  final bool loading;
+  final Set<String> selectedIds;
+  final ValueChanged<Set<String>> onChanged;
+
+  const _StandsPicker({
+    required this.clients,
+    required this.loading,
+    required this.selectedIds,
+    required this.onChanged,
+  });
+
+  @override
+  State<_StandsPicker> createState() => _StandsPickerState();
+}
+
+class _StandsPickerState extends State<_StandsPicker> {
+  void _openSheet() async {
+    final result = await showModalBottomSheet<Set<String>>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (_) => _StandsSheet(
+        clients: widget.clients,
+        initial: Set<String>.from(widget.selectedIds),
+      ),
+    );
+    if (result != null) widget.onChanged(result);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.loading) {
+      return const Card(
+        child: Padding(
+          padding: EdgeInsets.all(16),
+          child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+        ),
+      );
+    }
+    if (widget.clients.isEmpty) {
+      return const Card(
+        child: Padding(
+          padding: EdgeInsets.all(12),
+          child: Text('Nenhum stand disponível.',
+              style: TextStyle(color: Colors.grey)),
+        ),
+      );
+    }
+
+    final count = widget.selectedIds.length;
+    final label = count == 0
+        ? 'Toda a feira'
+        : count == 1
+            ? '1 stand selecionado'
+            : '$count stands selecionados';
+
+    return InkWell(
+      onTap: _openSheet,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.grey.shade400),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  color: count == 0 ? Colors.grey : const Color(0xFF1E3A5F),
+                  fontStyle: count == 0 ? FontStyle.italic : FontStyle.normal,
+                  fontWeight:
+                      count > 0 ? FontWeight.w600 : FontWeight.normal,
+                ),
+              ),
+            ),
+            Icon(Icons.arrow_drop_down,
+                color: Colors.grey.shade600),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StandsSheet extends StatefulWidget {
+  final List<Client> clients;
+  final Set<String> initial;
+
+  const _StandsSheet({required this.clients, required this.initial});
+
+  @override
+  State<_StandsSheet> createState() => _StandsSheetState();
+}
+
+class _StandsSheetState extends State<_StandsSheet> {
+  late final Set<String> _selected;
+  final _searchCtrl = TextEditingController();
+  String _query = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _selected = Set<String>.from(widget.initial);
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  List<Client> get _filtered {
+    if (_query.isEmpty) return widget.clients;
+    final q = _query.toLowerCase();
+    return widget.clients
+        .where((c) =>
+            c.nome.toLowerCase().contains(q) ||
+            c.local.toLowerCase().contains(q))
+        .toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final filtered = _filtered;
+    return DraggableScrollableSheet(
+      initialChildSize: 0.75,
+      minChildSize: 0.4,
+      maxChildSize: 0.95,
+      expand: false,
+      builder: (_, scrollCtrl) => Column(
+        children: [
+          // Handle
+          Container(
+            margin: const EdgeInsets.symmetric(vertical: 10),
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2)),
+          ),
+          // Header
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: [
+                const Expanded(
+                  child: Text('Selecionar Stands',
+                      style: TextStyle(
+                          fontSize: 16, fontWeight: FontWeight.bold)),
+                ),
+                if (_selected.isNotEmpty)
+                  TextButton(
+                    onPressed: () => setState(() => _selected.clear()),
+                    child: const Text('Limpar',
+                        style: TextStyle(color: Colors.red)),
+                  ),
+                TextButton(
+                  onPressed: () => Navigator.pop(context, _selected),
+                  child: const Text('Confirmar',
+                      style: TextStyle(
+                          color: Color(0xFF1E3A5F),
+                          fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+          ),
+          // Search
+          Padding(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+            child: TextField(
+              controller: _searchCtrl,
+              onChanged: (v) => setState(() => _query = v),
+              decoration: InputDecoration(
+                hintText: 'Buscar stand...',
+                prefixIcon: const Icon(Icons.search, size: 20),
+                suffixIcon: _query.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.close, size: 18),
+                        onPressed: () {
+                          _searchCtrl.clear();
+                          setState(() => _query = '');
+                        })
+                    : null,
+                filled: true,
+                fillColor: Colors.grey.shade100,
+                border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide.none),
+                contentPadding: const EdgeInsets.symmetric(vertical: 10),
+              ),
+            ),
+          ),
+          const Divider(height: 1),
+          // List
+          Expanded(
+            child: filtered.isEmpty
+                ? const Center(
+                    child: Text('Nenhum stand encontrado.',
+                        style: TextStyle(color: Colors.grey)))
+                : ListView.builder(
+                    controller: scrollCtrl,
+                    itemCount: filtered.length,
+                    itemBuilder: (_, i) {
+                      final c = filtered[i];
+                      final sel = _selected.contains(c.firestoreId);
+                      return CheckboxListTile(
+                        value: sel,
+                        activeColor: const Color(0xFF1E3A5F),
+                        title: Text(c.displayName,
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w500)),
+                        subtitle: c.local.isNotEmpty
+                            ? Text('Local: ${c.local}',
+                                style: const TextStyle(fontSize: 12))
+                            : null,
+                        onChanged: (v) => setState(() {
+                          if (v == true) {
+                            _selected.add(c.firestoreId);
+                          } else {
+                            _selected.remove(c.firestoreId);
+                          }
+                        }),
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
 }
