@@ -448,11 +448,17 @@ class DatabaseService {
 
   /// Fair IDs that have at least one client where the leader's team column
   /// matches [leaderName]. The team-to-column mapping mirrors the hangar screen.
+  /// Teams without a per-client column (e.g. Comunicação Visual, Vidraceiro)
+  /// cover all fairs, so every fair ID is returned for them.
   static Future<List<int>> getFairIdsWithLeader(
       String leaderName, String team) async {
     final database = await db;
     final col = _teamColumn(team);
-    if (col == null) return [];
+    if (col == null) {
+      // No per-client column — this team covers all fairs.
+      final rows = await database.rawQuery('SELECT id FROM fairs');
+      return rows.map((r) => r['id'] as int).toList();
+    }
     final rows = await database.rawQuery(
       "SELECT DISTINCT fair_id FROM clients WHERE $col = ? AND $col != ''",
       [leaderName],
@@ -474,6 +480,8 @@ class DatabaseService {
         return 'tapeceiro';
       case 'teto 50':
         return 'teto50';
+      // Comunicação Visual e Vidraceiro não têm coluna por cliente —
+      // retorna null para que getFairIdsWithLeader liste todas as feiras.
       default:
         return null;
     }
