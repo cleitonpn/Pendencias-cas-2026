@@ -16,6 +16,7 @@ import 'spec_edit_requests_screen.dart';
 import 'archived_fairs_screen.dart';
 import 'freight_requests_screen.dart';
 import 'freight_report_screen.dart';
+import 'organizer_approval_screen.dart';
 
 class FairSelectionScreen extends StatelessWidget {
   final bool canManage;
@@ -128,6 +129,7 @@ class FairSelectionScreen extends StatelessWidget {
               ),
             ),
           if (canManage) const _SpecEditRequestsBanner(),
+          if (canManage) const OrganizerApprovalBanner(),
           Expanded(
             child: fairs.isEmpty
                 ? const _EmptyState()

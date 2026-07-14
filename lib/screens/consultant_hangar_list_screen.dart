@@ -111,7 +111,7 @@ class _ConsultantHangarListScreenState
                     context,
                     MaterialPageRoute(
                       builder: (_) => OrganizerApprovalScreen(
-                          consultantName: widget.consultantName),
+                          approverName: widget.consultantName),
                     ),
                   );
                   await _loadCounts();

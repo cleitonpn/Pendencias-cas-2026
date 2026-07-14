@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/fair.dart';
-import '../models/pending_item.dart';
 import '../providers/app_provider.dart';
 import '../services/database_service.dart';
-import '../services/firestore_service.dart';
+import '../services/firestore_service.dart' show FirestoreService;
 import '../services/session_service.dart';
 import '../widgets/app_drawer.dart';
 import 'login_screen.dart';
@@ -109,7 +108,7 @@ class _ConsultantHomeScreenState extends State<ConsultantHomeScreen> {
       body: Column(
         children: [
           // ── Approval banner (Firestore stream, always live) ─────────────────
-          _ApprovalBanner(consultantName: widget.consultantName),
+          OrganizerApprovalBanner(approverName: widget.consultantName),
           // ── Fairs list ──────────────────────────────────────────────────────
           Expanded(
             child: fairs.isEmpty
@@ -139,99 +138,6 @@ class _ConsultantHomeScreenState extends State<ConsultantHomeScreen> {
           ),
         ],
       ),
-    );
-  }
-}
-
-// ─── Approval banner ──────────────────────────────────────────────────────────
-
-class _ApprovalBanner extends StatelessWidget {
-  final String consultantName;
-  const _ApprovalBanner({required this.consultantName});
-
-  @override
-  Widget build(BuildContext context) {
-    return StreamBuilder<List<PendingItem>>(
-      stream: FirestoreService.streamAllPendingApprovals(),
-      builder: (context, snap) {
-        final count = snap.data?.length ?? 0;
-        if (count == 0 && snap.connectionState != ConnectionState.waiting) {
-          return const SizedBox.shrink();
-        }
-        return GestureDetector(
-          onTap: count == 0
-              ? null
-              : () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => OrganizerApprovalScreen(
-                          consultantName: consultantName),
-                    ),
-                  ),
-          child: Container(
-            margin: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: count > 0
-                  ? Colors.orange.shade50
-                  : Colors.grey.shade100,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                  color: count > 0
-                      ? Colors.orange.shade300
-                      : Colors.grey.shade300,
-                  width: 1.5),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.fact_check_outlined,
-                    color: count > 0 ? Colors.orange.shade800 : Colors.grey,
-                    size: 22),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: snap.connectionState == ConnectionState.waiting
-                      ? const Text('Verificando pedidos da organizadora…',
-                          style: TextStyle(color: Colors.grey, fontSize: 13))
-                      : Text(
-                          count == 0
-                              ? 'Nenhum pedido aguardando aprovação'
-                              : count == 1
-                                  ? '1 pedido da organizadora aguardando aprovação'
-                                  : '$count pedidos da organizadora aguardando aprovação',
-                          style: TextStyle(
-                              color: count > 0
-                                  ? Colors.orange.shade900
-                                  : Colors.grey,
-                              fontWeight: count > 0
-                                  ? FontWeight.w600
-                                  : FontWeight.normal,
-                              fontSize: 13),
-                        ),
-                ),
-                if (count > 0)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: Colors.orange.shade800,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text('$count',
-                        style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13)),
-                  ),
-                if (count > 0) ...[
-                  const SizedBox(width: 8),
-                  Icon(Icons.chevron_right,
-                      color: Colors.orange.shade800, size: 20),
-                ],
-              ],
-            ),
-          ),
-        );
-      },
     );
   }
 }
