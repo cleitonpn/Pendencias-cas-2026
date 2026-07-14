@@ -297,10 +297,9 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
       );
       await FirestoreService.savePendingItem(item, _fair!.name);
       if (!mounted) return;
-      setState(() {
-        _busy = false;
-        _step = _Step.sent;
-      });
+      setState(() => _busy = false);
+      // Go directly to "my requests" so the organizer sees the submitted item.
+      await _loadMyRequests();
     } catch (e) {
       if (!mounted) return;
       setState(() => _busy = false);

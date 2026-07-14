@@ -1,62 +1,73 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../models/pending_item.dart';
 import '../providers/app_provider.dart';
-import '../services/database_service.dart';
+import '../services/firestore_service.dart';
 import '../widgets/photo_gallery.dart';
-import 'package:provider/provider.dart';
 
-/// Attendant (consultant) queue of organizer requests awaiting approval.
-/// Approve → the request becomes a normal pending and flows to producer/leader.
-/// Reject → the request is finalized with a reason the organizer can see.
-class OrganizerApprovalScreen extends StatefulWidget {
+/// Consultant queue of all organizer requests awaiting approval across every fair.
+/// Uses a Firestore stream directly so no fair needs to be "selected" first.
+class OrganizerApprovalScreen extends StatelessWidget {
   final String consultantName;
   const OrganizerApprovalScreen({super.key, this.consultantName = ''});
 
-  @override
-  State<OrganizerApprovalScreen> createState() =>
-      _OrganizerApprovalScreenState();
-}
-
-class _OrganizerApprovalScreenState extends State<OrganizerApprovalScreen> {
-  List<PendingItem> _items = [];
-  bool _loading = false;
-  AppProvider? _provider;
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-    _provider = context.read<AppProvider>();
-    _provider!.addListener(_onChanged);
-  }
-
-  @override
-  void dispose() {
-    _provider?.removeListener(_onChanged);
-    super.dispose();
-  }
-
-  void _onChanged() {
-    if (mounted) _load(silent: true);
-  }
-
-  Future<void> _load({bool silent = false}) async {
-    if (!silent) setState(() => _loading = true);
-    final fairId = context.read<AppProvider>().currentFair?.id ?? 1;
-    final items = await DatabaseService.getPendingApprovalItems(fairId: fairId);
-    if (mounted) {
-      setState(() {
-        _items = items;
-        _loading = false;
-      });
-    }
-  }
-
-  String get _by => widget.consultantName.isNotEmpty
-      ? 'Consultor: ${widget.consultantName}'
+  String get _by => consultantName.isNotEmpty
+      ? 'Consultor: $consultantName'
       : 'Atendimento';
 
-  Future<void> _approve(PendingItem item) async {
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF0F2F5),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF1E3A5F),
+        title: const Text('Pedidos da Organizadora',
+            style: TextStyle(
+                color: Colors.white, fontWeight: FontWeight.bold, fontSize: 17)),
+        iconTheme: const IconThemeData(color: Colors.white),
+      ),
+      body: StreamBuilder<List<PendingItem>>(
+        stream: FirestoreService.streamAllPendingApprovals(),
+        builder: (context, snap) {
+          if (snap.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snap.hasError) {
+            return Center(
+              child: Text('Erro: ${snap.error}',
+                  style: const TextStyle(color: Colors.red)),
+            );
+          }
+          final items = snap.data ?? [];
+          if (items.isEmpty) {
+            return const Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.inbox_outlined, size: 64, color: Colors.grey),
+                  SizedBox(height: 12),
+                  Text('Nenhum pedido aguardando aprovação.',
+                      style: TextStyle(color: Colors.grey)),
+                ],
+              ),
+            );
+          }
+          return ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: items.length,
+            itemBuilder: (context, i) => _ApprovalCard(
+              item: items[i],
+              consultantLabel: _by,
+              onApprove: () => _approve(context, items[i]),
+              onReject: () => _reject(context, items[i]),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _approve(BuildContext context, PendingItem item) async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -78,18 +89,19 @@ class _OrganizerApprovalScreenState extends State<OrganizerApprovalScreen> {
       ),
     );
     if (ok != true) return;
-    await context
-        .read<AppProvider>()
-        .approveOrganizerItem(item.id!, firestoreId: item.firestoreId);
-    await _load();
-    if (mounted) {
+    // ignore: use_build_context_synchronously
+    await context.read<AppProvider>().approveOrganizerItem(
+          item.id!,
+          firestoreId: item.firestoreId,
+        );
+    if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('Pedido aprovado e liberado.'),
           backgroundColor: Colors.green));
     }
   }
 
-  Future<void> _reject(PendingItem item) async {
+  Future<void> _reject(BuildContext context, PendingItem item) async {
     final ctrl = TextEditingController();
     final ok = await showDialog<bool>(
       context: context,
@@ -129,63 +141,32 @@ class _OrganizerApprovalScreenState extends State<OrganizerApprovalScreen> {
       ),
     );
     if (ok != true) return;
+    // ignore: use_build_context_synchronously
     await context.read<AppProvider>().rejectOrganizerItem(
           item.id!,
           firestoreId: item.firestoreId,
           reason: ctrl.text.trim(),
           by: _by,
         );
-    await _load();
-    if (mounted) {
+    if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('Pedido recusado.'), backgroundColor: Colors.red));
     }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF0F2F5),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF1E3A5F),
-        title: const Text('Pedidos da Organizadora',
-            style: TextStyle(
-                color: Colors.white, fontWeight: FontWeight.bold, fontSize: 17)),
-      ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _items.isEmpty
-              ? const Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.inbox_outlined, size: 64, color: Colors.grey),
-                      SizedBox(height: 12),
-                      Text('Nenhum pedido aguardando aprovação.',
-                          style: TextStyle(color: Colors.grey)),
-                    ],
-                  ),
-                )
-              : ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: _items.length,
-                  itemBuilder: (context, i) => _ApprovalCard(
-                    item: _items[i],
-                    onApprove: () => _approve(_items[i]),
-                    onReject: () => _reject(_items[i]),
-                  ),
-                ),
-    );
   }
 }
 
 class _ApprovalCard extends StatelessWidget {
   final PendingItem item;
+  final String consultantLabel;
   final VoidCallback onApprove;
   final VoidCallback onReject;
 
-  const _ApprovalCard(
-      {required this.item, required this.onApprove, required this.onReject});
+  const _ApprovalCard({
+    required this.item,
+    required this.consultantLabel,
+    required this.onApprove,
+    required this.onReject,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -197,6 +178,22 @@ class _ApprovalCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Fair label
+            if (item.fairName.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Row(children: [
+                  const Icon(Icons.event_outlined,
+                      size: 13, color: Color(0xFF1E3A5F)),
+                  const SizedBox(width: 4),
+                  Text(item.fairName,
+                      style: const TextStyle(
+                          fontSize: 11,
+                          color: Color(0xFF1E3A5F),
+                          fontWeight: FontWeight.w600)),
+                ]),
+              ),
+            // Organizer badge
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
@@ -217,7 +214,8 @@ class _ApprovalCard extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Row(children: [
-              Text('${item.hangar.isNotEmpty ? "Hangar ${item.hangar} • " : ""}Stand ${item.local}',
+              Text(
+                  '${item.hangar.isNotEmpty ? "Hangar ${item.hangar} • " : ""}Stand ${item.local}',
                   style: const TextStyle(
                       fontWeight: FontWeight.bold, fontSize: 14)),
               const Spacer(),

@@ -110,6 +110,23 @@ class FirestoreService {
     });
   }
 
+  /// Real-time stream of all organizer items awaiting consultant approval,
+  /// across every fair. Filters in memory to avoid composite index requirement.
+  static Stream<List<PendingItem>> streamAllPendingApprovals() {
+    return _db
+        .collection('pending_items')
+        .where('origem', isEqualTo: 'organizadora')
+        .snapshots()
+        .map((snap) {
+      final items = snap.docs
+          .map((d) => PendingItem.fromFirestore(d.id, d.data()))
+          .where((item) => item.approvalStatus == 'pendente' && !item.isResolved)
+          .toList();
+      items.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return items;
+    });
+  }
+
   /// All requests created by a given organizer (for the "my requests" view).
   static Future<List<PendingItem>> getOrganizerRequests(String createdBy) async {
     final snapshot = await _db
