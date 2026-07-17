@@ -175,6 +175,8 @@ class SheetsService {
         'memorial descritivo', 'link do memorial']);
     final mobilarioIdx   = findCol(['mobiliário locado', 'mobiliario locado',
         'mobiliário', 'mobiliario']);
+    final extrasIdx      = findCol(['extras', 'extra', 'itens extras',
+        'itens adicionais']);
 
     // Event-level date columns.  'montagem'/'evento'/'desmontagem' alone are
     // accepted as fallbacks for sheets that don't use the "data " prefix.
@@ -251,6 +253,7 @@ class SheetsService {
         linkCv: s(linkCvIdx),
         linkMemorial: s(linkMemorialIdx),
         mobilario: s(mobilarioIdx),
+        extras: s(extrasIdx),
         pavilhao: s(pavilhaoIdx),
         dataMontagem: s(dataMontagemIdx),
         dataEvento: s(dataEventoIdx),
@@ -323,6 +326,8 @@ class SheetsService {
         'memorial descritivo', 'link do memorial']);
     final mobilarioIdx     = findCol(['mobiliário locado', 'mobiliario locado',
         'mobiliário', 'mobiliario']);
+    final extrasIdx        = findCol(['extras', 'extra', 'itens extras',
+        'itens adicionais']);
     final linkPlantaIdx    = findCol(['link planta', 'link da planta',
         'planta baixa', 'planta', 'mapa']);
     final linkDriveIdx     = findCol(['link drive', 'drive',
@@ -394,6 +399,7 @@ class SheetsService {
         linkCv: s(linkCvIdx),
         linkMemorial: s(linkMemorialIdx),
         mobilario: s(mobilarioIdx),
+        extras: s(extrasIdx),
         pavilhao: s(pavilhaoIdx),
         dataMontagem: s(dataMontagemIdx),
         dataEvento: s(dataEventoIdx),

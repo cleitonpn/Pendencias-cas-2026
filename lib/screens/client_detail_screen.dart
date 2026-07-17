@@ -428,6 +428,33 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
               ),
             ],
 
+            // Extras
+            if (c.extras.isNotEmpty) ...[
+              const _SectionTitle(text: 'EXTRAS', color: Colors.deepPurple),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Card(
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(Icons.star_outline,
+                            color: Colors.deepPurple, size: 20),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(c.extras,
+                              style: const TextStyle(fontSize: 14)),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+
             // Stand specifications (filled by consultant, read-only here)
             ClientSpecsCard(clientId: c.firestoreId, legacyClientId: c.rowId),
 

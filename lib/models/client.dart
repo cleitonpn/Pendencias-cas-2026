@@ -24,6 +24,7 @@ class Client {
   final String linkCv;
   final String linkMemorial;
   final String mobilario;
+  final String extras;       // coluna "extras" da planilha
 
   // Event-level info columns (same for all clients in a fair)
   final String pavilhao;
@@ -61,6 +62,7 @@ class Client {
     this.linkCv = '',
     this.linkMemorial = '',
     this.mobilario = '',
+    this.extras = '',
     this.pavilhao = '',
     this.dataMontagem = '',
     this.dataEvento = '',
@@ -98,6 +100,7 @@ class Client {
         linkCv: linkCv,
         linkMemorial: linkMemorial,
         mobilario: mobilario,
+        extras: extras,
         pavilhao: pavilhao,
         dataMontagem: dataMontagem,
         dataEvento: dataEvento,
@@ -133,6 +136,7 @@ class Client {
         'link_cv': linkCv,
         'link_memorial': linkMemorial,
         'mobilario': mobilario,
+        'extras': extras,
         'pavilhao': pavilhao,
         'data_montagem': dataMontagem,
         'data_evento': dataEvento,
@@ -170,6 +174,7 @@ class Client {
         linkCv: map['link_cv'] ?? '',
         linkMemorial: map['link_memorial'] ?? '',
         mobilario: map['mobilario'] ?? '',
+        extras: map['extras'] ?? '',
         pavilhao: map['pavilhao'] ?? '',
         dataMontagem: map['data_montagem'] ?? '',
         dataEvento: map['data_evento'] ?? '',

@@ -438,6 +438,33 @@ class _ConsultantClientDetailScreenState
               ),
             ],
 
+            // Extras
+            if (c.extras.isNotEmpty) ...[
+              const _SectionTitle(text: 'EXTRAS', color: Colors.deepPurple),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Card(
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(Icons.star_outline,
+                            color: Colors.deepPurple, size: 20),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(c.extras,
+                              style: const TextStyle(fontSize: 14)),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+
             // Especificações do stand
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
