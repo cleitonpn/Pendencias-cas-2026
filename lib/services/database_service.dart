@@ -696,12 +696,32 @@ class DatabaseService {
   static Future<void> upsertPendingFromFirestore(PendingItem item) async {
     if (item.firestoreId == null) return;
     final database = await db;
+
+    // Resolve Firestore clientId to the local row_id format.
+    // Firestore may store firestoreId (e.g. 'cas_2026_5'); all SQLite queries
+    // use row_id (e.g. '1_5'). Match on either firestore_id or row_id.
+    String clientId = item.clientId;
+    int fairId = int.tryParse(item.clientId.split('_').first) ?? 1;
+    final clientRow = await database.query(
+      'clients',
+      columns: ['row_id', 'fair_id'],
+      where: "COALESCE(NULLIF(firestore_id, ''), row_id) = ?",
+      whereArgs: [item.clientId],
+      limit: 1,
+    );
+    if (clientRow.isNotEmpty) {
+      clientId = clientRow.first['row_id'] as String;
+      fairId = clientRow.first['fair_id'] as int;
+    }
+
     final existing = await database.query('pending_items',
         where: 'firestore_id = ?', whereArgs: [item.firestoreId], limit: 1);
     if (existing.isNotEmpty) {
       await database.update(
         'pending_items',
         {
+          'client_id': clientId, // normalize if previously stored as firestoreId
+          'fair_id': fairId,
           'is_resolved': item.isResolved ? 1 : 0,
           'awaiting_validation': item.awaitingValidation ? 1 : 0,
           'in_progress': item.inProgress ? 1 : 0,
@@ -717,21 +737,6 @@ class DatabaseService {
         whereArgs: [item.firestoreId],
       );
     } else {
-      // Resolve clientId to rowId (in case Firestore stored a firestoreId).
-      // All SQLite queries use row_id so we must store row_id as client_id.
-      String clientId = item.clientId;
-      int fairId = int.tryParse(item.clientId.split('_').first) ?? 1;
-      final clientRow = await database.query(
-        'clients',
-        columns: ['row_id', 'fair_id'],
-        where: "COALESCE(NULLIF(firestore_id, ''), row_id) = ?",
-        whereArgs: [item.clientId],
-        limit: 1,
-      );
-      if (clientRow.isNotEmpty) {
-        clientId = clientRow.first['row_id'] as String;
-        fairId = clientRow.first['fair_id'] as int;
-      }
       final data = {...item.toMap(), 'fair_id': fairId, 'client_id': clientId};
       await database.insert(
         'pending_items',

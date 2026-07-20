@@ -23,6 +23,7 @@ class ProducerClientListScreen extends StatefulWidget {
 class _ProducerClientListScreenState
     extends State<ProducerClientListScreen> {
   String _search = '';
+  bool _filterPending = false;
   Map<String, int> _pendingCounts = {};
 
   @override
@@ -32,13 +33,15 @@ class _ProducerClientListScreenState
   }
 
   Future<void> _loadCounts() async {
-    final clients = _filteredClients;
+    final clients = _allClients;
+    if (clients.isEmpty) return;
     final counts = await DatabaseService.getPendingCounts(
         clients.map((c) => c.rowId).toList());
     if (mounted) setState(() => _pendingCounts = counts);
   }
 
-  List<Client> get _filteredClients {
+  // All clients for this producer+hangar (search applied, pending filter NOT applied).
+  List<Client> get _allClients {
     final all = context.read<AppProvider>().clients;
     var list = all.where((c) {
       if (c.produtor != widget.producerName) return false;
@@ -59,9 +62,18 @@ class _ProducerClientListScreenState
     return list;
   }
 
+  // Clients shown in the list (pending filter applied on top of _allClients).
+  List<Client> get _displayedClients {
+    final list = _allClients;
+    if (!_filterPending) return list;
+    return list.where((c) => (_pendingCounts[c.rowId] ?? 0) > 0).toList();
+  }
+
   @override
   Widget build(BuildContext context) {
-    final clients = _filteredClients;
+    final all = _allClients;
+    final displayed = _displayedClients;
+    final withPending = all.where((c) => (_pendingCounts[c.rowId] ?? 0) > 0).length;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF0F2F5),
@@ -99,43 +111,54 @@ class _ProducerClientListScreenState
       ),
       body: Column(
         children: [
-          // Stats bar
+          // Stats / filter bar
           Container(
             color: Colors.white,
             padding:
                 const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Row(
               children: [
-                _chip('Total', clients.length, Colors.blue),
+                _StatChip(
+                  label: 'Total',
+                  value: all.length,
+                  color: Colors.blue,
+                  selected: !_filterPending,
+                  onTap: () => setState(() => _filterPending = false),
+                ),
                 const SizedBox(width: 8),
-                _chip(
-                    'Com pendência',
-                    clients
-                        .where((c) =>
-                            (_pendingCounts[c.rowId] ?? 0) > 0)
-                        .length,
-                    Colors.orange),
+                _StatChip(
+                  label: 'Com pendência',
+                  value: withPending,
+                  color: Colors.orange,
+                  selected: _filterPending,
+                  onTap: () => setState(() => _filterPending = !_filterPending),
+                ),
               ],
             ),
           ),
           Expanded(
-            child: clients.isEmpty
-                ? const Center(
-                    child: Text('Nenhum cliente encontrado.',
-                        style: TextStyle(color: Colors.grey)))
+            child: displayed.isEmpty
+                ? Center(
+                    child: Text(
+                      _filterPending
+                          ? 'Nenhum cliente com pendência.'
+                          : 'Nenhum cliente encontrado.',
+                      style: const TextStyle(color: Colors.grey),
+                    ),
+                  )
                 : ListView.builder(
                     padding: const EdgeInsets.all(12),
-                    itemCount: clients.length,
+                    itemCount: displayed.length,
                     itemBuilder: (context, i) => _ClientCard(
-                      client: clients[i],
+                      client: displayed[i],
                       pendingCount:
-                          _pendingCounts[clients[i].rowId] ?? 0,
+                          _pendingCounts[displayed[i].rowId] ?? 0,
                       onTap: () async {
                         await Navigator.push(
                           context,
                           MaterialPageRoute(
                             builder: (_) => ProducerClientDetailScreen(
-                              client: clients[i],
+                              client: displayed[i],
                               producerName: widget.producerName,
                             ),
                           ),
@@ -149,26 +172,59 @@ class _ProducerClientListScreenState
       ),
     );
   }
+}
 
-  Widget _chip(String label, int value, Color color) => Container(
-        padding:
-            const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+class _StatChip extends StatelessWidget {
+  final String label;
+  final int value;
+  final Color color;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _StatChip({
+    required this.label,
+    required this.value,
+    required this.color,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
+          color: selected ? color : color.withOpacity(0.08),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: color.withOpacity(0.3)),
+          border: Border.all(
+              color: selected ? color : color.withOpacity(0.3), width: 1.5),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('$value',
-                style: TextStyle(
-                    fontWeight: FontWeight.bold, color: color)),
+            Text(
+              '$value',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: selected ? Colors.white : color,
+              ),
+            ),
             const SizedBox(width: 4),
-            Text(label, style: TextStyle(fontSize: 12, color: color)),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                color: selected ? Colors.white : color,
+              ),
+            ),
           ],
         ),
-      );
+      ),
+    );
+  }
 }
 
 class _ClientCard extends StatelessWidget {
