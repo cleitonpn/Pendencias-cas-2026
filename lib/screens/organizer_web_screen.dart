@@ -280,7 +280,7 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
         ));
       }
       final item = PendingItem(
-        clientId: _client!.firestoreId,
+        clientId: _client!.rowId,
         clientName: _client!.displayName,
         producerName: _client!.produtor,
         fairName: _fair!.name,

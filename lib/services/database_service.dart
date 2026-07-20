@@ -15,7 +15,7 @@ class DatabaseService {
 
   static Future<Database> _initDb() async {
     final path = join(await getDatabasesPath(), 'cas2026.db');
-    return openDatabase(path, version: 19, onCreate: _onCreate, onUpgrade: _onUpgrade);
+    return openDatabase(path, version: 20, onCreate: _onCreate, onUpgrade: _onUpgrade);
   }
 
   static Future<void> _onCreate(Database db, int version) async {
@@ -239,6 +239,34 @@ class DatabaseService {
     if (oldV < 19) {
       try {
         await db.execute("ALTER TABLE clients ADD COLUMN extras TEXT DEFAULT ''");
+      } catch (_) {}
+    }
+    if (oldV < 20) {
+      // Fix pending items that were incorrectly stored with firestoreId as
+      // client_id. All SQLite queries use row_id, so we normalise client_id
+      // back to row_id and update fair_id accordingly.
+      try {
+        await db.rawUpdate('''
+          UPDATE pending_items
+          SET
+            client_id = (
+              SELECT c.row_id FROM clients c
+              WHERE c.firestore_id = pending_items.client_id
+                AND c.firestore_id != ''
+              LIMIT 1
+            ),
+            fair_id = COALESCE((
+              SELECT c.fair_id FROM clients c
+              WHERE c.firestore_id = pending_items.client_id
+                AND c.firestore_id != ''
+              LIMIT 1
+            ), fair_id)
+          WHERE EXISTS (
+            SELECT 1 FROM clients c
+            WHERE c.firestore_id = pending_items.client_id
+              AND c.firestore_id != ''
+          )
+        ''');
       } catch (_) {}
     }
   }
@@ -689,10 +717,25 @@ class DatabaseService {
         whereArgs: [item.firestoreId],
       );
     } else {
-      final fairId = int.tryParse(item.clientId.split('_').first) ?? 1;
+      // Resolve clientId to rowId (in case Firestore stored a firestoreId).
+      // All SQLite queries use row_id so we must store row_id as client_id.
+      String clientId = item.clientId;
+      int fairId = int.tryParse(item.clientId.split('_').first) ?? 1;
+      final clientRow = await database.query(
+        'clients',
+        columns: ['row_id', 'fair_id'],
+        where: "COALESCE(NULLIF(firestore_id, ''), row_id) = ?",
+        whereArgs: [item.clientId],
+        limit: 1,
+      );
+      if (clientRow.isNotEmpty) {
+        clientId = clientRow.first['row_id'] as String;
+        fairId = clientRow.first['fair_id'] as int;
+      }
+      final data = {...item.toMap(), 'fair_id': fairId, 'client_id': clientId};
       await database.insert(
         'pending_items',
-        {...item.toMap(), 'fair_id': fairId},
+        data,
         conflictAlgorithm: ConflictAlgorithm.ignore,
       );
     }
