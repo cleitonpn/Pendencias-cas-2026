@@ -26,6 +26,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   // Organizers
   List<String> _organizers = [];
   Map<String, String?> _organizerPins = {};
+  Map<String, int?> _organizerFairIds = {};
+  List<Map<String, dynamic>> _allFairs = [];
 
   // Team leaders
   List<String> _leaderNames = [];
@@ -97,9 +99,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final allOrganizers =
         {...localOrganizers, ...firestoreOrganizers}.toList()..sort();
     final organizerPins = <String, String?>{};
+    final organizerFairIds = <String, int?>{};
     for (final o in allOrganizers) {
       organizerPins[o] = await FirestoreService.getOrganizerPin(o);
+      organizerFairIds[o] = await FirestoreService.getOrganizerFairId(o);
     }
+    final allFairs = await FirestoreService.getFairs();
 
     final leaderList = await FirestoreService.getTeamLeadersWithPins();
     final lNames = leaderList.map((l) => l['name']!).toList();
@@ -141,6 +146,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _consultantPins = consultantPins;
         _organizers = allOrganizers;
         _organizerPins = organizerPins;
+        _organizerFairIds = organizerFairIds;
+        _allFairs = allFairs;
         _leaderNames = lNames;
         _leaderTeams = lTeams;
         _leaderPins = lPins;
@@ -286,49 +293,89 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _editOrganizerPin(String name) async {
     final currentPin = _organizerPins[name];
     final ctrl = TextEditingController(text: currentPin ?? '');
+    int? selectedFairId = _organizerFairIds[name];
 
-    final result = await showDialog<String>(
+    final fairs = _allFairs
+        .where((f) =>
+            f['id'] != null &&
+            (f['spreadsheetId'] as String? ?? '').isNotEmpty)
+        .toList()
+      ..sort((a, b) => (a['name'] as String).compareTo(b['name'] as String));
+
+    final result = await showDialog<_OrganizerPinResult>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        title: Text('PIN — $name'),
-        content: TextField(
-          controller: ctrl,
-          keyboardType: TextInputType.number,
-          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-          maxLength: 6,
-          autofocus: true,
-          decoration: const InputDecoration(
-            hintText: 'Digite o PIN (4–6 dígitos)',
-            prefixIcon: Icon(Icons.lock_outline),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          title: Text('Organizadora — $name'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DropdownButtonFormField<int?>(
+                value: selectedFairId,
+                decoration: const InputDecoration(
+                  labelText: 'Feira vinculada',
+                  prefixIcon: Icon(Icons.event_outlined),
+                ),
+                items: [
+                  const DropdownMenuItem<int?>(
+                      value: null, child: Text('— sem vínculo —')),
+                  ...fairs.map((f) => DropdownMenuItem<int?>(
+                        value: f['id'] as int,
+                        child: Text(f['name'] as String),
+                      )),
+                ],
+                onChanged: (v) => setDialogState(() => selectedFairId = v),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: ctrl,
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                maxLength: 6,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  hintText: 'PIN (4–6 dígitos)',
+                  prefixIcon: Icon(Icons.lock_outline),
+                ),
+                onSubmitted: (_) => Navigator.pop(
+                    ctx, _OrganizerPinResult(ctrl.text, selectedFairId)),
+              ),
+            ],
           ),
-          onSubmitted: (_) => Navigator.pop(ctx, ctrl.text),
-        ),
-        actions: [
-          if (currentPin != null)
+          actions: [
+            if (currentPin != null)
+              TextButton(
+                onPressed: () =>
+                    Navigator.pop(ctx, _OrganizerPinResult('', null)),
+                child:
+                    const Text('Remover', style: TextStyle(color: Colors.red)),
+              ),
             TextButton(
-              onPressed: () => Navigator.pop(ctx, ''),
-              child: const Text('Remover', style: TextStyle(color: Colors.red)),
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancelar')),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(
+                  ctx, _OrganizerPinResult(ctrl.text, selectedFairId)),
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF1E3A5F),
+                  foregroundColor: Colors.white),
+              child: const Text('Salvar'),
             ),
-          TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancelar')),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, ctrl.text),
-            style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF1E3A5F),
-                foregroundColor: Colors.white),
-            child: const Text('Salvar'),
-          ),
-        ],
+          ],
+        ),
       ),
     );
 
     if (result == null) return;
-    if (result.isEmpty) {
+    if (result.pin.isEmpty) {
       await FirestoreService.deleteOrganizerPin(name);
     } else {
-      await FirestoreService.setOrganizerPin(name, result);
+      await FirestoreService.setOrganizerPin(name, result.pin);
+      if (result.fairId != null) {
+        await FirestoreService.setOrganizerFairId(name, result.fairId!);
+      }
     }
     await _loadPins();
   }
@@ -1989,4 +2036,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ],
         ),
       );
+}
+
+class _OrganizerPinResult {
+  final String pin;
+  final int? fairId;
+  const _OrganizerPinResult(this.pin, this.fairId);
 }

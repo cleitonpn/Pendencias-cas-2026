@@ -138,6 +138,17 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
   Future<void> _loadFairs() async {
     setState(() => _step = _Step.loading);
     try {
+      // Fast path: if the organizer has a specific fair assigned in Firestore,
+      // skip the slow spreadsheet-by-spreadsheet scan.
+      if (widget.fairId == null) {
+        final assignedId =
+            await FirestoreService.getOrganizerFairId(_organizerName!);
+        if (assignedId != null) {
+          await _loadFairById(assignedId);
+          return;
+        }
+      }
+
       final all = (await FirestoreService.getFairs())
           .map(_fairFromData)
           .where((f) =>
@@ -211,6 +222,9 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
       );
 
   Future<void> _selectFair(Fair f) async {
+    // Persist in both Firestore and SharedPreferences so future sessions
+    // go straight to this fair without the full spreadsheet scan.
+    await FirestoreService.setOrganizerFairId(_organizerName!, f.id!);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_kFairId, f.id!);
     setState(() {

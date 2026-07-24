@@ -1,7 +1,7 @@
 name: montagem_uset
 description: Gestão de pendências - Montagem USET
 publish_to: 'none'
-version: 1.0.45+46
+version: 1.0.46+47
 
 environment:
   sdk: '>=3.3.0 <4.0.0'

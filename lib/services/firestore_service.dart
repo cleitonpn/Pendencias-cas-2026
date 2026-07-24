@@ -261,11 +261,32 @@ class FirestoreService {
   }
 
   static Future<void> setOrganizerPin(String name, String pin) async {
-    await _db.collection('organizer_pins').doc(name).set({'pin': pin});
+    await _db
+        .collection('organizer_pins')
+        .doc(name)
+        .set({'pin': pin}, SetOptions(merge: true));
   }
 
   static Future<void> deleteOrganizerPin(String name) async {
     await _db.collection('organizer_pins').doc(name).delete();
+  }
+
+  /// Returns the fair ID linked to this organizer, or null if not set.
+  static Future<int?> getOrganizerFairId(String name) async {
+    final doc = await _db.collection('organizer_pins').doc(name).get();
+    if (!doc.exists) return null;
+    final v = doc.data()?['fairId'];
+    if (v is int) return v;
+    if (v is String) return int.tryParse(v);
+    return null;
+  }
+
+  /// Associates an organizer with a specific fair (merges into existing doc).
+  static Future<void> setOrganizerFairId(String name, int fairId) async {
+    await _db
+        .collection('organizer_pins')
+        .doc(name)
+        .set({'fairId': fairId}, SetOptions(merge: true));
   }
 
   static Future<List<String>> getOrganizersWithPins() async {
