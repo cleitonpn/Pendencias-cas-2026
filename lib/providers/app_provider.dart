@@ -564,6 +564,34 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Full edit: updates team, responsible, description and photos.
+  Future<void> editPendingItemFull(
+    int sqliteId, {
+    String? firestoreId,
+    required String team,
+    required String responsible,
+    required String description,
+    required List<String> photoUrls,
+  }) async {
+    await DatabaseService.updatePendingFull(
+      sqliteId,
+      team: team,
+      responsible: responsible,
+      description: description,
+      photoUrls: photoUrls,
+    );
+    if (firestoreId != null && firestoreId.isNotEmpty) {
+      FirestoreService.updatePendingFull(
+        firestoreId,
+        team: team,
+        responsible: responsible,
+        description: description,
+        photoUrls: photoUrls,
+      ).catchError((_) {});
+    }
+    notifyListeners();
+  }
+
   Future<void> resolveItem(int sqliteId, {String? firestoreId, String? by}) async {
     await DatabaseService.resolvePendingItem(sqliteId, resolvedBy: by);
     if (firestoreId != null) {

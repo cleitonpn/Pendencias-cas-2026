@@ -776,6 +776,28 @@ class DatabaseService {
     );
   }
 
+  /// Full edit: updates team, responsible, description and photos in SQLite.
+  static Future<void> updatePendingFull(
+      int id, {
+      required String team,
+      required String responsible,
+      required String description,
+      required List<String> photoUrls,
+  }) async {
+    final database = await db;
+    await database.update(
+      'pending_items',
+      {
+        'team': team,
+        'responsible': responsible,
+        'description': description,
+        'photo_urls': jsonEncode(photoUrls),
+      },
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
   static Future<void> resolvePendingItem(int id, {String? resolvedBy}) async {
     final database = await db;
     await database.update(

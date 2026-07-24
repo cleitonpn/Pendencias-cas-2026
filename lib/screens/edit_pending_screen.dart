@@ -7,7 +7,7 @@ import '../models/client.dart';
 import '../models/pending_item.dart';
 import '../services/storage_service.dart';
 
-/// Edits the description and photos of an unresolved pending item.
+/// Edits team, responsible, description and photos of an unresolved pending item.
 class EditPendingScreen extends StatefulWidget {
   final PendingItem item;
   final Client client;
@@ -19,17 +19,54 @@ class EditPendingScreen extends StatefulWidget {
 }
 
 class _EditPendingScreenState extends State<EditPendingScreen> {
-  late final TextEditingController _descCtrl =
-      TextEditingController(text: widget.item.description);
-  late List<String> _existingPhotos = List<String>.from(widget.item.photoUrls);
+  static const _teams = [
+    'Limpeza',
+    'Elétrica',
+    'Marcenaria',
+    'Tapeçaria',
+    'Vidraceiro',
+    'Comunicação Visual',
+  ];
+
+  late String _selectedTeam;
+  late final TextEditingController _responsibleCtrl;
+  late final TextEditingController _descCtrl;
+  late List<String> _existingPhotos;
   final List<XFile> _newPhotos = [];
   final _picker = ImagePicker();
   bool _saving = false;
 
   @override
+  void initState() {
+    super.initState();
+    _selectedTeam = _teams.contains(widget.item.team)
+        ? widget.item.team
+        : _teams.first;
+    _responsibleCtrl =
+        TextEditingController(text: widget.item.responsible);
+    _descCtrl =
+        TextEditingController(text: widget.item.description);
+    _existingPhotos = List<String>.from(widget.item.photoUrls);
+  }
+
+  @override
   void dispose() {
+    _responsibleCtrl.dispose();
     _descCtrl.dispose();
     super.dispose();
+  }
+
+  String _defaultResponsible(String team) {
+    final c = widget.client;
+    switch (team) {
+      case 'Limpeza':            return c.faxineira;
+      case 'Elétrica':           return c.eletricista;
+      case 'Marcenaria':         return c.marceneiro;
+      case 'Tapeçaria':          return c.tapeceiro;
+      case 'Vidraceiro':         return 'Rodrigo';
+      case 'Comunicação Visual': return 'Vinícius';
+      default:                   return '';
+    }
   }
 
   Future<void> _pickPhoto(ImageSource source) async {
@@ -67,9 +104,11 @@ class _EditPendingScreenState extends State<EditPendingScreen> {
         );
         urls.addAll(uploaded);
       }
-      await context.read<AppProvider>().editPendingItem(
+      await context.read<AppProvider>().editPendingItemFull(
             widget.item.id!,
             firestoreId: widget.item.firestoreId,
+            team: _selectedTeam,
+            responsible: _responsibleCtrl.text.trim(),
             description: _descCtrl.text.trim(),
             photoUrls: urls,
           );
@@ -106,26 +145,79 @@ class _EditPendingScreenState extends State<EditPendingScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Stand info (read-only)
             Card(
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10)),
               child: ListTile(
-                leading: const Icon(Icons.info_outline, color: Color(0xFF1E3A5F)),
-                title: Text(widget.item.team,
+                leading: const Icon(Icons.store_outlined,
+                    color: Color(0xFF1E3A5F)),
+                title: Text(widget.client.displayName,
                     style: const TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: Text(widget.client.displayName),
+                subtitle: Text(
+                    'Stand ${widget.client.local}'
+                    '${widget.client.hangar.isNotEmpty ? " • Hangar ${widget.client.hangar}" : ""}'),
               ),
             ),
             const SizedBox(height: 20),
-            const Text('DESCRIÇÃO',
-                style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.grey,
-                    letterSpacing: 1)),
-            const SizedBox(height: 10),
+
+            // Team dropdown
+            _label('EQUIPE'),
+            const SizedBox(height: 8),
+            DropdownButtonFormField<String>(
+              value: _selectedTeam,
+              decoration: InputDecoration(
+                border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10)),
+                filled: true,
+                fillColor: Colors.white,
+                prefixIcon: const Icon(Icons.groups_outlined,
+                    color: Color(0xFF1E3A5F)),
+                contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12, vertical: 14),
+              ),
+              items: _teams
+                  .map((t) => DropdownMenuItem(value: t, child: Text(t)))
+                  .toList(),
+              onChanged: _saving
+                  ? null
+                  : (v) {
+                      if (v == null) return;
+                      setState(() {
+                        _selectedTeam = v;
+                        // Auto-fill responsible from client data; admin can override.
+                        final def = _defaultResponsible(v);
+                        if (def.isNotEmpty) _responsibleCtrl.text = def;
+                      });
+                    },
+            ),
+            const SizedBox(height: 16),
+
+            // Responsible
+            _label('RESPONSÁVEL'),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _responsibleCtrl,
+              enabled: !_saving,
+              textCapitalization: TextCapitalization.words,
+              decoration: InputDecoration(
+                border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10)),
+                filled: true,
+                fillColor: Colors.white,
+                prefixIcon: const Icon(Icons.person_outline,
+                    color: Color(0xFF1E3A5F)),
+                hintText: 'Nome do responsável',
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Description
+            _label('DESCRIÇÃO'),
+            const SizedBox(height: 8),
             TextField(
               controller: _descCtrl,
+              enabled: !_saving,
               maxLines: 5,
               textCapitalization: TextCapitalization.sentences,
               decoration: InputDecoration(
@@ -136,53 +228,28 @@ class _EditPendingScreenState extends State<EditPendingScreen> {
               ),
             ),
             const SizedBox(height: 20),
-            const Text('FOTOS',
-                style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.grey,
-                    letterSpacing: 1)),
-            const SizedBox(height: 10),
+
+            // Photos
+            _label('FOTOS'),
+            const SizedBox(height: 8),
             if (_existingPhotos.isNotEmpty) ...[
               const Text('Atuais (toque no × para remover):',
                   style: TextStyle(color: Colors.grey, fontSize: 12)),
               const SizedBox(height: 6),
-              SizedBox(
-                height: 84,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: _existingPhotos.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 8),
-                  itemBuilder: (context, i) => Stack(children: [
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: Image.network(_existingPhotos[i],
-                          width: 84, height: 84, fit: BoxFit.cover),
-                    ),
-                    Positioned(
-                      top: 2,
-                      right: 2,
-                      child: GestureDetector(
-                        onTap: () =>
-                            setState(() => _existingPhotos.removeAt(i)),
-                        child: Container(
-                          decoration: const BoxDecoration(
-                              color: Colors.black54, shape: BoxShape.circle),
-                          padding: const EdgeInsets.all(2),
-                          child: const Icon(Icons.close,
-                              color: Colors.white, size: 16),
-                        ),
-                      ),
-                    ),
-                  ]),
-                ),
+              _photoRow(
+                count: _existingPhotos.length,
+                imageBuilder: (i) => Image.network(_existingPhotos[i],
+                    width: 84, height: 84, fit: BoxFit.cover),
+                onRemove: (i) =>
+                    setState(() => _existingPhotos.removeAt(i)),
               ),
               const SizedBox(height: 12),
             ],
             Row(children: [
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: _saving ? null : () => _pickPhoto(ImageSource.camera),
+                  onPressed:
+                      _saving ? null : () => _pickPhoto(ImageSource.camera),
                   icon: const Icon(Icons.photo_camera_outlined, size: 18),
                   label: const Text('Câmera'),
                   style: OutlinedButton.styleFrom(
@@ -195,7 +262,8 @@ class _EditPendingScreenState extends State<EditPendingScreen> {
               const SizedBox(width: 10),
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: _saving ? null : () => _pickPhoto(ImageSource.gallery),
+                  onPressed:
+                      _saving ? null : () => _pickPhoto(ImageSource.gallery),
                   icon: const Icon(Icons.photo_library_outlined, size: 18),
                   label: const Text('Galeria'),
                   style: OutlinedButton.styleFrom(
@@ -211,34 +279,11 @@ class _EditPendingScreenState extends State<EditPendingScreen> {
               const Text('Novas:',
                   style: TextStyle(color: Colors.grey, fontSize: 12)),
               const SizedBox(height: 6),
-              SizedBox(
-                height: 84,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: _newPhotos.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 8),
-                  itemBuilder: (context, i) => Stack(children: [
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: Image.file(File(_newPhotos[i].path),
-                          width: 84, height: 84, fit: BoxFit.cover),
-                    ),
-                    Positioned(
-                      top: 2,
-                      right: 2,
-                      child: GestureDetector(
-                        onTap: () => setState(() => _newPhotos.removeAt(i)),
-                        child: Container(
-                          decoration: const BoxDecoration(
-                              color: Colors.black54, shape: BoxShape.circle),
-                          padding: const EdgeInsets.all(2),
-                          child: const Icon(Icons.close,
-                              color: Colors.white, size: 16),
-                        ),
-                      ),
-                    ),
-                  ]),
-                ),
+              _photoRow(
+                count: _newPhotos.length,
+                imageBuilder: (i) => Image.file(File(_newPhotos[i].path),
+                    width: 84, height: 84, fit: BoxFit.cover),
+                onRemove: (i) => setState(() => _newPhotos.removeAt(i)),
               ),
             ],
             const SizedBox(height: 28),
@@ -266,6 +311,50 @@ class _EditPendingScreenState extends State<EditPendingScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _label(String text) => Text(
+        text,
+        style: const TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+            color: Colors.grey,
+            letterSpacing: 1),
+      );
+
+  Widget _photoRow({
+    required int count,
+    required Widget Function(int) imageBuilder,
+    required void Function(int) onRemove,
+  }) {
+    return SizedBox(
+      height: 84,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: count,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (context, i) => Stack(children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: imageBuilder(i),
+          ),
+          Positioned(
+            top: 2,
+            right: 2,
+            child: GestureDetector(
+              onTap: () => onRemove(i),
+              child: Container(
+                decoration: const BoxDecoration(
+                    color: Colors.black54, shape: BoxShape.circle),
+                padding: const EdgeInsets.all(2),
+                child: const Icon(Icons.close,
+                    color: Colors.white, size: 16),
+              ),
+            ),
+          ),
+        ]),
       ),
     );
   }

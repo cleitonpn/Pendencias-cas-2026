@@ -159,6 +159,23 @@ class FirestoreService {
     });
   }
 
+  /// Full edit: updates team, responsible, description and photos.
+  static Future<void> updatePendingFull(
+      String firestoreId, {
+      required String team,
+      required String responsible,
+      required String description,
+      required List<String> photoUrls,
+  }) async {
+    if (firestoreId.isEmpty) return;
+    await _db.collection('pending_items').doc(firestoreId).update({
+      'team': team,
+      'responsible': responsible,
+      'description': description,
+      'photoUrls': photoUrls,
+    });
+  }
+
   static Future<void> markAwaitingValidation(String firestoreId) async {
     if (firestoreId.isEmpty) return;
     await _db.collection('pending_items').doc(firestoreId).update({
