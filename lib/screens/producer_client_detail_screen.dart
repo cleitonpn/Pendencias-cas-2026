@@ -68,8 +68,9 @@ class _ProducerClientDetailScreenState
   }
 
   bool _isAwaiting(PendingItem item) =>
-      item.firestoreId != null &&
-      _awaitingFirestoreIds.contains(item.firestoreId);
+      item.awaitingValidation ||
+      (item.firestoreId != null &&
+          _awaitingFirestoreIds.contains(item.firestoreId));
 
   Future<void> _toggleComplete() async {
     final newVal = !widget.client.isCompleted;
@@ -132,9 +133,13 @@ class _ProducerClientDetailScreenState
       ),
     );
     if (ok != true) return;
-    await context
-        .read<AppProvider>()
-        .markItemAwaitingValidation(item.id!, firestoreId: item.firestoreId);
+    if (item.id != null) {
+      await context.read<AppProvider>().markItemAwaitingValidation(
+          item.id!,
+          firestoreId: item.firestoreId);
+    } else if (item.firestoreId != null) {
+      await FirestoreService.markAwaitingValidation(item.firestoreId!);
+    }
     await _load();
   }
 
