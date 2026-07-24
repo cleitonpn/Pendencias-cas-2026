@@ -26,6 +26,7 @@ enum _Step { loading, pickFair, identify, menu, pickStand, form, sent, requests,
 class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
   static const _navy = Color(0xFF0A0F64);
   static const _kOrgName = 'org_verified_name';
+  static const _kFairId  = 'org_fair_id';
 
   static const _teams = [
     _TeamInfo('Limpeza',            Icons.cleaning_services, Color(0xFF00897B)),
@@ -90,7 +91,14 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
       final saved = prefs.getString(_kOrgName);
       if (saved != null && _organizers.contains(saved)) {
         _organizerName = saved;
-        await _loadFairs();
+        // If we already know which fair and the URL doesn't override it, jump
+        // directly to that fair without scanning every spreadsheet.
+        final savedFairId = widget.fairId ?? prefs.getInt(_kFairId);
+        if (savedFairId != null) {
+          await _loadFairById(savedFairId);
+        } else {
+          await _loadFairs();
+        }
         return;
       }
 
@@ -98,6 +106,31 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
     } catch (e) {
       _fail('Não foi possível carregar. Verifique sua conexão e tente '
           'novamente.\n\nDetalhe: $e');
+    }
+  }
+
+  /// Loads a single fair by ID without scanning every spreadsheet.
+  /// Falls back to _loadFairs() if the fair is not found.
+  Future<void> _loadFairById(int id) async {
+    setState(() => _step = _Step.loading);
+    try {
+      final all = (await FirestoreService.getFairs())
+          .map(_fairFromData)
+          .where((f) =>
+              f.id == id &&
+              f.spreadsheetId.isNotEmpty &&
+              f.sheetName.isNotEmpty)
+          .toList();
+      if (all.isEmpty) {
+        await _loadFairs();
+        return;
+      }
+      _fair = all.first;
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt(_kFairId, _fair!.id!);
+      _setStep(_Step.menu);
+    } catch (_) {
+      await _loadFairs(); // fallback to full scan
     }
   }
 
@@ -120,6 +153,8 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
           return;
         }
         _fair = match.first;
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setInt(_kFairId, _fair!.id!);
         _setStep(_Step.menu);
         return;
       }
@@ -153,6 +188,8 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
       if (mine.length == 1) {
         _fair = mine.first;
         _clients = _clientCache[mine.first.id!] ?? [];
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setInt(_kFairId, _fair!.id!);
         _setStep(_Step.menu);
       } else {
         _setStep(_Step.pickFair);
@@ -173,7 +210,9 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
         mode: (m['mode'] as String?) ?? 'producao',
       );
 
-  void _selectFair(Fair f) {
+  Future<void> _selectFair(Fair f) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_kFairId, f.id!);
     setState(() {
       _fair = f;
       _clients = _clientCache[f.id!] ?? [];
@@ -217,6 +256,7 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
   Future<void> _logout() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_kOrgName);
+    await prefs.remove(_kFairId);
     setState(() {
       _organizerName = null;
       _pinCtrl.clear();
