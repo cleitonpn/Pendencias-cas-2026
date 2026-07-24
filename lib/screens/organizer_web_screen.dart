@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/client.dart';
 import '../models/fair.dart';
@@ -24,6 +25,7 @@ enum _Step { loading, pickFair, identify, menu, pickStand, form, sent, requests,
 
 class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
   static const _navy = Color(0xFF0A0F64);
+  static const _kOrgName = 'org_verified_name';
 
   static const _teams = [
     _TeamInfo('Limpeza',            Icons.cleaning_services, Color(0xFF00897B)),
@@ -45,7 +47,7 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
 
   List<Client> _clients = [];
   Client? _client;
-  final Map<int, List<Client>> _clientCache = {}; // fairId → clients
+  final Map<int, List<Client>> _clientCache = {};
 
   final _pinCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
@@ -81,7 +83,17 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
             'configurar o PIN da organizadora no app.');
         return;
       }
-      // A organizadora se identifica primeiro; depois listamos as feiras dela.
+
+      // Restore session from a previous visit so page refresh doesn't force
+      // re-identification. The name is only accepted if it's still in the list.
+      final prefs = await SharedPreferences.getInstance();
+      final saved = prefs.getString(_kOrgName);
+      if (saved != null && _organizers.contains(saved)) {
+        _organizerName = saved;
+        await _loadFairs();
+        return;
+      }
+
       _setStep(_Step.identify);
     } catch (e) {
       _fail('Não foi possível carregar. Verifique sua conexão e tente '
@@ -89,8 +101,7 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
     }
   }
 
-  /// After identifying, loads the fairs the organizer is responsible for
-  /// (her name appears in the "organizadora" column of that fair's sheet).
+  /// After identifying, loads the fairs the organizer is responsible for.
   Future<void> _loadFairs() async {
     setState(() => _step = _Step.loading);
     try {
@@ -102,7 +113,6 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
               f.sheetName.isNotEmpty)
           .toList();
 
-      // Specific-fair link (compatibilidade com links antigos com ?f=).
       if (widget.fairId != null) {
         final match = all.where((f) => f.id == widget.fairId).toList();
         if (match.isEmpty) {
@@ -114,7 +124,6 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
         return;
       }
 
-      // Link único: mantém apenas as feiras em que ela é a organizadora.
       final name = _organizerName!.toLowerCase().trim();
       final mine = <Fair>[];
       await Future.wait(all.map((f) async {
@@ -130,9 +139,7 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
             _clientCache[f.id!] = clients;
             mine.add(f);
           }
-        } catch (_) {
-          // Ignora feiras que não puderam ser lidas.
-        }
+        } catch (_) {}
       }));
       mine.sort((a, b) => a.name.compareTo(b.name));
       _fairs = mine;
@@ -200,11 +207,28 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
       _pinCtrl.clear();
       return;
     }
+    // Save session so page refresh doesn't require re-identification.
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_kOrgName, _organizerName!);
     await _loadFairs();
   }
 
+  /// Logs out the organizer: clears persisted session and returns to identify.
+  Future<void> _logout() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_kOrgName);
+    setState(() {
+      _organizerName = null;
+      _pinCtrl.clear();
+      _fair = null;
+      _fairs.clear();
+      _clients.clear();
+      _clientCache.clear();
+    });
+    _setStep(_Step.identify);
+  }
+
   Future<void> _loadClients() async {
-    // Usa os clientes já carregados na seleção da feira, quando disponíveis.
     final cached = _clientCache[_fair!.id!];
     if (cached != null && cached.isNotEmpty) {
       _clients = cached;
@@ -298,7 +322,6 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
       await FirestoreService.savePendingItem(item, _fair!.name);
       if (!mounted) return;
       setState(() => _busy = false);
-      // Go directly to "my requests" so the organizer sees the submitted item.
       await _loadMyRequests();
     } catch (e) {
       if (!mounted) return;
@@ -387,43 +410,63 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
     }
   }
 
+  /// Shared header with logo and an optional prominent back button.
   Widget _header({String? subtitle, VoidCallback? onBack}) {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        onBack != null
-            ? SizedBox(
-                height: 48,
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: IconButton(
-                    icon: const Icon(Icons.arrow_back, color: _navy),
-                    tooltip: 'Voltar',
-                    onPressed: onBack,
-                  ),
+        if (onBack != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: onBack,
+                icon: const Icon(Icons.arrow_back_ios_new, size: 15),
+                label: const Text('Voltar',
+                    style: TextStyle(
+                        fontSize: 14, fontWeight: FontWeight.w600)),
+                style: TextButton.styleFrom(
+                  foregroundColor: _navy,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
-              )
-            : const SizedBox(height: 20),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(14),
-          child: Image.asset('assets/logo.png',
-              width: 64, height: 64, fit: BoxFit.cover),
+              ),
+            ),
+          )
+        else
+          const SizedBox(height: 16),
+        Center(
+          child: Column(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: Image.asset('assets/logo.png',
+                    width: 64, height: 64, fit: BoxFit.cover),
+              ),
+              const SizedBox(height: 10),
+              const Text('MONTAGEM USET',
+                  style: TextStyle(
+                      color: _navy,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 2)),
+              const SizedBox(height: 2),
+              const Text('Portal da Organizadora',
+                  style: TextStyle(
+                      color: Colors.orange,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold)),
+              if (subtitle != null) ...[
+                const SizedBox(height: 2),
+                Text(subtitle,
+                    style: const TextStyle(color: Colors.grey, fontSize: 13)),
+              ],
+              const SizedBox(height: 16),
+            ],
+          ),
         ),
-        const SizedBox(height: 10),
-        const Text('MONTAGEM USET',
-            style: TextStyle(
-                color: _navy,
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 2)),
-        const SizedBox(height: 2),
-        const Text('Portal da Organizadora',
-            style: TextStyle(color: Colors.orange, fontSize: 12, fontWeight: FontWeight.bold)),
-        if (subtitle != null) ...[
-          const SizedBox(height: 2),
-          Text(subtitle,
-              style: const TextStyle(color: Colors.grey, fontSize: 13)),
-        ],
-        const SizedBox(height: 16),
       ],
     );
   }
@@ -443,6 +486,13 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
           Text(body,
               textAlign: TextAlign.center,
               style: const TextStyle(color: Colors.grey, fontSize: 14)),
+          const SizedBox(height: 24),
+          TextButton.icon(
+            onPressed: _logout,
+            icon: const Icon(Icons.refresh, size: 16),
+            label: const Text('Tentar novamente'),
+            style: TextButton.styleFrom(foregroundColor: _navy),
+          ),
         ],
       ),
     );
@@ -454,7 +504,7 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
       children: [
         _header(
             subtitle: 'Selecione a feira',
-            onBack: () => _setStep(_Step.identify)),
+            onBack: () => _setStep(_Step.menu)),
         ..._fairs.map((f) => Card(
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12)),
@@ -474,7 +524,7 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        _header(subtitle: 'Identifique-se para ver suas feiras'),
+        _header(subtitle: 'Identifique-se para continuar'),
         const Text('SEU NOME',
             style: TextStyle(
                 fontSize: 11,
@@ -565,7 +615,6 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
       children: [
         _header(
             subtitle: '${_organizerName ?? ''} • ${_fair?.name ?? ''}',
-            // Permite trocar de feira quando a organizadora tem mais de uma.
             onBack: _fairs.length > 1 ? () => _setStep(_Step.pickFair) : null),
         _menuButton(
           icon: Icons.add_circle_outline,
@@ -582,16 +631,19 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
           subtitle: 'Acompanhe o status (aguardando / aprovado / recusado)',
           onTap: _loadMyRequests,
         ),
-        if (_fairs.length > 1) ...[
-          const SizedBox(height: 12),
-          Center(
-            child: TextButton.icon(
-              onPressed: () => _setStep(_Step.pickFair),
-              icon: const Icon(Icons.swap_horiz, size: 18),
-              label: const Text('Trocar de feira'),
-            ),
+        const SizedBox(height: 24),
+        const Divider(),
+        const SizedBox(height: 4),
+        Center(
+          child: TextButton.icon(
+            onPressed: _logout,
+            icon: const Icon(Icons.logout, size: 16),
+            label: const Text('Trocar usuário / Sair'),
+            style: TextButton.styleFrom(
+                foregroundColor: Colors.grey.shade600,
+                textStyle: const TextStyle(fontSize: 13)),
           ),
-        ],
+        ),
       ],
     );
   }
@@ -642,9 +694,12 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
   Widget _pickStandView() {
     return Column(
       children: [
-        _header(
-            subtitle: 'Encontre o stand',
-            onBack: () => _setStep(_Step.menu)),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: _header(
+              subtitle: 'Encontre o stand',
+              onBack: () => _setStep(_Step.menu)),
+        ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20),
           child: Autocomplete<Client>(
@@ -985,7 +1040,12 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
   Widget _requestsView() {
     return Column(
       children: [
-        _header(subtitle: 'Meus pedidos'),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: _header(
+              subtitle: 'Meus pedidos',
+              onBack: () => _setStep(_Step.menu)),
+        ),
         Expanded(
           child: _myRequests.isEmpty
               ? const Center(
