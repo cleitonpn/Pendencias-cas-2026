@@ -4,6 +4,7 @@ import '../providers/app_provider.dart';
 import '../models/pending_item.dart';
 import '../services/database_service.dart';
 import 'client_detail_screen.dart';
+import 'batch_validation_screen.dart';
 
 /// Fair-wide list of every pending item, with a status filter and search.
 /// Lets the admin/producer see and jump to any pending without drilling
@@ -109,6 +110,20 @@ class _PendingBoardScreenState extends State<PendingBoardScreen> {
         iconTheme: const IconThemeData(color: Colors.white),
         title: const Text('Pendências',
             style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.done_all, color: Colors.white),
+            tooltip: 'Validação em lote',
+            onPressed: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const BatchValidationScreen()),
+              );
+              _load(silent: true);
+            },
+          ),
+        ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(52),
           child: Padding(
