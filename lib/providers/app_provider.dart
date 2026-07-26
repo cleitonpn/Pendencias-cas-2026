@@ -194,6 +194,14 @@ class AppProvider extends ChangeNotifier {
     _startPendingStream(fair.name);
     _setLoading(false);
     _restartAutoSync(fair);
+
+    // Pull the shared check-off state in the background so a device that never
+    // marked anything locally still shows the real "X/N concluídos".
+    if (fair.id != null) {
+      _syncClientCompletion(fair.id!).then((_) {
+        if (_currentFair?.id == fair.id) _loadLocal();
+      }).catchError((_) {});
+    }
   }
 
   void _restartAutoSync(Fair fair) {
@@ -318,6 +326,7 @@ class AppProvider extends ChangeNotifier {
     final activeRowIds = sheetClients.map((c) => c.rowId).toSet();
     await DatabaseService.deleteStaleClients(_currentFair!.id!, activeRowIds);
 
+    await _syncClientCompletion(_currentFair!.id!);
     await _loadLocal();
     _lastSync = DateTime.now();
   }
@@ -394,6 +403,9 @@ class AppProvider extends ChangeNotifier {
     }
 
     _fairs = await DatabaseService.getFairs();
+    if (_currentFair?.id != null) {
+      await _syncClientCompletion(_currentFair!.id!);
+    }
     await _loadLocal();
     _lastSync = DateTime.now();
   }
@@ -430,6 +442,7 @@ class AppProvider extends ChangeNotifier {
     final activeIds = finalClients.map((c) => c.rowId).toSet();
     await DatabaseService.deleteStaleClients(fairId, activeIds);
 
+    await _syncClientCompletion(fairId);
     await _loadLocal();
     _lastSync = DateTime.now();
   }
@@ -511,10 +524,71 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<void> markClientCompleted(Client client, bool completed) async {
+    final now = completed ? DateTime.now() : null;
     await DatabaseService.updateClientStatus(client.rowId, completed);
     client.isCompleted = completed;
-    client.completedAt = completed ? DateTime.now() : null;
+    client.completedAt = now;
     notifyListeners();
+
+    // Publish to the shared cloud state so every device sees the same total.
+    // Fire-and-forget: the local check-off must never depend on connectivity.
+    if (client.firestoreId.isNotEmpty) {
+      FirestoreService.setClientCompleted(
+        clientFirestoreId: client.firestoreId,
+        fairId: client.fairId,
+        completed: completed,
+        completedAt: now,
+        completedBy: _completionAuthor,
+        fairName: _currentFair?.name ?? '',
+      ).catchError((_) {});
+    }
+  }
+
+  /// Best-effort label of who checked the stand off, for the cloud record.
+  String get _completionAuthor => 'Administrador';
+
+  /// Reconciles the local check-offs with the shared cloud state.
+  ///
+  /// * a stand marked in the cloud is applied locally (so a second device no
+  ///   longer shows 0/N while the field device shows 213/N);
+  /// * a stand marked only locally is pushed up (backfills check-offs made
+  ///   before this sync existed, and recovers writes made while offline).
+  Future<void> _syncClientCompletion(int fairId) async {
+    Map<String, ClientStatus> cloud = const {};
+    var reachedCloud = false;
+    try {
+      cloud = await FirestoreService.getClientStatuses(fairId);
+      reachedCloud = true;
+    } catch (_) {
+      // offline — keep whatever is local
+    }
+    if (!reachedCloud) return;
+
+    final locals = await DatabaseService.getClients(fairId: fairId);
+    for (final c in locals) {
+      if (c.firestoreId.isEmpty) continue;
+      final remote = cloud[c.firestoreId];
+
+      if (remote == null) {
+        if (c.isCompleted) {
+          // Local-only check-off: publish it.
+          FirestoreService.setClientCompleted(
+            clientFirestoreId: c.firestoreId,
+            fairId: fairId,
+            completed: true,
+            completedAt: c.completedAt,
+            completedBy: _completionAuthor,
+            fairName: _currentFair?.name ?? '',
+          ).catchError((_) {});
+        }
+        continue;
+      }
+
+      if (remote.completed != c.isCompleted) {
+        await DatabaseService.updateClientStatusByFirestoreId(
+            fairId, c.firestoreId, remote.completed, remote.completedAt);
+      }
+    }
   }
 
   Future<PendingItem> addPendingItem(PendingItem item) async {

@@ -873,4 +873,67 @@ class FirestoreService {
         .map((d) => FreightRequest.fromMap(d.id, d.data() as Map<String, dynamic>))
         .toList();
   }
+
+  // ─── Status de conclusão dos stands (compartilhado entre dispositivos) ───────
+  //
+  // O check-off de um stand era gravado apenas no SQLite local, então cada
+  // aparelho enxergava um total diferente de "concluídos". Estes métodos
+  // publicam o status na nuvem para que todos os usuários vejam o mesmo número.
+
+  /// Marks (or unmarks) a client/stand as completed in the shared cloud state.
+  /// Document id is the client's stable cross-device key (firestoreId).
+  static Future<void> setClientCompleted({
+    required String clientFirestoreId,
+    required int fairId,
+    required bool completed,
+    DateTime? completedAt,
+    String completedBy = '',
+    String fairName = '',
+  }) async {
+    if (clientFirestoreId.isEmpty) return;
+    await _db.collection('client_status').doc(clientFirestoreId).set({
+      'fairId': fairId,
+      'fairName': fairName,
+      'completed': completed,
+      'completedAt': completed
+          ? (completedAt ?? DateTime.now()).toIso8601String()
+          : null,
+      'completedBy': completedBy,
+      'updatedAt': DateTime.now().toIso8601String(),
+    }, SetOptions(merge: true));
+  }
+
+  /// Returns the shared completion status for every client of a fair,
+  /// keyed by the client's firestoreId.
+  static Future<Map<String, ClientStatus>> getClientStatuses(int fairId) async {
+    final snap = await _db
+        .collection('client_status')
+        .where('fairId', isEqualTo: fairId)
+        .get();
+    final result = <String, ClientStatus>{};
+    for (final doc in snap.docs) {
+      final data = doc.data() as Map<String, dynamic>;
+      result[doc.id] = ClientStatus(
+        completed: data['completed'] == true,
+        completedAt: data['completedAt'] is String
+            ? DateTime.tryParse(data['completedAt'] as String)
+            : null,
+        completedBy: (data['completedBy'] as String?) ?? '',
+      );
+    }
+    return result;
+  }
+}
+
+/// Shared (cloud) completion status of a single stand.
+class ClientStatus {
+  final bool completed;
+  final DateTime? completedAt;
+  final String completedBy;
+
+  const ClientStatus({
+    required this.completed,
+    this.completedAt,
+    this.completedBy = '',
+  });
 }

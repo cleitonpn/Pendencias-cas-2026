@@ -431,6 +431,29 @@ class DatabaseService {
     );
   }
 
+  /// Applies a completion status coming from the shared cloud state, keyed by
+  /// the client's stable cross-device id (firestore_id).
+  ///
+  /// Legacy rows may have an empty firestore_id — Client.fromMap falls back to
+  /// row_id in that case, so the lookup accepts either column. Both ids are
+  /// prefixed with the fair id, and the update is scoped to the fair anyway.
+  static Future<void> updateClientStatusByFirestoreId(
+      int fairId, String firestoreId, bool completed,
+      DateTime? completedAt) async {
+    final database = await db;
+    await database.update(
+      'clients',
+      {
+        'is_completed': completed ? 1 : 0,
+        'completed_at': completed
+            ? (completedAt ?? DateTime.now()).toIso8601String()
+            : null,
+      },
+      where: 'fair_id = ? AND (firestore_id = ? OR row_id = ?)',
+      whereArgs: [fairId, firestoreId, firestoreId],
+    );
+  }
+
   /// Returns the set of row_ids already stored for a fair (used to detect new
   /// clients after a sheet sync so that push notifications can be sent).
   static Future<Set<String>> getExistingClientRowIds(int fairId) async {
