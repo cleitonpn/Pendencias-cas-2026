@@ -565,21 +565,20 @@ class AppProvider extends ChangeNotifier {
     if (!reachedCloud) return;
 
     final locals = await DatabaseService.getClients(fairId: fairId);
+    final toBackfill = <ClientCompletionRecord>[];
+
     for (final c in locals) {
       if (c.firestoreId.isEmpty) continue;
       final remote = cloud[c.firestoreId];
 
       if (remote == null) {
+        // Local-only check-off: queue it to be published.
         if (c.isCompleted) {
-          // Local-only check-off: publish it.
-          FirestoreService.setClientCompleted(
+          toBackfill.add(ClientCompletionRecord(
             clientFirestoreId: c.firestoreId,
-            fairId: fairId,
-            completed: true,
             completedAt: c.completedAt,
             completedBy: _completionAuthor,
-            fairName: _currentFair?.name ?? '',
-          ).catchError((_) {});
+          ));
         }
         continue;
       }
@@ -587,6 +586,22 @@ class AppProvider extends ChangeNotifier {
       if (remote.completed != c.isCompleted) {
         await DatabaseService.updateClientStatusByFirestoreId(
             fairId, c.firestoreId, remote.completed, remote.completedAt);
+      }
+    }
+
+    // Awaited batched write — the previous version fired one unawaited write
+    // per stand, so most of them were lost if the app was backgrounded before
+    // they flushed (only part of the check-offs reached the other devices).
+    if (toBackfill.isNotEmpty) {
+      try {
+        await FirestoreService.backfillClientCompletions(
+          toBackfill,
+          fairId: fairId,
+          fairName: _currentFair?.name ?? '',
+        );
+      } catch (_) {
+        // Stays local; the next sync retries because the cloud record is
+        // still missing for these stands.
       }
     }
   }

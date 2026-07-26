@@ -903,6 +903,42 @@ class FirestoreService {
     }, SetOptions(merge: true));
   }
 
+  /// Publishes many completion records at once using batched writes.
+  ///
+  /// The backfill used to fire one unawaited set() per stand; with a few
+  /// hundred stands the call returned while most writes were still in flight
+  /// and anything not yet flushed was lost when the app was backgrounded.
+  /// Batches are awaited, so when this future completes the data is really on
+  /// the server. Firestore caps a batch at 500 operations.
+  static Future<void> backfillClientCompletions(
+    List<ClientCompletionRecord> records, {
+    required int fairId,
+    String fairName = '',
+  }) async {
+    const chunkSize = 450;
+    for (var i = 0; i < records.length; i += chunkSize) {
+      final end = (i + chunkSize < records.length) ? i + chunkSize : records.length;
+      final batch = _db.batch();
+      for (final r in records.sublist(i, end)) {
+        if (r.clientFirestoreId.isEmpty) continue;
+        batch.set(
+          _db.collection('client_status').doc(r.clientFirestoreId),
+          {
+            'fairId': fairId,
+            'fairName': fairName,
+            'completed': true,
+            'completedAt':
+                (r.completedAt ?? DateTime.now()).toIso8601String(),
+            'completedBy': r.completedBy,
+            'updatedAt': DateTime.now().toIso8601String(),
+          },
+          SetOptions(merge: true),
+        );
+      }
+      await batch.commit();
+    }
+  }
+
   /// Returns the shared completion status for every client of a fair,
   /// keyed by the client's firestoreId.
   static Future<Map<String, ClientStatus>> getClientStatuses(int fairId) async {
@@ -923,6 +959,19 @@ class FirestoreService {
     }
     return result;
   }
+}
+
+/// One stand to publish during a completion backfill.
+class ClientCompletionRecord {
+  final String clientFirestoreId;
+  final DateTime? completedAt;
+  final String completedBy;
+
+  const ClientCompletionRecord({
+    required this.clientFirestoreId,
+    this.completedAt,
+    this.completedBy = '',
+  });
 }
 
 /// Shared (cloud) completion status of a single stand.
