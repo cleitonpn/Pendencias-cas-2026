@@ -27,6 +27,9 @@ class _ProducerPendingScreenState extends State<ProducerPendingScreen> {
   bool _loading = false;
   int? _fairId;
 
+  /// Equipes marcadas no filtro. Vazio = mostra todas.
+  final Set<String> _teamFilter = {};
+
   bool get _isProducerMode => widget.lockedProducer != null;
 
   @override
@@ -47,6 +50,18 @@ class _ProducerPendingScreenState extends State<ProducerPendingScreen> {
   }
 
   Future<void> _selectProducer(String produtor) async {
+    // Trocar de produtor zera o filtro; recarregar a lista não (ver _reload).
+    setState(() => _teamFilter.clear());
+    await _loadItems(produtor);
+  }
+
+  /// Recarrega mantendo o filtro de equipe — usado após concluir uma pendência,
+  /// senão o produtor perderia o filtro a cada item concluído em campo.
+  Future<void> _reload() async {
+    if (_selected != null) await _loadItems(_selected!);
+  }
+
+  Future<void> _loadItems(String produtor) async {
     setState(() { _selected = produtor; _loading = true; });
 
     List<PendingItem> items;
@@ -61,7 +76,15 @@ class _ProducerPendingScreenState extends State<ProducerPendingScreen> {
           : [];
     }
 
-    if (mounted) setState(() { _items = items; _loading = false; });
+    if (!mounted) return;
+    setState(() {
+      _items = items;
+      _loading = false;
+      // Descarta equipes que deixaram de existir na lista, senão o filtro
+      // continuaria apontando para uma equipe já zerada.
+      final present = items.map(_teamKey).toSet();
+      _teamFilter.removeWhere((t) => !present.contains(t));
+    });
   }
 
   Future<void> _resolveItem(PendingItem item) async {
@@ -78,12 +101,35 @@ class _ProducerPendingScreenState extends State<ProducerPendingScreen> {
             .resolveItem(item.id!, firestoreId: item.firestoreId, by: by);
       }
     }
-    if (_selected != null) await _selectProducer(_selected!);
+    await _reload();
+  }
+
+  /// Rótulo da equipe usado tanto nos chips quanto no filtro — sem isto, um
+  /// item com equipe vazia apareceria como "Sem equipe" no chip mas nunca
+  /// casaria com o filtro.
+  static String _teamKey(PendingItem i) =>
+      i.team.isEmpty ? 'Sem equipe' : i.team;
+
+  /// Pendências após o filtro de equipe (vazio = todas).
+  List<PendingItem> get _visible => _teamFilter.isEmpty
+      ? _items
+      : _items.where((i) => _teamFilter.contains(_teamKey(i))).toList();
+
+  /// Equipes presentes nas pendências deste produtor, com a contagem de cada
+  /// uma — o produtor vê de cara onde está o volume de trabalho.
+  Map<String, int> get _teamCounts {
+    final counts = <String, int>{};
+    for (final item in _items) {
+      final t = _teamKey(item);
+      counts[t] = (counts[t] ?? 0) + 1;
+    }
+    return Map.fromEntries(
+        counts.entries.toList()..sort((a, b) => a.key.compareTo(b.key)));
   }
 
   Map<String, Map<String, List<PendingItem>>> get _grouped {
     final result = <String, Map<String, List<PendingItem>>>{};
-    for (final item in _items) {
+    for (final item in _visible) {
       final h = item.hangar.isNotEmpty ? 'Hangar ${item.hangar}' : 'Sem Hangar';
       final c =
           '${item.local}${item.clientName.isNotEmpty ? " — ${item.clientName}" : ""}';
@@ -107,6 +153,12 @@ class _ProducerPendingScreenState extends State<ProducerPendingScreen> {
     final sb = StringBuffer();
     sb.writeln('*PENDÊNCIAS — $_selected*');
     sb.writeln('$fairName | $date');
+    // Deixa explícito que a lista está filtrada, senão quem recebe no
+    // WhatsApp acha que são todas as pendências do produtor.
+    if (_teamFilter.isNotEmpty) {
+      final teams = _teamFilter.toList()..sort();
+      sb.writeln('_Equipe: ${teams.join(", ")}_');
+    }
 
     final grouped = _grouped;
     final hangars = grouped.keys.toList()..sort();
@@ -130,7 +182,7 @@ class _ProducerPendingScreenState extends State<ProducerPendingScreen> {
   }
 
   void _copyWhatsApp() {
-    if (_items.isEmpty) return;
+    if (_visible.isEmpty) return;
     final text = _buildWhatsAppText();
     Clipboard.setData(ClipboardData(text: text));
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -138,6 +190,121 @@ class _ProducerPendingScreenState extends State<ProducerPendingScreen> {
       backgroundColor: Color(0xFF25D366),
       duration: Duration(seconds: 3),
     ));
+  }
+
+  /// Barra de filtro por equipe: um chip por equipe presente nas pendências,
+  /// com a contagem. Toca para alternar; nada marcado = todas.
+  Widget _teamFilterBar() {
+    final counts = _teamCounts;
+    if (counts.length < 2) return const SizedBox.shrink(); // 1 equipe: sem filtro
+
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            const Icon(Icons.groups, size: 15, color: Colors.grey),
+            const SizedBox(width: 5),
+            const Text('FILTRAR POR EQUIPE',
+                style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey,
+                    letterSpacing: 1)),
+            const Spacer(),
+            if (_teamFilter.isNotEmpty)
+              Text('${_visible.length} de ${_items.length}',
+                  style: const TextStyle(
+                      fontSize: 11,
+                      color: Colors.grey,
+                      fontWeight: FontWeight.w600)),
+          ]),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 34,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              children: [
+                _teamChip(
+                  label: 'Todas',
+                  count: _items.length,
+                  color: const Color(0xFF1E3A5F),
+                  selected: _teamFilter.isEmpty,
+                  onTap: () => setState(_teamFilter.clear),
+                ),
+                ...counts.entries.map((e) => _teamChip(
+                      label: e.key,
+                      count: e.value,
+                      color: teamColor(e.key),
+                      selected: _teamFilter.contains(e.key),
+                      onTap: () => setState(() {
+                        if (!_teamFilter.remove(e.key)) _teamFilter.add(e.key);
+                      }),
+                    )),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _teamChip({
+    required String label,
+    required int count,
+    required Color color,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: selected ? color : color.withOpacity(0.08),
+            borderRadius: BorderRadius.circular(17),
+            border: Border.all(
+                color: selected ? color : color.withOpacity(0.35)),
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            if (selected) ...[
+              const Icon(Icons.check, size: 14, color: Colors.white),
+              const SizedBox(width: 4),
+            ],
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w700,
+                color: selected ? Colors.white : color,
+              ),
+            ),
+            const SizedBox(width: 5),
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+              decoration: BoxDecoration(
+                color: selected
+                    ? Colors.white.withOpacity(0.25)
+                    : color.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text('$count',
+                  style: TextStyle(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.bold,
+                      color: selected ? Colors.white : color)),
+            ),
+          ]),
+        ),
+      ),
+    );
   }
 
   @override
@@ -155,7 +322,7 @@ class _ProducerPendingScreenState extends State<ProducerPendingScreen> {
                 fontWeight: FontWeight.bold,
                 fontSize: 17)),
         actions: [
-          if (_selected != null && _items.isNotEmpty)
+          if (_selected != null && _visible.isNotEmpty)
             IconButton(
               icon: const Icon(Icons.copy, color: Colors.white),
               tooltip: 'Copiar para WhatsApp',
@@ -220,6 +387,9 @@ class _ProducerPendingScreenState extends State<ProducerPendingScreen> {
               ),
             ),
 
+          if (_selected != null && !_loading && _items.isNotEmpty)
+            _teamFilterBar(),
+
           Expanded(
             child: _selected == null
                 ? const Center(
@@ -253,19 +423,44 @@ class _ProducerPendingScreenState extends State<ProducerPendingScreen> {
                               ],
                             ),
                           )
-                        : _PendingList(
-                            grouped: _grouped,
-                            totalItems: _items.length,
-                            produtor: _selected!,
-                            canResolve: widget.canResolve,
-                            onCopy: _copyWhatsApp,
-                            onResolve: _resolveItem,
-                          ),
+                        : _visible.isEmpty
+                            ? Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const Icon(Icons.filter_alt_off,
+                                        size: 56, color: Colors.grey),
+                                    const SizedBox(height: 12),
+                                    const Text(
+                                      'Nenhuma pendência para\na equipe selecionada.',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                          color: Colors.grey, fontSize: 15),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    TextButton.icon(
+                                      onPressed: () =>
+                                          setState(_teamFilter.clear),
+                                      icon: const Icon(Icons.clear_all,
+                                          size: 18),
+                                      label: const Text('Mostrar todas'),
+                                    ),
+                                  ],
+                                ),
+                              )
+                            : _PendingList(
+                                grouped: _grouped,
+                                totalItems: _visible.length,
+                                produtor: _selected!,
+                                canResolve: widget.canResolve,
+                                onCopy: _copyWhatsApp,
+                                onResolve: _resolveItem,
+                              ),
           ),
         ],
       ),
       floatingActionButton:
-          (_selected != null && _items.isNotEmpty && !_loading)
+          (_selected != null && _visible.isNotEmpty && !_loading)
               ? FloatingActionButton.extended(
                   onPressed: _copyWhatsApp,
                   backgroundColor: const Color(0xFF25D366),
@@ -446,30 +641,33 @@ class _PendingList extends StatelessWidget {
   }
 }
 
+/// Cor da equipe — compartilhada entre o marcador da lista e os chips de filtro.
+Color teamColor(String team) {
+  switch (team.toLowerCase()) {
+    case 'elétrica':
+    case 'eletrica':
+      return Colors.orange;
+    case 'limpeza':
+      return Colors.cyan.shade700;
+    case 'marcenaria':
+      return Colors.brown;
+    case 'tapeçaria':
+    case 'tapecaria':
+      return Colors.purple;
+    case 'vidraceiro':
+      return Colors.lightBlue;
+    case 'comunicação visual':
+      return Colors.pink;
+    default:
+      return Colors.grey;
+  }
+}
+
 class _TeamDot extends StatelessWidget {
   final String team;
   const _TeamDot({required this.team});
 
-  Color get _color {
-    switch (team.toLowerCase()) {
-      case 'elétrica':
-      case 'eletrica':
-        return Colors.orange;
-      case 'limpeza':
-        return Colors.cyan.shade700;
-      case 'marcenaria':
-        return Colors.brown;
-      case 'tapeçaria':
-      case 'tapecaria':
-        return Colors.purple;
-      case 'vidraceiro':
-        return Colors.lightBlue;
-      case 'comunicação visual':
-        return Colors.pink;
-      default:
-        return Colors.grey;
-    }
-  }
+  Color get _color => teamColor(team);
 
   @override
   Widget build(BuildContext context) => Container(
