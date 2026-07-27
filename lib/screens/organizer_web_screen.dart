@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/client.dart';
@@ -58,6 +60,10 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
   bool _busy = false;
 
   List<PendingItem> _myRequests = [];
+
+  /// Date filters on "Meus pedidos": by opening date and by conclusion date.
+  DateTimeRange? _openedRange;
+  DateTimeRange? _closedRange;
 
   @override
   void initState() {
@@ -373,9 +379,11 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
         approvalStatus: 'pendente',
         createdAt: DateTime.now(),
       );
-      await FirestoreService.savePendingItem(item, _fair!.name);
+      final newId = await FirestoreService.savePendingItem(item, _fair!.name);
       if (!mounted) return;
       setState(() => _busy = false);
+      await _showCreatedDialog(item, newId);
+      if (!mounted) return;
       await _loadMyRequests();
     } catch (e) {
       if (!mounted) return;
@@ -384,6 +392,178 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
           error: true);
     }
   }
+
+  // ── Resumo da pendência criada ─────────────────────────────────────────────
+
+  static final _dateFmt = DateFormat('dd/MM/yyyy');
+  static final _dateTimeFmt = DateFormat('dd/MM/yyyy HH:mm');
+
+  /// Plain-text summary of a request — this is what "Copiar tudo" puts on the
+  /// clipboard, so it has to read well when pasted into WhatsApp or e-mail.
+  String _summaryText(PendingItem item, String? protocol) {
+    final b = StringBuffer()
+      ..writeln('*PENDÊNCIA REGISTRADA*')
+      ..writeln();
+    if (protocol != null && protocol.isNotEmpty) {
+      b.writeln('Protocolo: $protocol');
+    }
+    b
+      ..writeln('Feira: ${item.fairName}')
+      ..writeln('Stand: ${item.local}'
+          '${item.hangar.isNotEmpty ? " — Hangar ${item.hangar}" : ""}')
+      ..writeln('Cliente: ${item.clientName}')
+      ..writeln('Equipe: ${item.team}');
+    if (item.responsible.isNotEmpty) {
+      b.writeln('Responsável: ${item.responsible}');
+    }
+    if (item.producerName.isNotEmpty) {
+      b.writeln('Produtor: ${item.producerName}');
+    }
+    b
+      ..writeln('Aberta em: ${_dateTimeFmt.format(item.createdAt)}')
+      ..writeln('Solicitante: ${item.createdBy}')
+      ..writeln('Status: Aguardando aprovação')
+      ..writeln()
+      ..writeln('Descrição:')
+      ..writeln(item.description);
+    if (item.photoUrls.isNotEmpty) {
+      b
+        ..writeln()
+        ..writeln('Fotos (${item.photoUrls.length}):');
+      for (final u in item.photoUrls) {
+        b.writeln(u);
+      }
+    }
+    return b.toString().trim();
+  }
+
+  /// Shown right after a request is created: full details, with the option to
+  /// copy everything to the clipboard or just close.
+  Future<void> _showCreatedDialog(PendingItem item, String? protocol) async {
+    final text = _summaryText(item, protocol);
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
+        contentPadding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+        title: Row(children: [
+          const Icon(Icons.check_circle, color: Colors.green, size: 26),
+          const SizedBox(width: 10),
+          const Expanded(
+            child: Text('Pendência registrada!',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          ),
+        ]),
+        content: SizedBox(
+          width: 420,
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Seu pedido foi enviado e está aguardando aprovação.',
+                  style: TextStyle(fontSize: 13, color: Colors.black54),
+                ),
+                const SizedBox(height: 14),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF4F6FA),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.grey.shade300),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (protocol != null && protocol.isNotEmpty)
+                        _sumRow('Protocolo', protocol),
+                      _sumRow('Feira', item.fairName),
+                      _sumRow(
+                          'Stand',
+                          '${item.local}'
+                          '${item.hangar.isNotEmpty ? " — Hangar ${item.hangar}" : ""}'),
+                      _sumRow('Cliente', item.clientName),
+                      _sumRow('Equipe', item.team),
+                      if (item.responsible.isNotEmpty)
+                        _sumRow('Responsável', item.responsible),
+                      if (item.producerName.isNotEmpty)
+                        _sumRow('Produtor', item.producerName),
+                      _sumRow('Aberta em', _dateTimeFmt.format(item.createdAt)),
+                      _sumRow('Solicitante', item.createdBy),
+                      _sumRow('Status', 'Aguardando aprovação'),
+                      if (item.photoUrls.isNotEmpty)
+                        _sumRow('Fotos', '${item.photoUrls.length} anexada'
+                            '${item.photoUrls.length != 1 ? "s" : ""}'),
+                      const Divider(height: 18),
+                      const Text('Descrição',
+                          style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.grey,
+                              fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 2),
+                      Text(item.description,
+                          style: const TextStyle(fontSize: 13)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Fechar',
+                style: TextStyle(color: Colors.grey, fontSize: 15)),
+          ),
+          ElevatedButton.icon(
+            onPressed: () async {
+              await Clipboard.setData(ClipboardData(text: text));
+              if (ctx.mounted) Navigator.pop(ctx);
+              if (mounted) _toast('Informações copiadas!');
+            },
+            icon: const Icon(Icons.copy_all, size: 18),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _navy,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+            ),
+            label: const Text('Copiar tudo',
+                style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _sumRow(String label, String value) => Padding(
+        padding: const EdgeInsets.only(bottom: 5),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: 92,
+              child: Text(label,
+                  style: const TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey,
+                      fontWeight: FontWeight.w600)),
+            ),
+            Expanded(
+              child: Text(value,
+                  style: const TextStyle(
+                      fontSize: 13, fontWeight: FontWeight.w500)),
+            ),
+          ],
+        ),
+      );
 
   Future<void> _loadMyRequests() async {
     setState(() => _step = _Step.loading);
@@ -1091,7 +1271,153 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
     );
   }
 
+  // ── Filtros por data ───────────────────────────────────────────────────────
+
+  bool _inRange(DateTime? date, DateTimeRange? range) {
+    if (range == null) return true;
+    // Filtrando por conclusão, o que ainda não foi concluído fica de fora.
+    if (date == null) return false;
+    final day = DateTime(date.year, date.month, date.day);
+    final start = DateTime(range.start.year, range.start.month, range.start.day);
+    final end = DateTime(range.end.year, range.end.month, range.end.day);
+    return !day.isBefore(start) && !day.isAfter(end);
+  }
+
+  List<PendingItem> get _filteredRequests => _myRequests
+      .where((r) =>
+          _inRange(r.createdAt, _openedRange) &&
+          _inRange(r.resolvedAt, _closedRange))
+      .toList();
+
+  bool get _hasDateFilter => _openedRange != null || _closedRange != null;
+
+  Future<void> _pickRange({required bool opened}) async {
+    final now = DateTime.now();
+    final current = opened ? _openedRange : _closedRange;
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(now.year - 2),
+      lastDate: DateTime(now.year + 2, 12, 31),
+      initialDateRange: current,
+      helpText: opened
+          ? 'Período de abertura'
+          : 'Período de conclusão',
+      saveText: 'Aplicar',
+    );
+    if (picked == null) return;
+    setState(() {
+      if (opened) {
+        _openedRange = picked;
+      } else {
+        _closedRange = picked;
+      }
+    });
+  }
+
+  Widget _dateFilterChip({
+    required String label,
+    required IconData icon,
+    required DateTimeRange? range,
+    required bool opened,
+  }) {
+    final active = range != null;
+    final text = active
+        ? '${_dateFmt.format(range.start)} – ${_dateFmt.format(range.end)}'
+        : label;
+    return InkWell(
+      onTap: () => _pickRange(opened: opened),
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: active ? _navy : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+              color: active ? _navy : Colors.grey.shade400),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(icon,
+              size: 15, color: active ? Colors.white : Colors.grey.shade700),
+          const SizedBox(width: 6),
+          Text(
+            text,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: active ? Colors.white : Colors.grey.shade800,
+            ),
+          ),
+          if (active) ...[
+            const SizedBox(width: 6),
+            GestureDetector(
+              onTap: () => setState(() {
+                if (opened) {
+                  _openedRange = null;
+                } else {
+                  _closedRange = null;
+                }
+              }),
+              child: const Icon(Icons.close, size: 15, color: Colors.white),
+            ),
+          ],
+        ]),
+      ),
+    );
+  }
+
+  Widget _filterBar(int shown, int total) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _dateFilterChip(
+                label: 'Abertura',
+                icon: Icons.event_available,
+                range: _openedRange,
+                opened: true,
+              ),
+              _dateFilterChip(
+                label: 'Conclusão',
+                icon: Icons.task_alt,
+                range: _closedRange,
+                opened: false,
+              ),
+              if (_hasDateFilter)
+                TextButton.icon(
+                  onPressed: () => setState(() {
+                    _openedRange = null;
+                    _closedRange = null;
+                  }),
+                  icon: const Icon(Icons.filter_alt_off, size: 16),
+                  label: const Text('Limpar',
+                      style: TextStyle(fontSize: 12)),
+                  style: TextButton.styleFrom(
+                      foregroundColor: Colors.red.shade700,
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 8)),
+                ),
+            ],
+          ),
+          if (_hasDateFilter)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                'Mostrando $shown de $total pedido${total != 1 ? "s" : ""}',
+                style: const TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _requestsView() {
+    final filtered = _filteredRequests;
     return Column(
       children: [
         Padding(
@@ -1100,16 +1426,29 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
               subtitle: 'Meus pedidos',
               onBack: () => _setStep(_Step.menu)),
         ),
+        if (_myRequests.isNotEmpty)
+          _filterBar(filtered.length, _myRequests.length),
         Expanded(
           child: _myRequests.isEmpty
               ? const Center(
                   child: Text('Você ainda não fez pedidos.',
                       style: TextStyle(color: Colors.grey)))
-              : ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: _myRequests.length,
-                  itemBuilder: (context, i) => _RequestCard(_myRequests[i]),
-                ),
+              : filtered.isEmpty
+                  ? const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(24),
+                        child: Text(
+                          'Nenhum pedido no período selecionado.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: Colors.grey),
+                        ),
+                      ),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: filtered.length,
+                      itemBuilder: (context, i) => _RequestCard(filtered[i]),
+                    ),
         ),
         Padding(
           padding: const EdgeInsets.all(16),
@@ -1136,6 +1475,8 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
 class _RequestCard extends StatelessWidget {
   final PendingItem item;
   const _RequestCard(this.item);
+
+  static final _fmt = DateFormat('dd/MM/yyyy HH:mm');
 
   ({Color color, String label, IconData icon}) get _status {
     if (item.isRejected) {
@@ -1187,6 +1528,27 @@ class _RequestCard extends StatelessWidget {
                     fontWeight: FontWeight.w600, fontSize: 13)),
             const SizedBox(height: 4),
             Text(item.description, style: const TextStyle(fontSize: 14)),
+            const SizedBox(height: 8),
+            Row(children: [
+              const Icon(Icons.event_available,
+                  size: 13, color: Colors.grey),
+              const SizedBox(width: 4),
+              Text('Aberta: ${_fmt.format(item.createdAt)}',
+                  style: const TextStyle(fontSize: 11, color: Colors.grey)),
+            ]),
+            if (item.resolvedAt != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Row(children: [
+                  const Icon(Icons.task_alt, size: 13, color: Colors.green),
+                  const SizedBox(width: 4),
+                  Text('Concluída: ${_fmt.format(item.resolvedAt!)}',
+                      style: const TextStyle(
+                          fontSize: 11,
+                          color: Colors.green,
+                          fontWeight: FontWeight.w500)),
+                ]),
+              ),
             if (item.isRejected && item.rejectionReason.isNotEmpty) ...[
               const SizedBox(height: 8),
               Container(
