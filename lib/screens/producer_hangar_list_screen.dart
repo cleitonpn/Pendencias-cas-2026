@@ -6,6 +6,7 @@ import '../models/client.dart';
 import '../services/database_service.dart';
 import '../widgets/fair_info_header.dart';
 import 'producer_client_list_screen.dart';
+import 'producer_pending_screen.dart';
 
 class ProducerHangarListScreen extends StatefulWidget {
   final String producerName;
@@ -85,6 +86,22 @@ class _ProducerHangarListScreenState
                 fontWeight: FontWeight.bold,
                 fontSize: 20)),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.checklist, color: Colors.white),
+            tooltip: 'Minhas pendências',
+            onPressed: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => ProducerPendingScreen(
+                      lockedProducer: widget.producerName,
+                      canResolve: true,
+                      fairName: provider.currentFairName),
+                ),
+              );
+              await _loadCounts();
+            },
+          ),
           IconButton(
             icon: provider.isLoading
                 ? const SizedBox(

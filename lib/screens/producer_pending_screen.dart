@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../models/pending_item.dart';
 import '../providers/app_provider.dart';
@@ -10,15 +11,26 @@ class ProducerPendingScreen extends StatefulWidget {
   final String? lockedProducer;
   final bool canResolve;
 
+  /// Quando informado, restringe a lista a esta feira. A consulta ao Firestore
+  /// busca por produtor sem filtrar feira, então abrir a tela de dentro de uma
+  /// feira sem isto misturaria pendências de outras.
+  final String? fairName;
+
   const ProducerPendingScreen({
     super.key,
     this.lockedProducer,
     this.canResolve = false,
+    this.fairName,
   });
 
   @override
   State<ProducerPendingScreen> createState() => _ProducerPendingScreenState();
 }
+
+/// Ordenação da lista. `hangar` mantém o agrupamento por hangar → cliente;
+/// as opções por data viram uma lista corrida, que é a única forma da ordem
+/// cronológica ficar legível.
+enum _Sort { hangar, antigas, recentes }
 
 class _ProducerPendingScreenState extends State<ProducerPendingScreen> {
   List<String> _producers = [];
@@ -29,6 +41,8 @@ class _ProducerPendingScreenState extends State<ProducerPendingScreen> {
 
   /// Equipes marcadas no filtro. Vazio = mostra todas.
   final Set<String> _teamFilter = {};
+
+  _Sort _sort = _Sort.hangar;
 
   bool get _isProducerMode => widget.lockedProducer != null;
 
@@ -68,6 +82,14 @@ class _ProducerPendingScreenState extends State<ProducerPendingScreen> {
     if (_isProducerMode) {
       // Producer mode: read from Firestore
       items = await FirestoreService.getItemsByProducer(produtor);
+      final fair = widget.fairName;
+      if (fair != null && fair.isNotEmpty) {
+        // Itens antigos podem não ter fairName gravado; mantê-los é melhor do
+        // que sumir com trabalho real da lista de campo.
+        items = items
+            .where((i) => i.fairName == fair || i.fairName.isEmpty)
+            .toList();
+      }
     } else {
       // Admin mode: read from local SQLite
       items = _fairId != null
@@ -115,6 +137,15 @@ class _ProducerPendingScreenState extends State<ProducerPendingScreen> {
       ? _items
       : _items.where((i) => _teamFilter.contains(_teamKey(i))).toList();
 
+  /// Lista corrida em ordem cronológica, usada nos modos por data.
+  List<PendingItem> get _byDate {
+    final list = List<PendingItem>.from(_visible);
+    list.sort((a, b) => _sort == _Sort.antigas
+        ? a.createdAt.compareTo(b.createdAt)
+        : b.createdAt.compareTo(a.createdAt));
+    return list;
+  }
+
   /// Equipes presentes nas pendências deste produtor, com a contagem de cada
   /// uma — o produtor vê de cara onde está o volume de trabalho.
   Map<String, int> get _teamCounts {
@@ -160,6 +191,26 @@ class _ProducerPendingScreenState extends State<ProducerPendingScreen> {
       sb.writeln('_Equipe: ${teams.join(", ")}_');
     }
 
+    // Nos modos por data a mensagem sai na mesma ordem que está na tela,
+    // senão o produtor copia uma lista diferente da que está vendo.
+    if (_sort != _Sort.hangar) {
+      sb.writeln(_sort == _Sort.antigas
+          ? '_Mais antigas primeiro_'
+          : '_Mais recentes primeiro_');
+      for (final item in _byDate) {
+        final d = item.createdAt;
+        final dd = '${d.day.toString().padLeft(2, '0')}/'
+            '${d.month.toString().padLeft(2, '0')}';
+        sb.writeln();
+        sb.writeln('*${item.local.isNotEmpty ? "Stand ${item.local}" : "Sem stand"}'
+            '${item.clientName.isNotEmpty ? " — ${item.clientName}" : ""}* ($dd)');
+        sb.write('• ${item.team}');
+        if (item.responsible.isNotEmpty) sb.write(' (${item.responsible})');
+        sb.writeln(': ${item.description}');
+      }
+      return sb.toString().trim();
+    }
+
     final grouped = _grouped;
     final hangars = grouped.keys.toList()..sort();
 
@@ -196,7 +247,7 @@ class _ProducerPendingScreenState extends State<ProducerPendingScreen> {
   /// com a contagem. Toca para alternar; nada marcado = todas.
   Widget _teamFilterBar() {
     final counts = _teamCounts;
-    if (counts.length < 2) return const SizedBox.shrink(); // 1 equipe: sem filtro
+    final showTeams = counts.length >= 2; // com 1 equipe só, filtrar não ajuda
 
     return Container(
       color: Colors.white,
@@ -204,22 +255,62 @@ class _ProducerPendingScreenState extends State<ProducerPendingScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (showTeams) ...[
+            Row(children: [
+              const Icon(Icons.groups, size: 15, color: Colors.grey),
+              const SizedBox(width: 5),
+              const Text('FILTRAR POR EQUIPE',
+                  style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey,
+                      letterSpacing: 1)),
+              const Spacer(),
+              if (_teamFilter.isNotEmpty)
+                Text('${_visible.length} de ${_items.length}',
+                    style: const TextStyle(
+                        fontSize: 11,
+                        color: Colors.grey,
+                        fontWeight: FontWeight.w600)),
+            ]),
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 34,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                children: [
+                  _teamChip(
+                    label: 'Todas',
+                    count: _items.length,
+                    color: const Color(0xFF1E3A5F),
+                    selected: _teamFilter.isEmpty,
+                    onTap: () => setState(_teamFilter.clear),
+                  ),
+                  ...counts.entries.map((e) => _teamChip(
+                        label: e.key,
+                        count: e.value,
+                        color: teamColor(e.key),
+                        selected: _teamFilter.contains(e.key),
+                        onTap: () => setState(() {
+                          if (!_teamFilter.remove(e.key)) {
+                            _teamFilter.add(e.key);
+                          }
+                        }),
+                      )),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
           Row(children: [
-            const Icon(Icons.groups, size: 15, color: Colors.grey),
+            const Icon(Icons.sort, size: 15, color: Colors.grey),
             const SizedBox(width: 5),
-            const Text('FILTRAR POR EQUIPE',
+            const Text('ORDENAR',
                 style: TextStyle(
                     fontSize: 10,
                     fontWeight: FontWeight.bold,
                     color: Colors.grey,
                     letterSpacing: 1)),
-            const Spacer(),
-            if (_teamFilter.isNotEmpty)
-              Text('${_visible.length} de ${_items.length}',
-                  style: const TextStyle(
-                      fontSize: 11,
-                      color: Colors.grey,
-                      fontWeight: FontWeight.w600)),
           ]),
           const SizedBox(height: 8),
           SizedBox(
@@ -227,26 +318,46 @@ class _ProducerPendingScreenState extends State<ProducerPendingScreen> {
             child: ListView(
               scrollDirection: Axis.horizontal,
               children: [
-                _teamChip(
-                  label: 'Todas',
-                  count: _items.length,
-                  color: const Color(0xFF1E3A5F),
-                  selected: _teamFilter.isEmpty,
-                  onTap: () => setState(_teamFilter.clear),
-                ),
-                ...counts.entries.map((e) => _teamChip(
-                      label: e.key,
-                      count: e.value,
-                      color: teamColor(e.key),
-                      selected: _teamFilter.contains(e.key),
-                      onTap: () => setState(() {
-                        if (!_teamFilter.remove(e.key)) _teamFilter.add(e.key);
-                      }),
-                    )),
+                _sortChip('Por hangar', Icons.warehouse, _Sort.hangar),
+                _sortChip(
+                    'Mais antigas', Icons.arrow_upward, _Sort.antigas),
+                _sortChip(
+                    'Mais recentes', Icons.arrow_downward, _Sort.recentes),
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _sortChip(String label, IconData icon, _Sort mode) {
+    final selected = _sort == mode;
+    const color = Color(0xFF1E3A5F);
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: GestureDetector(
+        onTap: () => setState(() => _sort = mode),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: selected ? color : color.withOpacity(0.07),
+            borderRadius: BorderRadius.circular(17),
+            border:
+                Border.all(color: selected ? color : color.withOpacity(0.3)),
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(icon, size: 14, color: selected ? Colors.white : color),
+            const SizedBox(width: 5),
+            Text(label,
+                style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                    color: selected ? Colors.white : color)),
+          ]),
+        ),
       ),
     );
   }
@@ -448,14 +559,22 @@ class _ProducerPendingScreenState extends State<ProducerPendingScreen> {
                                   ],
                                 ),
                               )
-                            : _PendingList(
-                                grouped: _grouped,
-                                totalItems: _visible.length,
-                                produtor: _selected!,
-                                canResolve: widget.canResolve,
-                                onCopy: _copyWhatsApp,
-                                onResolve: _resolveItem,
-                              ),
+                            : _sort == _Sort.hangar
+                                ? _PendingList(
+                                    grouped: _grouped,
+                                    totalItems: _visible.length,
+                                    produtor: _selected!,
+                                    canResolve: widget.canResolve,
+                                    onCopy: _copyWhatsApp,
+                                    onResolve: _resolveItem,
+                                  )
+                                : _ChronoList(
+                                    items: _byDate,
+                                    produtor: _selected!,
+                                    oldestFirst: _sort == _Sort.antigas,
+                                    canResolve: widget.canResolve,
+                                    onResolve: _resolveItem,
+                                  ),
           ),
         ],
       ),
@@ -471,6 +590,163 @@ class _ProducerPendingScreenState extends State<ProducerPendingScreen> {
                           fontWeight: FontWeight.bold)),
                 )
               : null,
+    );
+  }
+}
+
+/// Lista corrida em ordem cronológica, com a idade de cada pendência em
+/// destaque — no modo "mais antigas" é o que mostra o que está parado há
+/// mais tempo.
+class _ChronoList extends StatelessWidget {
+  final List<PendingItem> items;
+  final String produtor;
+  final bool oldestFirst;
+  final bool canResolve;
+  final Future<void> Function(PendingItem) onResolve;
+
+  const _ChronoList({
+    required this.items,
+    required this.produtor,
+    required this.oldestFirst,
+    required this.canResolve,
+    required this.onResolve,
+  });
+
+  static final _fmt = DateFormat('dd/MM/yyyy HH:mm');
+
+  static String _age(DateTime d) {
+    final days = DateTime.now().difference(d).inDays;
+    if (days <= 0) return 'hoje';
+    if (days == 1) return 'há 1 dia';
+    return 'há $days dias';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Container(
+          color: Colors.orange.shade50,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          child: Row(children: [
+            Icon(oldestFirst ? Icons.history : Icons.schedule,
+                color: Colors.orange, size: 18),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                '${items.length} pendência${items.length != 1 ? "s" : ""} — '
+                '${oldestFirst ? "mais antigas primeiro" : "mais recentes primeiro"}',
+                style: const TextStyle(
+                    fontWeight: FontWeight.bold, fontSize: 14),
+              ),
+            ),
+          ]),
+        ),
+        Expanded(
+          child: ListView.builder(
+            padding: const EdgeInsets.all(12),
+            itemCount: items.length,
+            itemBuilder: (context, i) {
+              final item = items[i];
+              final days = DateTime.now().difference(item.createdAt).inDays;
+              final urgent = days >= 2;
+              return Card(
+                margin: const EdgeInsets.only(bottom: 8),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 7, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: urgent
+                                ? Colors.red.shade50
+                                : Colors.grey.shade100,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            _age(item.createdAt),
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: urgent
+                                  ? Colors.red.shade700
+                                  : Colors.grey.shade700,
+                            ),
+                          ),
+                        ),
+                        const Spacer(),
+                        Text(_fmt.format(item.createdAt),
+                            style: const TextStyle(
+                                fontSize: 11, color: Colors.grey)),
+                      ]),
+                      const SizedBox(height: 8),
+                      Text(
+                        '${item.local.isNotEmpty ? "Stand ${item.local}" : "Sem stand"}'
+                        '${item.hangar.isNotEmpty ? " · Hangar ${item.hangar}" : ""}'
+                        '${item.clientName.isNotEmpty ? " — ${item.clientName}" : ""}',
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 13),
+                      ),
+                      const Divider(height: 14),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _TeamDot(team: item.team),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  item.team +
+                                      (item.responsible.isNotEmpty
+                                          ? ' · ${item.responsible}'
+                                          : ''),
+                                  style: TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 12,
+                                      color: Colors.grey.shade700),
+                                ),
+                                Text(item.description,
+                                    style: const TextStyle(fontSize: 13)),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (canResolve) ...[
+                        const SizedBox(height: 6),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: ElevatedButton.icon(
+                            onPressed: () => onResolve(item),
+                            icon: const Icon(Icons.check, size: 14),
+                            label: const Text('Resolver',
+                                style: TextStyle(fontSize: 12)),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.green,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 6),
+                              minimumSize: Size.zero,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 }
