@@ -5,6 +5,7 @@ import '../models/pending_item.dart';
 import '../services/database_service.dart';
 import 'client_detail_screen.dart';
 import 'batch_validation_screen.dart';
+import '../widgets/pending_status.dart';
 
 /// Fair-wide list of every pending item, with a status filter and search.
 /// Lets the admin/producer see and jump to any pending without drilling
@@ -16,7 +17,7 @@ class PendingBoardScreen extends StatefulWidget {
   State<PendingBoardScreen> createState() => _PendingBoardScreenState();
 }
 
-enum _Filter { todas, pendentes, aguardando, resolvidas }
+enum _Filter { todas, pendentes, aguardando, resolvidas, recusadas }
 
 class _PendingBoardScreenState extends State<PendingBoardScreen> {
   List<PendingItem> _all = [];
@@ -66,7 +67,11 @@ class _PendingBoardScreenState extends State<PendingBoardScreen> {
       case _Filter.aguardando:
         return !p.isResolved && p.awaitingValidation;
       case _Filter.resolvidas:
-        return p.isResolved;
+        // Recusadas também têm is_resolved = 1; sem excluí-las aqui elas
+        // apareceriam como resolvidas.
+        return p.isResolved && !p.isRejected;
+      case _Filter.recusadas:
+        return p.isRejected;
     }
   }
 
@@ -89,7 +94,9 @@ class _PendingBoardScreenState extends State<PendingBoardScreen> {
         case _Filter.aguardando:
           return !p.isResolved && p.awaitingValidation;
         case _Filter.resolvidas:
-          return p.isResolved;
+          return p.isResolved && !p.isRejected;
+        case _Filter.recusadas:
+          return p.isRejected;
       }
     }).length;
   }
@@ -158,6 +165,7 @@ class _PendingBoardScreenState extends State<PendingBoardScreen> {
                 _filterChip('Pendentes', _Filter.pendentes, Colors.deepOrange),
                 _filterChip('Aguardando', _Filter.aguardando, Colors.amber.shade800),
                 _filterChip('Resolvidas', _Filter.resolvidas, Colors.green),
+                _filterChip('Recusadas', _Filter.recusadas, Colors.red),
                 _filterChip('Todas', _Filter.todas, const Color(0xFF1E3A5F)),
               ],
             ),
@@ -220,11 +228,7 @@ class _BoardCard extends StatelessWidget {
   final VoidCallback onTap;
   const _BoardCard({required this.item, required this.onTap});
 
-  Color get _statusColor {
-    if (item.isResolved) return Colors.green;
-    if (item.awaitingValidation) return Colors.amber;
-    return Colors.deepOrange;
-  }
+  Color get _statusColor => statusOf(item).color;
 
   @override
   Widget build(BuildContext context) {
@@ -288,6 +292,10 @@ class _BoardCard extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style:
                             const TextStyle(fontSize: 13, color: Colors.black87)),
+                    if (item.isRejected) ...[
+                      const SizedBox(height: 4),
+                      PendingStatusBadge(item: item, fontSize: 11),
+                    ],
                   ],
                 ),
               ),

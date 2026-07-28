@@ -8,6 +8,7 @@ import '../services/database_service.dart';
 import '../services/firestore_service.dart';
 import '../widgets/photo_gallery.dart';
 import '../widgets/montage_section.dart';
+import '../widgets/pending_status.dart';
 import '../widgets/client_specs_card.dart';
 import '../widgets/analyst_notes_widget.dart';
 
@@ -81,7 +82,10 @@ class _AnalystClientDetailScreenState
             !p.isResolved &&
             (p.firestoreId == null || !awaitingIds.contains(p.firestoreId)))
         .toList();
-    final resolved = _items.where((p) => p.isResolved).toList();
+    // Recusadas vêm marcadas como resolvidas no banco.
+    final resolved =
+        _items.where((p) => p.isResolved && !p.isRejected).toList();
+    final rejected = _items.where((p) => p.isRejected).toList();
     final headerColor =
         c.isCompleted ? Colors.green.shade700 : const Color(0xFF1E3A5F);
 
@@ -279,6 +283,12 @@ class _AnalystClientDetailScreenState
                     color: Colors.green),
                 ...resolved.map((item) => _ReadOnlyPendingCard(item: item)),
               ],
+              if (rejected.isNotEmpty) ...[
+                _SectionTitle(
+                    text: 'RECUSADAS (${rejected.length})',
+                    color: Colors.red),
+                ...rejected.map((item) => _ReadOnlyPendingCard(item: item)),
+              ],
               if (_items.isEmpty && _awaitingItems.isEmpty)
                 const Padding(
                   padding: EdgeInsets.all(24),
@@ -396,17 +406,24 @@ class _ReadOnlyPendingCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final resolved = item.isResolved;
-    Color borderColor = resolved
-        ? Colors.green.shade200
-        : awaiting
-            ? Colors.blue.shade200
-            : Colors.orange.shade200;
-    Color bgColor = resolved
-        ? Colors.green.shade50
-        : awaiting
-            ? Colors.blue.shade50
-            : Colors.white;
+    // Um chamado recusado também vem com is_resolved = 1; checar a recusa
+    // antes evita exibi-lo como "Resolvido".
+    final rejected = item.isRejected;
+    final resolved = item.isResolved && !rejected;
+    Color borderColor = rejected
+        ? Colors.red.shade200
+        : resolved
+            ? Colors.green.shade200
+            : awaiting
+                ? Colors.blue.shade200
+                : Colors.orange.shade200;
+    Color bgColor = rejected
+        ? Colors.red.shade50
+        : resolved
+            ? Colors.green.shade50
+            : awaiting
+                ? Colors.blue.shade50
+                : Colors.white;
 
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 10),
@@ -445,16 +462,8 @@ class _ReadOnlyPendingCard extends StatelessWidget {
                 ),
               ],
               const Spacer(),
-              if (resolved)
-                const Row(children: [
-                  Icon(Icons.check_circle, color: Colors.green, size: 16),
-                  SizedBox(width: 4),
-                  Text('Resolvido',
-                      style: TextStyle(
-                          color: Colors.green,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold)),
-                ])
+              if (rejected || resolved)
+                PendingStatusBadge(item: item)
               else if (awaiting)
                 Container(
                   padding:
@@ -508,6 +517,7 @@ class _ReadOnlyPendingCard extends StatelessWidget {
               ),
             ],
             Text(item.description, style: const TextStyle(fontSize: 14)),
+            RejectionReasonBox(item: item),
             if (item.photoUrls.isNotEmpty) ...[
               const SizedBox(height: 8),
               PhotoStrip(urls: item.photoUrls),

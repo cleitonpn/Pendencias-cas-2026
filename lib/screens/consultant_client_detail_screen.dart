@@ -8,6 +8,7 @@ import '../models/pending_item.dart';
 import '../services/database_service.dart';
 import '../services/firestore_service.dart';
 import '../widgets/photo_gallery.dart';
+import '../widgets/pending_status.dart';
 import '../widgets/analyst_notes_widget.dart';
 import 'add_pending_screen.dart';
 
@@ -239,7 +240,10 @@ class _ConsultantClientDetailScreenState
         .toList();
     final awaiting =
         _items.where((p) => !p.isResolved && _isAwaiting(p)).toList();
-    final resolved = _items.where((p) => p.isResolved).toList();
+    // Recusadas vêm marcadas como resolvidas no banco.
+    final resolved =
+        _items.where((p) => p.isResolved && !p.isRejected).toList();
+    final rejected = _items.where((p) => p.isRejected).toList();
 
     return Scaffold(
       backgroundColor: const Color(0xFFF0F2F5),
@@ -538,6 +542,15 @@ class _ConsultantClientDetailScreenState
                 ...resolved.map((item) => _PendingCard(
                     item: item,
                     badge: _Badge('Resolvido', Colors.green),
+                    onCopy: () => _copyWhatsApp(item))),
+              ],
+              if (rejected.isNotEmpty) ...[
+                _SectionTitle(
+                    text: 'RECUSADAS (${rejected.length})',
+                    color: Colors.red),
+                ...rejected.map((item) => _PendingCard(
+                    item: item,
+                    badge: _Badge('Recusado', Colors.red),
                     onCopy: () => _copyWhatsApp(item))),
               ],
               if (_items.isEmpty)
@@ -940,6 +953,7 @@ class _PendingCard extends StatelessWidget {
               ),
             ],
             Text(item.description, style: const TextStyle(fontSize: 14)),
+            RejectionReasonBox(item: item),
             if (item.photoUrls.isNotEmpty) ...[
               const SizedBox(height: 8),
               PhotoStrip(urls: item.photoUrls),

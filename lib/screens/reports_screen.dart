@@ -4,6 +4,7 @@ import '../models/pending_item.dart';
 import '../providers/app_provider.dart';
 import '../services/database_service.dart';
 import '../services/pdf_service.dart';
+import '../widgets/pending_status.dart';
 
 class ReportsScreen extends StatefulWidget {
   const ReportsScreen({super.key});
@@ -18,6 +19,7 @@ class _ReportsScreenState extends State<ReportsScreen>
   late int _fairId;
   List<PendingItem> _open = [];
   List<PendingItem> _resolved = [];
+  List<PendingItem> _rejected = [];
   Map<String, int> _stats = {};
   List<Map<String, dynamic>> _teamRankings = [];
   List<Map<String, dynamic>> _producerRankings = [];
@@ -28,7 +30,7 @@ class _ReportsScreenState extends State<ReportsScreen>
   void initState() {
     super.initState();
     _fairId = context.read<AppProvider>().currentFair?.id ?? 1;
-    _tab = TabController(length: 6, vsync: this);
+    _tab = TabController(length: 7, vsync: this);
     _load();
   }
 
@@ -42,8 +44,12 @@ class _ReportsScreenState extends State<ReportsScreen>
     setState(() => _loading = true);
     _open = await DatabaseService.getAllPendingItems(
         resolved: false, fairId: _fairId);
-    _resolved = await DatabaseService.getAllPendingItems(
+    // Recusadas vêm com is_resolved = 1; separá-las evita que apareçam
+    // como resolvidas na aba e nas contagens.
+    final closed = await DatabaseService.getAllPendingItems(
         resolved: true, fairId: _fairId);
+    _resolved = closed.where((i) => !i.isRejected).toList();
+    _rejected = closed.where((i) => i.isRejected).toList();
     _stats = await DatabaseService.getStats(fairId: _fairId);
     _teamRankings =
         await DatabaseService.getTeamRankings(fairId: _fairId);
@@ -88,6 +94,7 @@ class _ReportsScreenState extends State<ReportsScreen>
           tabs: [
             Tab(text: 'Abertas (${_open.length})'),
             Tab(text: 'Resolvidas (${_resolved.length})'),
+            Tab(text: 'Recusadas (${_rejected.length})'),
             const Tab(text: 'Resumo'),
             const Tab(text: 'Por Equipe'),
             const Tab(text: 'Por Produtor'),
@@ -118,6 +125,16 @@ class _ReportsScreenState extends State<ReportsScreen>
                   showResolved: true,
                   onExport: () => PdfService.generateAndShow(context,
                       () => PdfService.generatePendingReport(_resolved, true)),
+                  onReload: null,
+                ),
+                _ListTab(
+                  items: _rejected,
+                  emptyMsg: 'Nenhum chamado recusado.',
+                  emptyIcon: Icons.cancel_outlined,
+                  emptyColor: Colors.red,
+                  showResolved: true,
+                  onExport: () => PdfService.generateAndShow(context,
+                      () => PdfService.generatePendingReport(_rejected, true)),
                   onReload: null,
                 ),
                 _SummaryTab(
@@ -293,6 +310,11 @@ class _ItemCard extends StatelessWidget {
             const SizedBox(height: 4),
             Text(item.description,
                 style: const TextStyle(fontSize: 13)),
+            if (item.isRejected) ...[
+              const SizedBox(height: 4),
+              PendingStatusBadge(item: item, fontSize: 11),
+              RejectionReasonBox(item: item),
+            ],
             const SizedBox(height: 4),
             Text(_fmt(item.createdAt),
                 style:
@@ -410,6 +432,10 @@ class _SummaryTab extends StatelessWidget {
           _row('Pendências resolvidas',
               '${stats['resolved_pending'] ?? 0}',
               Icons.done_all, Colors.green),
+          if ((stats['rejected_pending'] ?? 0) > 0)
+            _row('Chamados recusados',
+                '${stats['rejected_pending'] ?? 0}',
+                Icons.cancel, Colors.red),
           _row('Tempo médio de resolução', _dur(avg), Icons.timer,
               Colors.purple),
           if (byTeam.isNotEmpty) ...[
@@ -523,6 +549,7 @@ class _RankingTab extends StatelessWidget {
         final total = (item['total'] as num?)?.toInt() ?? 0;
         final open = (item['open'] as num?)?.toInt() ?? 0;
         final resolved = (item['resolved'] as num?)?.toInt() ?? 0;
+        final rejected = (item['rejected'] as num?)?.toInt() ?? 0;
         final progress = maxTotal > 0 ? total / maxTotal : 0.0;
 
         return Card(
@@ -587,6 +614,10 @@ class _RankingTab extends StatelessWidget {
                   _chip('$open abertas', Colors.orange),
                   const SizedBox(width: 8),
                   _chip('$resolved resolvidas', Colors.green),
+                  if (rejected > 0) ...[
+                    const SizedBox(width: 8),
+                    _chip('$rejected recusadas', Colors.red),
+                  ],
                   if (showAvgTime) ...[
                     const SizedBox(width: 8),
                     _avgTimeChip(item['avg_minutes']),
@@ -664,8 +695,9 @@ class RankingDetailScreen extends StatefulWidget {
 class _RankingDetailScreenState extends State<RankingDetailScreen> {
   List<PendingItem> _open = [];
   List<PendingItem> _resolved = [];
+  List<PendingItem> _rejected = [];
   bool _loading = true;
-  bool _showResolved = false;
+  int _view = 0; // 0 abertas, 1 resolvidas, 2 recusadas
 
   @override
   void initState() {
@@ -691,14 +723,22 @@ class _RankingDetailScreenState extends State<RankingDetailScreen> {
     if (!mounted) return;
     setState(() {
       _open = open.where(_matches).toList();
-      _resolved = resolved.where(_matches).toList();
+      // Recusadas vêm com is_resolved = 1; separadas para não contarem
+      // como resolvidas.
+      final closed = resolved.where(_matches).toList();
+      _resolved = closed.where((i) => !i.isRejected).toList();
+      _rejected = closed.where((i) => i.isRejected).toList();
       _loading = false;
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    final items = _showResolved ? _resolved : _open;
+    final items = _view == 0
+        ? _open
+        : _view == 1
+            ? _resolved
+            : _rejected;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF0F2F5),
@@ -726,28 +766,33 @@ class _RankingDetailScreenState extends State<RankingDetailScreen> {
                   padding: const EdgeInsets.symmetric(
                       horizontal: 16, vertical: 10),
                   child: Row(children: [
-                    _tab('Abertas', _open.length, Colors.orange,
-                        !_showResolved,
-                        () => setState(() => _showResolved = false)),
+                    _tab('Abertas', _open.length, Colors.orange, _view == 0,
+                        () => setState(() => _view = 0)),
                     const SizedBox(width: 8),
                     _tab('Resolvidas', _resolved.length, Colors.green,
-                        _showResolved,
-                        () => setState(() => _showResolved = true)),
+                        _view == 1, () => setState(() => _view = 1)),
+                    if (_rejected.isNotEmpty) ...[
+                      const SizedBox(width: 8),
+                      _tab('Recusadas', _rejected.length, Colors.red,
+                          _view == 2, () => setState(() => _view = 2)),
+                    ],
                   ]),
                 ),
                 Expanded(
                   child: items.isEmpty
                       ? Center(
                           child: Text(
-                            _showResolved
-                                ? 'Nenhuma pendência resolvida.'
-                                : 'Nenhuma pendência aberta.',
+                            _view == 0
+                                ? 'Nenhuma pendência aberta.'
+                                : _view == 1
+                                    ? 'Nenhuma pendência resolvida.'
+                                    : 'Nenhum chamado recusado.',
                             style: const TextStyle(color: Colors.grey),
                           ),
                         )
                       : _GroupedList(
                           items: items,
-                          onReload: _showResolved ? null : _load,
+                          onReload: _view == 0 ? _load : null,
                         ),
                 ),
               ],

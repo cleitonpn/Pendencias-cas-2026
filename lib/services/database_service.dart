@@ -903,8 +903,15 @@ class DatabaseService {
       'total_pending': q(Sqflite.firstIntValue(await database.rawQuery(
           'SELECT COUNT(*) FROM pending_items WHERE is_resolved = 0 AND fair_id = ?',
           [fairId]))),
+      // Recusadas gravam is_resolved = 1 junto com approval_status = 'recusada';
+      // contá-las como resolvidas inflaria o número de conclusões.
       'resolved_pending': q(Sqflite.firstIntValue(await database.rawQuery(
-          'SELECT COUNT(*) FROM pending_items WHERE is_resolved = 1 AND fair_id = ?',
+          "SELECT COUNT(*) FROM pending_items WHERE is_resolved = 1 "
+          "AND COALESCE(approval_status, 'none') != 'recusada' AND fair_id = ?",
+          [fairId]))),
+      'rejected_pending': q(Sqflite.firstIntValue(await database.rawQuery(
+          "SELECT COUNT(*) FROM pending_items WHERE "
+          "COALESCE(approval_status, 'none') = 'recusada' AND fair_id = ?",
           [fairId]))),
     };
   }
@@ -916,7 +923,11 @@ class DatabaseService {
       SELECT team,
         COUNT(*) as total,
         SUM(CASE WHEN is_resolved = 0 THEN 1 ELSE 0 END) as open,
-        SUM(CASE WHEN is_resolved = 1 THEN 1 ELSE 0 END) as resolved,
+        SUM(CASE WHEN is_resolved = 1
+                  AND COALESCE(approval_status, 'none') != 'recusada'
+                 THEN 1 ELSE 0 END) as resolved,
+        SUM(CASE WHEN COALESCE(approval_status, 'none') = 'recusada'
+                 THEN 1 ELSE 0 END) as rejected,
         AVG(CASE
           WHEN is_resolved = 1 AND resolved_at IS NOT NULL
           THEN (JULIANDAY(resolved_at) - JULIANDAY(created_at)) * 24 * 60
@@ -938,7 +949,11 @@ class DatabaseService {
         COUNT(DISTINCT c.row_id) as total_clients,
         SUM(CASE WHEN c.is_completed = 1 THEN 1 ELSE 0 END) as completed_clients,
         COUNT(p.id) as total_pending,
-        SUM(CASE WHEN p.is_resolved = 1 THEN 1 ELSE 0 END) as resolved_pending,
+        SUM(CASE WHEN p.is_resolved = 1
+                  AND COALESCE(p.approval_status, 'none') != 'recusada'
+                 THEN 1 ELSE 0 END) as resolved_pending,
+        SUM(CASE WHEN COALESCE(p.approval_status, 'none') = 'recusada'
+                 THEN 1 ELSE 0 END) as rejected_pending,
         AVG(CASE
           WHEN p.is_resolved = 1 AND p.resolved_at IS NOT NULL
           THEN (JULIANDAY(p.resolved_at) - JULIANDAY(p.created_at)) * 24 * 60
@@ -960,7 +975,11 @@ class DatabaseService {
       SELECT c.produtor as producer,
         COUNT(*) as total,
         SUM(CASE WHEN p.is_resolved = 0 THEN 1 ELSE 0 END) as open,
-        SUM(CASE WHEN p.is_resolved = 1 THEN 1 ELSE 0 END) as resolved
+        SUM(CASE WHEN p.is_resolved = 1
+                  AND COALESCE(p.approval_status, 'none') != 'recusada'
+                 THEN 1 ELSE 0 END) as resolved,
+        SUM(CASE WHEN COALESCE(p.approval_status, 'none') = 'recusada'
+                 THEN 1 ELSE 0 END) as rejected
       FROM pending_items p
       JOIN clients c ON c.row_id = p.client_id
       WHERE c.produtor != '' AND p.fair_id = ?

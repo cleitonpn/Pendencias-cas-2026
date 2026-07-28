@@ -9,6 +9,7 @@ import '../services/database_service.dart';
 import '../services/firestore_service.dart';
 import '../services/pdf_service.dart';
 import '../widgets/photo_gallery.dart';
+import '../widgets/pending_status.dart';
 import '../widgets/montage_section.dart';
 import '../widgets/client_specs_card.dart';
 import '../widgets/analyst_notes_widget.dart';
@@ -200,7 +201,11 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
     // Awaiting: firestoreItems from Firestore that are awaiting validation
     // merged with SQLite items that match (to get sqliteId for resolution)
     final awaitingItems = _awaitingFirestoreItems;
-    final resolved = _items.where((p) => p.isResolved).toList();
+    // Recusadas vêm marcadas como resolvidas no banco; sem separar aqui elas
+    // seriam contadas em "RESOLVIDAS".
+    final resolved =
+        _items.where((p) => p.isResolved && !p.isRejected).toList();
+    final rejected = _items.where((p) => p.isRejected).toList();
     final headerColor =
         c.isCompleted ? Colors.green.shade700 : const Color(0xFF1E3A5F);
 
@@ -577,6 +582,16 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
                     onEdit: null,
                     onCopy: () => _copyWhatsApp(item))),
               ],
+              if (rejected.isNotEmpty) ...[
+                _SectionTitle(
+                    text: 'RECUSADAS (${rejected.length})',
+                    color: Colors.red),
+                ...rejected.map((item) => _PendingCard(
+                    item: item,
+                    onResolve: null,
+                    onEdit: null,
+                    onCopy: () => _copyWhatsApp(item))),
+              ],
               if (_items.isEmpty && awaitingItems.isEmpty)
                 const Padding(
                   padding: EdgeInsets.all(24),
@@ -674,16 +689,25 @@ class _PendingCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final resolved = item.isResolved;
+    final rejected = item.isRejected;
+    // Um chamado recusado também vem com is_resolved = 1; sem checar a recusa
+    // antes, ele apareceria como "Resolvido".
+    final resolved = item.isResolved && !rejected;
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 10),
       decoration: BoxDecoration(
-        color: resolved ? Colors.green.shade50 : Colors.white,
+        color: rejected
+            ? Colors.red.shade50
+            : resolved
+                ? Colors.green.shade50
+                : Colors.white,
         borderRadius: BorderRadius.circular(10),
         border: Border.all(
-            color: resolved
-                ? Colors.green.shade200
-                : Colors.orange.shade200),
+            color: rejected
+                ? Colors.red.shade200
+                : resolved
+                    ? Colors.green.shade200
+                    : Colors.orange.shade200),
         boxShadow: [
           BoxShadow(
               color: Colors.black.withOpacity(0.04),
@@ -697,7 +721,12 @@ class _PendingCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(children: [
-              _StatusDot(color: resolved ? Colors.green : Colors.deepOrange),
+              _StatusDot(
+                  color: rejected
+                      ? Colors.red
+                      : resolved
+                          ? Colors.green
+                          : Colors.deepOrange),
               const SizedBox(width: 8),
               _TeamBadge(team: item.team),
               if (item.responsible.isNotEmpty) ...[
@@ -710,16 +739,8 @@ class _PendingCard extends StatelessWidget {
                 ),
               ],
               const Spacer(),
-              if (resolved)
-                const Row(children: [
-                  Icon(Icons.check_circle, color: Colors.green, size: 16),
-                  SizedBox(width: 4),
-                  Text('Resolvido',
-                      style: TextStyle(
-                          color: Colors.green,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold)),
-                ])
+              if (rejected || resolved)
+                PendingStatusBadge(item: item)
               else if (item.inProgress && item.inProgressBy.isNotEmpty)
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -762,6 +783,7 @@ class _PendingCard extends StatelessWidget {
               ),
             ],
             Text(item.description, style: const TextStyle(fontSize: 14)),
+            RejectionReasonBox(item: item),
             if (item.photoUrls.isNotEmpty) ...[
               const SizedBox(height: 8),
               PhotoStrip(urls: item.photoUrls),
