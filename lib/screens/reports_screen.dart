@@ -53,6 +53,17 @@ class _ReportsScreenState extends State<ReportsScreen>
     setState(() => _loading = false);
   }
 
+  Future<void> _openRanking(String name, {required bool isTeam}) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => RankingDetailScreen(
+            fairId: _fairId, name: name, isTeam: isTeam),
+      ),
+    );
+    await _load(); // itens podem ter sido resolvidos lá dentro
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -121,12 +132,14 @@ class _ReportsScreenState extends State<ReportsScreen>
                   emptyMsg: 'Nenhuma pendência registrada.',
                   title: 'RANKING POR EQUIPE',
                   showAvgTime: true,
+                  onTapItem: (name) => _openRanking(name, isTeam: true),
                 ),
                 _RankingTab(
                   data: _producerRankings,
                   nameKey: 'producer',
                   emptyMsg: 'Nenhuma pendência com produtor registrado.',
                   title: 'RANKING POR PRODUTOR',
+                  onTapItem: (name) => _openRanking(name, isTeam: false),
                 ),
                 _CrossFairTab(data: _crossFair),
               ],
@@ -295,7 +308,13 @@ class _ItemCard extends StatelessWidget {
               const SizedBox(height: 8),
               ElevatedButton(
                 onPressed: () async {
-                  await DatabaseService.resolvePendingItem(item.id!);
+                  // Antes gravava só no SQLite: a resolução ficava presa neste
+                  // aparelho e os outros continuavam vendo a pendência aberta.
+                  await context.read<AppProvider>().resolveItem(
+                        item.id!,
+                        firestoreId: item.firestoreId,
+                        by: 'Administrador',
+                      );
                   onReload!();
                 },
                 style: ElevatedButton.styleFrom(
@@ -454,6 +473,7 @@ class _RankingTab extends StatelessWidget {
   final String emptyMsg;
   final String title;
   final bool showAvgTime;
+  final void Function(String name)? onTapItem;
 
   const _RankingTab({
     required this.data,
@@ -461,6 +481,7 @@ class _RankingTab extends StatelessWidget {
     required this.emptyMsg,
     required this.title,
     this.showAvgTime = false,
+    this.onTapItem,
   });
 
   @override
@@ -508,7 +529,10 @@ class _RankingTab extends StatelessWidget {
           margin: const EdgeInsets.only(bottom: 8),
           shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(10)),
-          child: Padding(
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onTapItem == null ? null : () => onTapItem!(name),
+            child: Padding(
             padding: const EdgeInsets.all(14),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -540,6 +564,12 @@ class _RankingTab extends StatelessWidget {
                           fontSize: 24,
                           fontWeight: FontWeight.bold,
                           color: Color(0xFF1E3A5F))),
+                  if (onTapItem != null)
+                    const Padding(
+                      padding: EdgeInsets.only(left: 4),
+                      child: Icon(Icons.chevron_right,
+                          color: Colors.grey, size: 20),
+                    ),
                 ]),
                 const SizedBox(height: 8),
                 ClipRRect(
@@ -563,6 +593,7 @@ class _RankingTab extends StatelessWidget {
                   ],
                 ]),
               ],
+            ),
             ),
           ),
         );
@@ -609,6 +640,142 @@ class _RankingTab extends StatelessWidget {
                 fontSize: 11,
                 color: color,
                 fontWeight: FontWeight.w600)),
+      );
+}
+
+/// Pendências de uma equipe (ou produtor) específica, aberta ao tocar num card
+/// do ranking.
+class RankingDetailScreen extends StatefulWidget {
+  final int fairId;
+  final String name;
+  final bool isTeam;
+
+  const RankingDetailScreen({
+    super.key,
+    required this.fairId,
+    required this.name,
+    required this.isTeam,
+  });
+
+  @override
+  State<RankingDetailScreen> createState() => _RankingDetailScreenState();
+}
+
+class _RankingDetailScreenState extends State<RankingDetailScreen> {
+  List<PendingItem> _open = [];
+  List<PendingItem> _resolved = [];
+  bool _loading = true;
+  bool _showResolved = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  /// O ranking por produtor agrupa por `clients.produtor` (via JOIN), não por
+  /// `pending_items.producerName` — filtrar pelo campo do item daria números
+  /// diferentes dos do card. Por isso o produtor é resolvido pelo cliente.
+  bool _matches(PendingItem item) {
+    if (widget.isTeam) return item.team == widget.name;
+    final client = context.read<AppProvider>().clientById(item.clientId);
+    return client?.produtor == widget.name;
+  }
+
+  Future<void> _load() async {
+    setState(() => _loading = true);
+    final open = await DatabaseService.getAllPendingItems(
+        resolved: false, fairId: widget.fairId);
+    final resolved = await DatabaseService.getAllPendingItems(
+        resolved: true, fairId: widget.fairId);
+    if (!mounted) return;
+    setState(() {
+      _open = open.where(_matches).toList();
+      _resolved = resolved.where(_matches).toList();
+      _loading = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final items = _showResolved ? _resolved : _open;
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF0F2F5),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF1E3A5F),
+        iconTheme: const IconThemeData(color: Colors.white),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(widget.name,
+                style: const TextStyle(
+                    color: Colors.white, fontWeight: FontWeight.bold)),
+            Text(widget.isTeam ? 'Equipe' : 'Produtor',
+                style: TextStyle(
+                    color: Colors.white.withOpacity(0.7), fontSize: 12)),
+          ],
+        ),
+      ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : Column(
+              children: [
+                Container(
+                  color: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 10),
+                  child: Row(children: [
+                    _tab('Abertas', _open.length, Colors.orange,
+                        !_showResolved,
+                        () => setState(() => _showResolved = false)),
+                    const SizedBox(width: 8),
+                    _tab('Resolvidas', _resolved.length, Colors.green,
+                        _showResolved,
+                        () => setState(() => _showResolved = true)),
+                  ]),
+                ),
+                Expanded(
+                  child: items.isEmpty
+                      ? Center(
+                          child: Text(
+                            _showResolved
+                                ? 'Nenhuma pendência resolvida.'
+                                : 'Nenhuma pendência aberta.',
+                            style: const TextStyle(color: Colors.grey),
+                          ),
+                        )
+                      : _GroupedList(
+                          items: items,
+                          onReload: _showResolved ? null : _load,
+                        ),
+                ),
+              ],
+            ),
+    );
+  }
+
+  Widget _tab(String label, int count, Color color, bool selected,
+          VoidCallback onTap) =>
+      GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding:
+              const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+          decoration: BoxDecoration(
+            color: selected ? color : color.withOpacity(0.08),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+                color: selected ? color : color.withOpacity(0.3),
+                width: 1.5),
+          ),
+          child: Text('$count $label',
+              style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.bold,
+                  color: selected ? Colors.white : color)),
+        ),
       );
 }
 
