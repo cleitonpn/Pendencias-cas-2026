@@ -698,7 +698,13 @@ class DatabaseService {
     final database = await db;
     var clauses = <String>['client_id = ?'];
     if (excludeUnapproved) clauses.add(_visibleClause);
-    if (resolvedOnly) clauses.add('is_resolved = 1');
+    if (resolvedOnly) {
+      // Recusar grava is_resolved = 1, então filtrar só por isso trazia
+      // chamados recusados junto — e o relatório de entrega do stand, que vai
+      // para o expositor, os listava como serviço resolvido.
+      clauses.add('is_resolved = 1');
+      clauses.add("COALESCE(approval_status, 'none') != 'recusada'");
+    }
     final where = clauses.join(' AND ');
     final maps = await database.query('pending_items',
         where: where,
