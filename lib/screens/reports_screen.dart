@@ -23,6 +23,7 @@ class _ReportsScreenState extends State<ReportsScreen>
   Map<String, int> _stats = {};
   List<Map<String, dynamic>> _teamRankings = [];
   List<Map<String, dynamic>> _producerRankings = [];
+  List<Map<String, dynamic>> _leaderRankings = [];
   List<Map<String, dynamic>> _crossFair = [];
   bool _loading = true;
 
@@ -30,7 +31,7 @@ class _ReportsScreenState extends State<ReportsScreen>
   void initState() {
     super.initState();
     _fairId = context.read<AppProvider>().currentFair?.id ?? 1;
-    _tab = TabController(length: 7, vsync: this);
+    _tab = TabController(length: 8, vsync: this);
     _load();
   }
 
@@ -55,16 +56,18 @@ class _ReportsScreenState extends State<ReportsScreen>
         await DatabaseService.getTeamRankings(fairId: _fairId);
     _producerRankings =
         await DatabaseService.getProducerRankings(fairId: _fairId);
+    _leaderRankings =
+        await DatabaseService.getLeaderRankings(fairId: _fairId);
     _crossFair = await DatabaseService.getCrossFairStats();
     setState(() => _loading = false);
   }
 
-  Future<void> _openRanking(String name, {required bool isTeam}) async {
+  Future<void> _openRanking(String name, RankingKind kind) async {
     await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => RankingDetailScreen(
-            fairId: _fairId, name: name, isTeam: isTeam),
+            fairId: _fairId, name: name, kind: kind),
       ),
     );
     await _load(); // itens podem ter sido resolvidos lá dentro
@@ -98,6 +101,7 @@ class _ReportsScreenState extends State<ReportsScreen>
             const Tab(text: 'Resumo'),
             const Tab(text: 'Por Equipe'),
             const Tab(text: 'Por Produtor'),
+            const Tab(text: 'Por Líder'),
             const Tab(text: 'Comparativo'),
           ],
         ),
@@ -149,14 +153,23 @@ class _ReportsScreenState extends State<ReportsScreen>
                   emptyMsg: 'Nenhuma pendência registrada.',
                   title: 'RANKING POR EQUIPE',
                   showAvgTime: true,
-                  onTapItem: (name) => _openRanking(name, isTeam: true),
+                  onTapItem: (name) => _openRanking(name, RankingKind.team),
                 ),
                 _RankingTab(
                   data: _producerRankings,
                   nameKey: 'producer',
                   emptyMsg: 'Nenhuma pendência com produtor registrado.',
                   title: 'RANKING POR PRODUTOR',
-                  onTapItem: (name) => _openRanking(name, isTeam: false),
+                  onTapItem: (name) =>
+                      _openRanking(name, RankingKind.producer),
+                ),
+                _RankingTab(
+                  data: _leaderRankings,
+                  nameKey: 'leader',
+                  emptyMsg: 'Nenhuma pendência com responsável definido.',
+                  title: 'RANKING POR LÍDER',
+                  showAvgTime: true,
+                  onTapItem: (name) => _openRanking(name, RankingKind.leader),
                 ),
                 _CrossFairTab(data: _crossFair),
               ],
@@ -674,18 +687,21 @@ class _RankingTab extends StatelessWidget {
       );
 }
 
-/// Pendências de uma equipe (ou produtor) específica, aberta ao tocar num card
-/// do ranking.
+/// Como o nome do ranking se relaciona com a pendência.
+enum RankingKind { team, producer, leader }
+
+/// Pendências de uma equipe, produtor ou líder, aberta ao tocar num card do
+/// ranking.
 class RankingDetailScreen extends StatefulWidget {
   final int fairId;
   final String name;
-  final bool isTeam;
+  final RankingKind kind;
 
   const RankingDetailScreen({
     super.key,
     required this.fairId,
     required this.name,
-    required this.isTeam,
+    required this.kind,
   });
 
   @override
@@ -705,13 +721,20 @@ class _RankingDetailScreenState extends State<RankingDetailScreen> {
     _load();
   }
 
-  /// O ranking por produtor agrupa por `clients.produtor` (via JOIN), não por
-  /// `pending_items.producerName` — filtrar pelo campo do item daria números
-  /// diferentes dos do card. Por isso o produtor é resolvido pelo cliente.
+  /// Cada ranking agrupa por um campo diferente; o filtro precisa usar
+  /// exatamente o mesmo, senão a lista mostra um número diferente do card.
+  /// O de produtor agrupa por `clients.produtor` (via JOIN), não por
+  /// `pending_items.producerName` — por isso é resolvido pelo cliente.
   bool _matches(PendingItem item) {
-    if (widget.isTeam) return item.team == widget.name;
-    final client = context.read<AppProvider>().clientById(item.clientId);
-    return client?.produtor == widget.name;
+    switch (widget.kind) {
+      case RankingKind.team:
+        return item.team == widget.name;
+      case RankingKind.leader:
+        return item.responsible == widget.name;
+      case RankingKind.producer:
+        final client = context.read<AppProvider>().clientById(item.clientId);
+        return client?.produtor == widget.name;
+    }
   }
 
   Future<void> _load() async {
@@ -751,7 +774,12 @@ class _RankingDetailScreenState extends State<RankingDetailScreen> {
             Text(widget.name,
                 style: const TextStyle(
                     color: Colors.white, fontWeight: FontWeight.bold)),
-            Text(widget.isTeam ? 'Equipe' : 'Produtor',
+            Text(
+                widget.kind == RankingKind.team
+                    ? 'Equipe'
+                    : widget.kind == RankingKind.leader
+                        ? 'Líder responsável'
+                        : 'Produtor',
                 style: TextStyle(
                     color: Colors.white.withOpacity(0.7), fontSize: 12)),
           ],

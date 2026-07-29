@@ -1096,6 +1096,34 @@ class DatabaseService {
     return rows.map((r) => Map<String, dynamic>.from(r)).toList();
   }
 
+  /// Ranking por líder/responsável. Agrupa pelo campo `responsible` da
+  /// pendência — a mesma pessoa usada para direcionar a notificação ao líder
+  /// daquele cliente/equipe.
+  static Future<List<Map<String, dynamic>>> getLeaderRankings(
+      {required int fairId}) async {
+    final database = await db;
+    final rows = await database.rawQuery('''
+      SELECT responsible as leader,
+        COUNT(*) as total,
+        SUM(CASE WHEN is_resolved = 0 THEN 1 ELSE 0 END) as open,
+        SUM(CASE WHEN is_resolved = 1
+                  AND COALESCE(approval_status, 'none') != 'recusada'
+                 THEN 1 ELSE 0 END) as resolved,
+        SUM(CASE WHEN COALESCE(approval_status, 'none') = 'recusada'
+                 THEN 1 ELSE 0 END) as rejected,
+        AVG(CASE
+          WHEN is_resolved = 1 AND resolved_at IS NOT NULL
+          THEN (JULIANDAY(resolved_at) - JULIANDAY(created_at)) * 24 * 60
+          ELSE NULL
+        END) as avg_minutes
+      FROM pending_items
+      WHERE fair_id = ? AND COALESCE(responsible, '') != ''
+      GROUP BY responsible
+      ORDER BY total DESC
+    ''', [fairId]);
+    return rows.map((r) => Map<String, dynamic>.from(r)).toList();
+  }
+
   /// Returns cross-fair summary for all fairs (for the metrics tab).
   static Future<List<Map<String, dynamic>>> getCrossFairStats() async {
     final database = await db;
