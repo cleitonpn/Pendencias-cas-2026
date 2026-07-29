@@ -360,6 +360,19 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
       _toast('Descreva o que você precisa.', error: true);
       return;
     }
+    // Antes de gastar upload de foto, avisa se já existe chamado aberto para
+    // este stand e esta mesma equipe.
+    final duplicates = await _openItemsForSelection();
+    if (!mounted) return;
+    if (duplicates.isNotEmpty) {
+      final proceed = await _showDuplicateDialog(duplicates);
+      if (!mounted) return;
+      if (proceed != true) {
+        _clearForm();
+        return;
+      }
+    }
+
     setState(() => _busy = true);
     try {
       final urls = <String>[];
@@ -402,6 +415,132 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
       _toast('Falha ao enviar. Verifique a conexão e tente novamente.',
           error: true);
     }
+  }
+
+  /// Chamados ainda abertos deste stand para a equipe selecionada.
+  /// Recusados e concluídos não contam como duplicidade.
+  Future<List<PendingItem>> _openItemsForSelection() async {
+    if (_client == null || _selectedTeam == null) return [];
+    try {
+      final all = await FirestoreService.getItemsByClientId(_client!.rowId);
+      return all
+          .where((i) =>
+              i.team == _selectedTeam &&
+              !i.isResolved &&
+              !i.isRejected)
+          .toList();
+    } catch (_) {
+      // Sem conexão para checar: não bloqueia a abertura do chamado.
+      return [];
+    }
+  }
+
+  void _clearForm() {
+    setState(() {
+      _descCtrl.clear();
+      _selectedTeam = null;
+      _photos.clear();
+    });
+    _toast('Pedido cancelado e campos limpos.');
+  }
+
+  /// Mostra os chamados já abertos para a mesma equipe e pergunta se ela quer
+  /// abrir outro assim mesmo.
+  Future<bool?> _showDuplicateDialog(List<PendingItem> existing) {
+    final plural = existing.length != 1;
+    return showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
+        title: Row(children: [
+          const Icon(Icons.warning_amber_rounded,
+              color: Color(0xFFF57C00), size: 26),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              plural
+                  ? 'Já existem pedidos abertos'
+                  : 'Já existe um pedido aberto',
+              style: const TextStyle(
+                  fontSize: 17, fontWeight: FontWeight.bold),
+            ),
+          ),
+        ]),
+        contentPadding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+        content: SizedBox(
+          width: 420,
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'O stand ${_client!.local} já tem '
+                  '${existing.length} pedido${plural ? "s" : ""} '
+                  'em aberto na equipe $_selectedTeam:',
+                  style: const TextStyle(fontSize: 13, color: Colors.black54),
+                ),
+                const SizedBox(height: 12),
+                ...existing.map((e) => Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFF8E1),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFFFFE082)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(children: [
+                            PendingStatusBadge(item: e, fontSize: 11),
+                            const Spacer(),
+                            Text(_dateTimeFmt.format(e.createdAt),
+                                style: const TextStyle(
+                                    fontSize: 11, color: Colors.grey)),
+                          ]),
+                          const SizedBox(height: 6),
+                          Text(e.description,
+                              style: const TextStyle(fontSize: 13)),
+                          PendingNotes(item: e, compact: true),
+                        ],
+                      ),
+                    )),
+                const SizedBox(height: 4),
+                const Text(
+                  'Deseja abrir um novo pedido mesmo assim?',
+                  style: TextStyle(
+                      fontSize: 13, fontWeight: FontWeight.w600),
+                ),
+              ],
+            ),
+          ),
+        ),
+        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Não, cancelar',
+                style: TextStyle(color: Colors.grey, fontSize: 15)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _navy,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              shape:
+                  RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            child: const Text('Sim, continuar',
+                style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
   }
 
   // ── Resumo da pendência criada ─────────────────────────────────────────────
