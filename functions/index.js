@@ -80,10 +80,14 @@ exports.onPendingCreated = onDocumentCreated(
       const desc = data.description || "";
       const fromClient = (data.origem || "equipe") === "cliente";
 
+      const fair = data.fairName || "";
       const prefix = fromClient ? "Pedido do expositor" : "Nova pendência";
       const title = team ? `${prefix} — ${team}` : prefix;
       const where = local ? ` (Stand ${local})` : "";
-      const body = `${client}${where}: ${desc}`;
+      // A feira vai no corpo: quem administra várias recebe aviso de todas,
+      // mas o quadro mostra só a feira aberta — sem isso não dá para saber
+      // onde procurar.
+      const body = `${fair ? `[${fair}] ` : ""}${client}${where}: ${desc}`;
 
       // Só os envolvidos são notificados. Antes ia para o tópico da equipe
       // inteira, então todo líder daquela equipe recebia pendências de
@@ -98,7 +102,7 @@ exports.onPendingCreated = onDocumentCreated(
         await sendToTopics(
             ["admins"].concat(consultant ? [sanitize("consultant", consultant)] : []),
             "Pedido aguardando aprovação",
-            `${client}${where}: ${desc}`,
+            `${fair ? `[${fair}] ` : ""}${client}${where}: ${desc}`,
             {
               type: "pending",
               clientId: data.clientId || "",
@@ -162,10 +166,11 @@ exports.onPendingUpdated = onDocumentUpdated(
       if (!before.awaitingValidation &&
           after.awaitingValidation === true &&
           after.isResolved !== true) {
+        const fair = after.fairName || "";
         await sendToTopics(
             ["admins"],
             "Pendência aguardando validação",
-            `${teamLabel}${client}: ${desc}`,
+            `${fair ? `[${fair}] ` : ""}${teamLabel}${client}: ${desc}`,
             payload);
         return;
       }

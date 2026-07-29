@@ -15,7 +15,53 @@ class DatabaseService {
 
   static Future<Database> _initDb() async {
     final path = join(await getDatabasesPath(), 'cas2026.db');
-    return openDatabase(path, version: 23, onCreate: _onCreate, onUpgrade: _onUpgrade);
+    final database = await openDatabase(path,
+        version: 23, onCreate: _onCreate, onUpgrade: _onUpgrade);
+    await _ensureSchema(database);
+    return database;
+  }
+
+  /// Colunas que precisam existir. Os ALTER TABLE das migrações ficam dentro
+  /// de try/catch: se um falha, a falha passa despercebida e, a partir daí,
+  /// todo insert/update naquela tabela lança — derrubando a sincronização.
+  /// Esta checagem roda em toda abertura e repõe o que faltar, inclusive em
+  /// aparelhos que já ficaram nesse estado.
+  static const _requiredColumns = <String, Map<String, String>>{
+    'pending_items': {
+      'consultant_name': "TEXT DEFAULT ''",
+      'approval_note': "TEXT DEFAULT ''",
+      'resolution_note': "TEXT DEFAULT ''",
+      'resolution_photos': "TEXT DEFAULT ''",
+      'approval_status': "TEXT DEFAULT 'none'",
+      'rejection_reason': "TEXT DEFAULT ''",
+      'awaiting_validation': 'INTEGER DEFAULT 0',
+      'in_progress': 'INTEGER DEFAULT 0',
+      'in_progress_by': "TEXT DEFAULT ''",
+    },
+    'fairs': {
+      'auto_approve': 'INTEGER DEFAULT 0',
+      'archived': 'INTEGER DEFAULT 0',
+    },
+  };
+
+  static Future<void> _ensureSchema(Database database) async {
+    for (final table in _requiredColumns.entries) {
+      try {
+        final info =
+            await database.rawQuery('PRAGMA table_info(${table.key})');
+        final existing =
+            info.map((r) => (r['name'] as String?) ?? '').toSet();
+        for (final col in table.value.entries) {
+          if (existing.contains(col.key)) continue;
+          try {
+            await database.execute('ALTER TABLE ${table.key} '
+                'ADD COLUMN ${col.key} ${col.value}');
+          } catch (_) {}
+        }
+      } catch (_) {
+        // Tabela ainda não criada — _onCreate cuida.
+      }
+    }
   }
 
   static Future<void> _onCreate(Database db, int version) async {

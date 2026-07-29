@@ -240,7 +240,12 @@ class AppProvider extends ChangeNotifier {
     _pendingSubscription = FirestoreService.streamPendingByFair(fairName)
         .listen((items) async {
       for (final item in items) {
-        await DatabaseService.upsertPendingFromFirestore(item);
+        // Isolado por item: sem isto, um único registro problemático abortava
+        // o laço e derrubava a sincronização inteira — em silêncio, já que a
+        // exceção é assíncrona e o onError do stream não a captura.
+        try {
+          await DatabaseService.upsertPendingFromFirestore(item);
+        } catch (_) {}
       }
       if (_currentFair != null) {
         _pendingCounts =
