@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_provider.dart';
 import '../services/session_service.dart';
+import '../services/notification_router.dart';
 import 'login_screen.dart';
 import 'fair_selection_screen.dart';
 import 'producer_home_screen.dart';
@@ -62,6 +63,10 @@ class _SplashScreenState extends State<SplashScreen> {
 
     Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => destination));
+
+    // Se o app foi aberto por um toque em notificação, agora há navigator e
+    // sessão para decidir a tela — processa o toque que ficou pendente.
+    NotificationRouter.flushPending();
   }
 
   @override

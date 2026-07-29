@@ -20,6 +20,9 @@ class PendingItem {
   // 'none' (não precisa de aprovação) | 'pendente' | 'aprovada' | 'recusada'
   String approvalStatus;
   String rejectionReason;       // motivo da recusa pelo atendimento
+  String approvalNote;          // nota opcional deixada ao aprovar o chamado
+  String resolutionNote;        // nota de manutenção deixada ao concluir
+  List<String> resolutionPhotoUrls; // fotos da manutenção feita
   bool isResolved;
   bool awaitingValidation;     // producer marked as done, admin needs to validate
   bool inProgress;
@@ -45,6 +48,9 @@ class PendingItem {
     this.resolvedBy = '',
     this.approvalStatus = 'none',
     this.rejectionReason = '',
+    this.approvalNote = '',
+    this.resolutionNote = '',
+    this.resolutionPhotoUrls = const [],
     this.isResolved = false,
     this.awaitingValidation = false,
     this.inProgress = false,
@@ -70,6 +76,9 @@ class PendingItem {
         'resolved_by': resolvedBy,
         'approval_status': approvalStatus,
         'rejection_reason': rejectionReason,
+        'approval_note': approvalNote,
+        'resolution_note': resolutionNote,
+        'resolution_photos': jsonEncode(resolutionPhotoUrls),
         'is_resolved': isResolved ? 1 : 0,
         'awaiting_validation': awaitingValidation ? 1 : 0,
         'in_progress': inProgress ? 1 : 0,
@@ -108,6 +117,9 @@ class PendingItem {
         resolvedBy: (map['resolved_by'] as String?) ?? '',
         approvalStatus: (map['approval_status'] as String?) ?? 'none',
         rejectionReason: (map['rejection_reason'] as String?) ?? '',
+        approvalNote: (map['approval_note'] as String?) ?? '',
+        resolutionNote: (map['resolution_note'] as String?) ?? '',
+        resolutionPhotoUrls: _parsePhotos(map['resolution_photos']),
         isResolved: (map['is_resolved'] as int? ?? 0) == 1,
         awaitingValidation: (map['awaiting_validation'] as int? ?? 0) == 1,
         inProgress: (map['in_progress'] as int? ?? 0) == 1,
@@ -137,6 +149,9 @@ class PendingItem {
         resolvedBy: (data['resolvedBy'] as String?) ?? '',
         approvalStatus: (data['approvalStatus'] as String?) ?? 'none',
         rejectionReason: (data['rejectionReason'] as String?) ?? '',
+        approvalNote: (data['approvalNote'] as String?) ?? '',
+        resolutionNote: (data['resolutionNote'] as String?) ?? '',
+        resolutionPhotoUrls: _parsePhotos(data['resolutionPhotoUrls']),
         isResolved: data['isResolved'] as bool? ?? false,
         awaitingValidation: data['awaitingValidation'] as bool? ?? false,
         inProgress: data['inProgress'] as bool? ?? false,
@@ -152,6 +167,14 @@ class PendingItem {
   bool get fromOrganizer => origem == 'organizadora';
   bool get isPendingApproval => approvalStatus == 'pendente';
   bool get isRejected => approvalStatus == 'recusada';
+
+  /// Tem alguma anotação da montadora para exibir (aprovação, conclusão ou
+  /// recusa), com ou sem fotos da manutenção.
+  bool get hasNotes =>
+      approvalNote.isNotEmpty ||
+      resolutionNote.isNotEmpty ||
+      rejectionReason.isNotEmpty ||
+      resolutionPhotoUrls.isNotEmpty;
 
   String toWhatsAppText() {
     final d = createdAt;

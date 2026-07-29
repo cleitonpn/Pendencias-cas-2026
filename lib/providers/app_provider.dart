@@ -681,20 +681,30 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> resolveItem(int sqliteId, {String? firestoreId, String? by}) async {
-    await DatabaseService.resolvePendingItem(sqliteId, resolvedBy: by);
+  Future<void> resolveItem(int sqliteId,
+      {String? firestoreId,
+      String? by,
+      String? note,
+      List<String>? photoUrls}) async {
+    await DatabaseService.resolvePendingItem(sqliteId,
+        resolvedBy: by, resolutionNote: note, resolutionPhotoUrls: photoUrls);
     if (firestoreId != null) {
-      FirestoreService.resolveItem(firestoreId, resolvedBy: by)
+      FirestoreService.resolveItem(firestoreId,
+              resolvedBy: by,
+              resolutionNote: note,
+              resolutionPhotoUrls: photoUrls)
           .catchError((_) {});
     }
     notifyListeners();
   }
 
   /// Attendant approves an organizer request → becomes a normal pending.
-  Future<void> approveOrganizerItem(int sqliteId, {String? firestoreId}) async {
-    await DatabaseService.approveOrganizerItem(sqliteId);
+  Future<void> approveOrganizerItem(int sqliteId,
+      {String? firestoreId, String note = ''}) async {
+    await DatabaseService.approveOrganizerItem(sqliteId, note: note);
     if (firestoreId != null && firestoreId.isNotEmpty) {
-      FirestoreService.approveOrganizerItem(firestoreId).catchError((_) {});
+      FirestoreService.approveOrganizerItem(firestoreId, note: note)
+          .catchError((_) {});
     }
     if (_currentFair != null) {
       _pendingCounts =
@@ -730,10 +740,18 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> validateItemByFirestoreId(String firestoreId, {String? by}) async {
+  Future<void> validateItemByFirestoreId(String firestoreId,
+      {String? by, String? note, List<String>? photoUrls}) async {
     await DatabaseService.resolvePendingItemByFirestoreId(firestoreId,
         resolvedBy: by);
-    FirestoreService.resolveItem(firestoreId, resolvedBy: by).catchError((_) {});
+    if (note != null && note.isNotEmpty ||
+        photoUrls != null && photoUrls.isNotEmpty) {
+      await DatabaseService.setResolutionNoteByFirestoreId(firestoreId,
+          note: note, photoUrls: photoUrls);
+    }
+    FirestoreService.resolveItem(firestoreId,
+            resolvedBy: by, resolutionNote: note, resolutionPhotoUrls: photoUrls)
+        .catchError((_) {});
     notifyListeners();
   }
 

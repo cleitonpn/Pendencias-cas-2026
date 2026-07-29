@@ -11,6 +11,7 @@ import 'firebase_options.dart';
 import 'providers/app_provider.dart';
 import 'utils/desktop_db.dart';
 import 'services/notification_service.dart';
+import 'services/notification_router.dart';
 import 'services/update_service.dart';
 import 'widgets/update_dialog.dart';
 import 'app_home.dart';
@@ -55,6 +56,11 @@ void main() async {
     FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
     await NotificationService.init();
   }
+
+  // O router precisa do navigator para abrir a tela do toque. init() roda
+  // antes do runApp, então um toque vindo do app encerrado fica guardado até
+  // a splash chamar flushPending().
+  NotificationRouter.navigatorKey = CasApp.navigatorKey;
 
   runApp(
     ChangeNotifierProvider(

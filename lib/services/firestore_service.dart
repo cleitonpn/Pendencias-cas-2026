@@ -81,6 +81,9 @@ class FirestoreService {
       'resolvedBy': '',
       'approvalStatus': item.approvalStatus,
       'rejectionReason': '',
+      'approvalNote': '',
+      'resolutionNote': '',
+      'resolutionPhotoUrls': <String>[],
       'isResolved': false,
       'awaitingValidation': false,
       'createdAt': item.createdAt.toIso8601String(),
@@ -90,10 +93,12 @@ class FirestoreService {
   }
 
   /// Approves an organizer request (becomes a normal pending).
-  static Future<void> approveOrganizerItem(String firestoreId) async {
+  static Future<void> approveOrganizerItem(String firestoreId,
+      {String note = ''}) async {
     if (firestoreId.isEmpty) return;
     await _db.collection('pending_items').doc(firestoreId).update({
       'approvalStatus': 'aprovada',
+      if (note.isNotEmpty) 'approvalNote': note,
     });
   }
 
@@ -141,12 +146,20 @@ class FirestoreService {
   }
 
   static Future<void> resolveItem(String firestoreId,
-      {String? resolvedBy}) async {
+      {String? resolvedBy,
+      String? resolutionNote,
+      List<String>? resolutionPhotoUrls}) async {
     if (firestoreId.isEmpty) return;
     await _db.collection('pending_items').doc(firestoreId).update({
       'isResolved': true,
       'resolvedAt': DateTime.now().toIso8601String(),
       if (resolvedBy != null && resolvedBy.isNotEmpty) 'resolvedBy': resolvedBy,
+      // Opcionais: só grava quando vieram preenchidos, para não apagar o que
+      // já estava lá.
+      if (resolutionNote != null && resolutionNote.isNotEmpty)
+        'resolutionNote': resolutionNote,
+      if (resolutionPhotoUrls != null && resolutionPhotoUrls.isNotEmpty)
+        'resolutionPhotoUrls': resolutionPhotoUrls,
     });
   }
 

@@ -1,7 +1,9 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'dart:convert';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'notification_router.dart';
 import 'package:timezone/timezone.dart' as tz;
 import '../models/fair.dart';
 import '../utils/fcm_topics.dart';
@@ -52,6 +54,8 @@ class NotificationService {
           n.title,
           n.body,
           const NotificationDetails(android: _fcmChannel),
+          // Sem payload o toque não teria como saber o que abrir.
+          payload: jsonEncode(message.data),
         );
 
         // Also show an in-app snackbar for immediate attention
@@ -82,7 +86,32 @@ class NotificationService {
     const initSettings = InitializationSettings(
       android: AndroidInitializationSettings('@mipmap/ic_launcher'),
     );
-    await _localPlugin.initialize(initSettings);
+    await _localPlugin.initialize(
+      initSettings,
+      onDidReceiveNotificationResponse: (response) {
+        final payload = response.payload;
+        if (payload == null || payload.isEmpty) return;
+        try {
+          final decoded = jsonDecode(payload);
+          if (decoded is Map) {
+            NotificationRouter.handle(Map<String, dynamic>.from(decoded));
+          }
+        } catch (_) {}
+      },
+    );
+
+    try {
+      // App em segundo plano: usuário tocou na notificação do sistema.
+      FirebaseMessaging.onMessageOpenedApp.listen(
+          (message) => NotificationRouter.handle(message.data));
+
+      // App estava encerrado: a mensagem que o abriu fica guardada até a
+      // splash terminar (ver NotificationRouter.flushPending).
+      final initial = await FirebaseMessaging.instance.getInitialMessage();
+      if (initial != null) NotificationRouter.handle(initial.data);
+    } catch (_) {
+      // Messaging indisponível — ignora.
+    }
   }
 
   // ── Local daily reminder ───────────────────────────────────────────────────

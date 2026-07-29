@@ -15,7 +15,7 @@ class DatabaseService {
 
   static Future<Database> _initDb() async {
     final path = join(await getDatabasesPath(), 'cas2026.db');
-    return openDatabase(path, version: 20, onCreate: _onCreate, onUpgrade: _onUpgrade);
+    return openDatabase(path, version: 21, onCreate: _onCreate, onUpgrade: _onUpgrade);
   }
 
   static Future<void> _onCreate(Database db, int version) async {
@@ -72,6 +72,9 @@ class DatabaseService {
         resolved_by TEXT DEFAULT '',
         approval_status TEXT DEFAULT 'none',
         rejection_reason TEXT DEFAULT '',
+        approval_note TEXT DEFAULT '',
+        resolution_note TEXT DEFAULT '',
+        resolution_photos TEXT DEFAULT '',
         is_resolved INTEGER DEFAULT 0,
         awaiting_validation INTEGER DEFAULT 0,
         in_progress INTEGER DEFAULT 0,
@@ -268,6 +271,20 @@ class DatabaseService {
           )
         ''');
       } catch (_) {}
+    }
+    if (oldV < 21) {
+      // Notas da montadora: aprovação, conclusão (manutenção) e fotos do
+      // serviço realizado.
+      for (final col in const [
+        'approval_note',
+        'resolution_note',
+        'resolution_photos'
+      ]) {
+        try {
+          await db.execute(
+              "ALTER TABLE pending_items ADD COLUMN $col TEXT DEFAULT ''");
+        } catch (_) {}
+      }
     }
   }
 
@@ -646,10 +663,16 @@ class DatabaseService {
 
   /// Approves an organizer request: it becomes a normal pending and flows to
   /// the producer/leader.
-  static Future<void> approveOrganizerItem(int id) async {
+  static Future<void> approveOrganizerItem(int id, {String note = ''}) async {
     final database = await db;
-    await database.update('pending_items', {'approval_status': 'aprovada'},
-        where: 'id = ?', whereArgs: [id]);
+    await database.update(
+        'pending_items',
+        {
+          'approval_status': 'aprovada',
+          if (note.isNotEmpty) 'approval_note': note,
+        },
+        where: 'id = ?',
+        whereArgs: [id]);
   }
 
   /// Rejects an organizer request: it is finalized (closed) with a reason.
@@ -753,6 +776,9 @@ class DatabaseService {
           'resolved_by': item.resolvedBy,
           'approval_status': item.approvalStatus,
           'rejection_reason': item.rejectionReason,
+          'approval_note': item.approvalNote,
+          'resolution_note': item.resolutionNote,
+          'resolution_photos': jsonEncode(item.resolutionPhotoUrls),
           'description': item.description,
           'photo_urls': jsonEncode(item.photoUrls),
         },
@@ -821,7 +847,10 @@ class DatabaseService {
     );
   }
 
-  static Future<void> resolvePendingItem(int id, {String? resolvedBy}) async {
+  static Future<void> resolvePendingItem(int id,
+      {String? resolvedBy,
+      String? resolutionNote,
+      List<String>? resolutionPhotoUrls}) async {
     final database = await db;
     await database.update(
       'pending_items',
@@ -829,6 +858,12 @@ class DatabaseService {
         'is_resolved': 1,
         'resolved_at': DateTime.now().toIso8601String(),
         if (resolvedBy != null && resolvedBy.isNotEmpty) 'resolved_by': resolvedBy,
+        // Nota e fotos de manutenção são opcionais: só sobrescreve quando
+        // vieram preenchidas, para não apagar o que já existia.
+        if (resolutionNote != null && resolutionNote.isNotEmpty)
+          'resolution_note': resolutionNote,
+        if (resolutionPhotoUrls != null && resolutionPhotoUrls.isNotEmpty)
+          'resolution_photos': jsonEncode(resolutionPhotoUrls),
       },
       where: 'id = ?',
       whereArgs: [id],
@@ -852,6 +887,39 @@ class DatabaseService {
       {'in_progress': 1, 'in_progress_by': by},
       where: 'id = ?',
       whereArgs: [id],
+    );
+  }
+
+  /// Busca um cliente por qualquer um dos dois identificadores (row_id local ou
+  /// firestore_id), em qualquer feira. Usado ao abrir uma notificação, quando
+  /// ainda não se sabe a que feira o item pertence.
+  static Future<Client?> findClientByAnyId(String id) async {
+    if (id.isEmpty) return null;
+    final database = await db;
+    final rows = await database.query(
+      'clients',
+      where: "row_id = ? OR (firestore_id != '' AND firestore_id = ?)",
+      whereArgs: [id, id],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return Client.fromMap(rows.first);
+  }
+
+  /// Grava nota/fotos de manutenção num item identificado pelo id do Firestore.
+  /// Usado quando a conclusão parte de um item que só existe na nuvem.
+  static Future<void> setResolutionNoteByFirestoreId(String firestoreId,
+      {String? note, List<String>? photoUrls}) async {
+    final database = await db;
+    await database.update(
+      'pending_items',
+      {
+        if (note != null && note.isNotEmpty) 'resolution_note': note,
+        if (photoUrls != null && photoUrls.isNotEmpty)
+          'resolution_photos': jsonEncode(photoUrls),
+      },
+      where: 'firestore_id = ?',
+      whereArgs: [firestoreId],
     );
   }
 

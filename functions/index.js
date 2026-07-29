@@ -47,11 +47,21 @@ function sanitize(prefix, raw) {
  * @param {string} body notification body
  * @return {Promise} resolved when all sends settle
  */
-function sendToTopics(topics, title, body) {
+function sendToTopics(topics, title, body, data) {
+  // O payload `data` é o que permite ao app abrir a tela certa ao tocar na
+  // notificação. Sem ele o toque apenas abria o app na tela inicial.
+  // Todos os valores precisam ser string.
+  const payload = {};
+  if (data) {
+    for (const [k, v] of Object.entries(data)) {
+      if (v !== undefined && v !== null && v !== "") payload[k] = String(v);
+    }
+  }
   const sends = topics.map((topic) =>
     getMessaging().send({
       topic,
       notification: {title, body},
+      data: payload,
       android: {priority: "high"},
     }));
   return Promise.allSettled(sends);
@@ -82,7 +92,12 @@ exports.onPendingCreated = onDocumentCreated(
       if (fromClient) topics.push("admins");
       if (topics.length === 0) return;
 
-      await sendToTopics(topics, title, body);
+      await sendToTopics(topics, title, body, {
+        type: "pending",
+        clientId: data.clientId || "",
+        pendingId: event.params.id,
+        fairName: data.fairName || "",
+      });
     });
 
 // Producer marked item as done (awaiting validation) → notify admins.
@@ -104,7 +119,13 @@ exports.onPendingUpdated = onDocumentUpdated(
       await sendToTopics(
           ["admins"],
           "Pendência aguardando validação",
-          `${team}${client}: ${desc}`);
+          `${team}${client}: ${desc}`,
+          {
+            type: "pending",
+            clientId: after.clientId || "",
+            pendingId: event.params.id,
+            fairName: after.fairName || "",
+          });
     });
 
 // New client detected during sheet sync → notify producer + consultant.
@@ -128,7 +149,11 @@ exports.onNewClientSynced = onDocumentCreated(
       if (consultant) topics.push(sanitize("consultant", consultant));
       if (topics.length === 0) return;
 
-      await sendToTopics(topics, title, body);
+      await sendToTopics(topics, title, body, {
+        type: "client",
+        clientId: data.clientId || "",
+        fairName: fair,
+      });
 
       // Delete the transient event document after processing.
       try {
