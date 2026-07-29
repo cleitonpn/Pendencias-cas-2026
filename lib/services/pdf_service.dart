@@ -9,6 +9,10 @@ import '../models/client.dart';
 import '../models/montage_update.dart';
 import '../models/pending_item.dart';
 
+/// Qual relatório de pendências gerar. Substitui o booleano antigo, que não
+/// conseguia distinguir recusadas de resolvidas.
+enum PendingReportKind { abertas, resolvidas, recusadas }
+
 class PdfService {
   static final _dtFmt = DateFormat('dd/MM/yyyy HH:mm');
   static final _dateFmt = DateFormat('dd/MM/yyyy');
@@ -51,11 +55,24 @@ class PdfService {
     );
   }
 
+  /// Um booleano não dava conta de três relatórios: passar `true` para as
+  /// recusadas gerava um PDF intitulado — e salvo como — "resolvidas".
   static Future<void> generatePendingReport(
-      List<PendingItem> items, bool showResolved) async {
+      List<PendingItem> items, PendingReportKind kind) async {
     final pdf = pw.Document();
     final now = _dateFmt.format(DateTime.now());
-    final title = showResolved ? 'PENDÊNCIAS RESOLVIDAS' : 'PENDÊNCIAS ABERTAS';
+    final closed = kind != PendingReportKind.abertas;
+    final rejected = kind == PendingReportKind.recusadas;
+    final title = switch (kind) {
+      PendingReportKind.abertas => 'PENDÊNCIAS ABERTAS',
+      PendingReportKind.resolvidas => 'PENDÊNCIAS RESOLVIDAS',
+      PendingReportKind.recusadas => 'CHAMADOS RECUSADOS',
+    };
+    final titleColor = switch (kind) {
+      PendingReportKind.abertas => PdfColors.red800,
+      PendingReportKind.resolvidas => PdfColors.green800,
+      PendingReportKind.recusadas => PdfColors.red800,
+    };
 
     final grouped = <String, List<PendingItem>>{};
     for (final item in items) {
@@ -76,9 +93,7 @@ class PdfService {
                   style: pw.TextStyle(
                       fontSize: 16,
                       fontWeight: pw.FontWeight.bold,
-                      color: showResolved
-                          ? PdfColors.green800
-                          : PdfColors.red800)),
+                      color: titleColor)),
               pw.Text('CAS 2026 — $now',
                   style: const pw.TextStyle(
                       fontSize: 9, color: PdfColors.grey600)),
@@ -151,16 +166,26 @@ class PdfService {
                   pw.SizedBox(height: 4),
                   pw.Text(
                     'Criado: ${_dtFmt.format(item.createdAt)}'
-                    '${item.resolvedAt != null ? "  |  Resolvido: ${_dtFmt.format(item.resolvedAt!)}" : ""}',
+                    '${item.resolvedAt != null ? "  |  ${rejected ? "Recusado" : "Resolvido"}: ${_dtFmt.format(item.resolvedAt!)}" : ""}',
                     style: const pw.TextStyle(
                         fontSize: 9, color: PdfColors.grey600),
                   ),
-                  if (showResolved && item.resolvedAt != null)
+                  // Tempo de resolução não faz sentido para uma recusa.
+                  if (closed && !rejected && item.resolvedAt != null)
                     pw.Text(
                       'Tempo: ${_dur(item.resolvedAt!.difference(item.createdAt))}',
                       style: const pw.TextStyle(
                           fontSize: 9, color: PdfColors.green700),
                     ),
+                  // Sem o motivo, um relatório de recusados não serve de nada.
+                  if (rejected && item.rejectionReason.isNotEmpty)
+                    pw.Text('Motivo: ${item.rejectionReason}',
+                        style: const pw.TextStyle(
+                            fontSize: 9, color: PdfColors.red700)),
+                  if (!rejected && item.resolutionNote.isNotEmpty)
+                    pw.Text('Nota da montadora: ${item.resolutionNote}',
+                        style: const pw.TextStyle(
+                            fontSize: 9, color: PdfColors.green700)),
                 ],
               ),
             ));
@@ -171,9 +196,11 @@ class PdfService {
       },
     ));
 
-    final filename = showResolved
-        ? 'CAS2026_pendencias_resolvidas.pdf'
-        : 'CAS2026_pendencias_abertas.pdf';
+    final filename = switch (kind) {
+      PendingReportKind.abertas => 'CAS2026_pendencias_abertas.pdf',
+      PendingReportKind.resolvidas => 'CAS2026_pendencias_resolvidas.pdf',
+      PendingReportKind.recusadas => 'CAS2026_chamados_recusados.pdf',
+    };
     await _saveAndShare(pdf, filename);
   }
 

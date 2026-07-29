@@ -118,7 +118,8 @@ class _ReportsScreenState extends State<ReportsScreen>
                   emptyColor: Colors.green,
                   showResolved: false,
                   onExport: () => PdfService.generateAndShow(context,
-                      () => PdfService.generatePendingReport(_open, false)),
+                      () => PdfService.generatePendingReport(
+                          _open, PendingReportKind.abertas)),
                   onReload: _load,
                 ),
                 _ListTab(
@@ -128,7 +129,8 @@ class _ReportsScreenState extends State<ReportsScreen>
                   emptyColor: Colors.grey,
                   showResolved: true,
                   onExport: () => PdfService.generateAndShow(context,
-                      () => PdfService.generatePendingReport(_resolved, true)),
+                      () => PdfService.generatePendingReport(
+                          _resolved, PendingReportKind.resolvidas)),
                   onReload: null,
                 ),
                 _ListTab(
@@ -138,7 +140,8 @@ class _ReportsScreenState extends State<ReportsScreen>
                   emptyColor: Colors.red,
                   showResolved: true,
                   onExport: () => PdfService.generateAndShow(context,
-                      () => PdfService.generatePendingReport(_rejected, true)),
+                      () => PdfService.generatePendingReport(
+                          _rejected, PendingReportKind.recusadas)),
                   onReload: null,
                 ),
                 _SummaryTab(
