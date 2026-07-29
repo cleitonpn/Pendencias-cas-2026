@@ -10,6 +10,7 @@ import '../services/firestore_service.dart';
 import '../services/pdf_service.dart';
 import '../widgets/photo_gallery.dart';
 import '../widgets/pending_status.dart';
+import '../widgets/resolution_dialog.dart';
 import '../widgets/montage_section.dart';
 import '../widgets/client_specs_card.dart';
 import '../widgets/analyst_notes_widget.dart';
@@ -112,44 +113,35 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
     }
   }
 
-  Future<bool> _confirm(String title, String message, String confirmLabel) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        title: Text(title),
-        content: Text(message),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancelar')),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green, foregroundColor: Colors.white),
-            child: Text(confirmLabel),
-          ),
-        ],
-      ),
-    );
-    return ok ?? false;
-  }
+  int get _fairId => context.read<AppProvider>().currentFair?.id ?? 1;
 
   Future<void> _resolve(PendingItem item) async {
-    if (!await _confirm('Resolver pendência?',
-        'Marcar esta pendência como resolvida? Esta ação não pode ser desfeita.',
-        'Resolver')) return;
+    final r = await showResolutionDialog(context,
+        fairId: _fairId,
+        title: 'Resolver pendência?',
+        message: 'Registre, se quiser, uma nota de manutenção e fotos do '
+            'serviço. Ambos são opcionais e ficam visíveis para a equipe, '
+            'a organizadora e o expositor.',
+        confirmLabel: 'Resolver');
+    if (r == null || !mounted) return;
     await context.read<AppProvider>().resolveItem(item.id!,
-        firestoreId: item.firestoreId, by: 'Administrador');
+        firestoreId: item.firestoreId,
+        by: 'Administrador',
+        note: r.note,
+        photoUrls: r.photoUrls);
     await _load();
   }
 
   Future<void> _validateByFirestoreId(String firestoreId) async {
-    if (!await _confirm('Validar pendência?',
-        'Validar e concluir esta pendência? Esta ação não pode ser desfeita.',
-        'Validar')) return;
+    final r = await showResolutionDialog(context,
+        fairId: _fairId,
+        title: 'Validar pendência?',
+        message: 'Registre, se quiser, uma nota de manutenção e fotos do '
+            'serviço. Ambos são opcionais.',
+        confirmLabel: 'Validar');
+    if (r == null || !mounted) return;
     await context.read<AppProvider>().validateItemByFirestoreId(firestoreId,
-        by: 'Administrador');
+        by: 'Administrador', note: r.note, photoUrls: r.photoUrls);
     await _load();
   }
 
@@ -783,7 +775,7 @@ class _PendingCard extends StatelessWidget {
               ),
             ],
             Text(item.description, style: const TextStyle(fontSize: 14)),
-            RejectionReasonBox(item: item),
+            PendingNotes(item: item),
             if (item.photoUrls.isNotEmpty) ...[
               const SizedBox(height: 8),
               PhotoStrip(urls: item.photoUrls),

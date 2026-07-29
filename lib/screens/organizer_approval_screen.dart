@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../models/pending_item.dart';
 import '../providers/app_provider.dart';
 import '../services/firestore_service.dart';
+import '../widgets/resolution_dialog.dart';
 import '../widgets/photo_gallery.dart';
 
 /// Consultant / admin queue of all organizer requests awaiting approval.
@@ -76,36 +77,29 @@ class OrganizerApprovalScreen extends StatelessWidget {
     final fid = item.firestoreId ?? '';
     if (fid.isEmpty) return;
 
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        title: const Text('Aprovar pedido?'),
-        content: const Text(
-            'A pendência será liberada para o produtor e o líder da equipe.'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancelar')),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green, foregroundColor: Colors.white),
-            child: const Text('Aprovar'),
-          ),
-        ],
-      ),
+    // Vale tanto para o consultor quanto para o admin — os dois chegam nesta
+    // mesma tela. Sem fotos: na aprovação o serviço ainda nem foi feito.
+    final r = await showResolutionDialog(
+      context,
+      fairId: context.read<AppProvider>().currentFair?.id ?? 1,
+      title: 'Aprovar pedido?',
+      message: 'A pendência será liberada para o produtor e o líder da '
+          'equipe. Você pode deixar uma nota (opcional) que ficará visível '
+          'para a organizadora e o expositor.',
+      confirmLabel: 'Aprovar',
+      allowPhotos: false,
     );
-    if (ok != true || !context.mounted) return;
+    if (r == null || !context.mounted) return;
 
     try {
       // Always update Firestore first — the stream will remove the item automatically.
-      await FirestoreService.approveOrganizerItem(fid);
+      await FirestoreService.approveOrganizerItem(fid, note: r.note);
       // Also sync to local SQLite if the item exists there.
       if (item.id != null) {
         await context.read<AppProvider>().approveOrganizerItem(
               item.id!,
               firestoreId: fid,
+              note: r.note,
             );
       }
       if (context.mounted) {

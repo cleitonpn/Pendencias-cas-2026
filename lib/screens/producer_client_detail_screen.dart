@@ -7,6 +7,8 @@ import '../models/pending_item.dart';
 import '../providers/app_provider.dart';
 import '../services/database_service.dart';
 import '../services/firestore_service.dart';
+import '../widgets/resolution_dialog.dart';
+import '../widgets/pending_status.dart';
 import '../widgets/photo_gallery.dart';
 import '../widgets/montage_section.dart';
 import '../widgets/client_specs_card.dart';
@@ -112,27 +114,29 @@ class _ProducerClientDetailScreenState
   }
 
   Future<void> _markAwaiting(PendingItem item) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        title: const Text('Marcar como concluída?'),
-        content: const Text(
-            'A pendência irá para validação do administrador. Confirmar?'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancelar')),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green, foregroundColor: Colors.white),
-            child: const Text('Confirmar'),
-          ),
-        ],
-      ),
+    final r = await showResolutionDialog(
+      context,
+      fairId: context.read<AppProvider>().currentFair?.id ?? 1,
+      title: 'Marcar como concluída?',
+      message: 'A pendência irá para validação do administrador. Você pode '
+          'registrar uma nota de manutenção e fotos do serviço — ambos '
+          'opcionais e visíveis para a organizadora e o expositor.',
+      confirmLabel: 'Confirmar',
     );
-    if (ok != true) return;
+    if (r == null || !mounted) return;
+    // Nota e fotos ficam gravadas já na conclusão do produtor, antes da
+    // validação, para não se perderem no caminho.
+    if (r.note.isNotEmpty || r.photoUrls.isNotEmpty) {
+      if (item.id != null) {
+        await DatabaseService.setResolutionNote(item.id!,
+            note: r.note, photoUrls: r.photoUrls);
+      }
+      if (item.firestoreId != null && item.firestoreId!.isNotEmpty) {
+        FirestoreService.setResolutionNote(item.firestoreId!,
+                note: r.note, photoUrls: r.photoUrls)
+            .catchError((_) {});
+      }
+    }
     if (item.id != null) {
       await context.read<AppProvider>().markItemAwaitingValidation(
           item.id!,
@@ -714,6 +718,7 @@ class _PendingCard extends StatelessWidget {
             ],
             Text(item.description,
                 style: const TextStyle(fontSize: 14)),
+            PendingNotes(item: item),
             if (item.photoUrls.isNotEmpty) ...[
               const SizedBox(height: 8),
               PhotoStrip(urls: item.photoUrls),

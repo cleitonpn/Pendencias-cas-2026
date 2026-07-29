@@ -7,6 +7,7 @@ import '../models/pending_item.dart';
 import '../services/firestore_service.dart';
 import '../services/sheets_service.dart';
 import '../services/stand_storage.dart';
+import '../widgets/pending_status.dart';
 
 /// Public page opened by exhibitors via the QR code printed on their stand.
 /// Self-contained: uses Firestore + Google Sheets only (no local SQLite),
@@ -21,7 +22,7 @@ class StandRequestScreen extends StatefulWidget {
   State<StandRequestScreen> createState() => _StandRequestScreenState();
 }
 
-enum _Step { loading, pickFair, closed, pickStand, pin, form, sent, error }
+enum _Step { loading, pickFair, closed, pickStand, pin, form, sent, requests, error }
 
 class _StandRequestScreenState extends State<StandRequestScreen> {
   static const _navy = Color(0xFF0A0F64);
@@ -49,6 +50,7 @@ class _StandRequestScreenState extends State<StandRequestScreen> {
   String? _selectedTeam;
   final _picker = ImagePicker();
   final List<XFile> _photos = [];
+  List<PendingItem> _myRequests = [];
   bool _busy = false;
 
   @override
@@ -254,6 +256,85 @@ class _StandRequestScreenState extends State<StandRequestScreen> {
     });
   }
 
+  Future<void> _loadMyRequests() async {
+    if (_client == null) return;
+    setState(() => _step = _Step.loading);
+    try {
+      _myRequests = await FirestoreService.getItemsByClientId(_client!.rowId);
+      if (mounted) setState(() => _step = _Step.requests);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _step = _Step.sent);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Não foi possível carregar seus pedidos.'),
+            backgroundColor: Colors.red));
+      }
+    }
+  }
+
+  Widget _requestsView() {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+          child: Row(children: [
+            IconButton(
+              onPressed: () => setState(() => _step = _Step.sent),
+              icon: const Icon(Icons.arrow_back, color: _navy),
+              tooltip: 'Voltar',
+            ),
+            const Expanded(
+              child: Text('Meus pedidos',
+                  style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: _navy)),
+            ),
+          ]),
+        ),
+        Expanded(
+          child: _myRequests.isEmpty
+              ? const Center(
+                  child: Text('Você ainda não fez pedidos para este stand.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.grey)))
+              : ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  itemCount: _myRequests.length,
+                  itemBuilder: (context, i) {
+                    final item = _myRequests[i];
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 10),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                      child: Padding(
+                        padding: const EdgeInsets.all(14),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(children: [
+                              PendingStatusBadge(item: item, fontSize: 12),
+                              const Spacer(),
+                              Text(item.team,
+                                  style: const TextStyle(
+                                      fontSize: 11, color: Colors.grey)),
+                            ]),
+                            const SizedBox(height: 8),
+                            Text(item.description,
+                                style: const TextStyle(fontSize: 14)),
+                            // Notas da montadora e fotos do serviço feito.
+                            PendingNotes(item: item, compact: true),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+
   // ── Helpers ────────────────────────────────────────────────────────────────
 
   void _setStep(_Step s) => setState(() => _step = s);
@@ -377,6 +458,8 @@ class _StandRequestScreenState extends State<StandRequestScreen> {
         return _pinView();
       case _Step.form:
         return _formView();
+      case _Step.requests:
+        return _requestsView();
       case _Step.sent:
         return _sentView();
     }
@@ -732,6 +815,13 @@ class _StandRequestScreenState extends State<StandRequestScreen> {
               padding:
                   const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
             ),
+          ),
+          const SizedBox(height: 10),
+          TextButton.icon(
+            onPressed: _loadMyRequests,
+            icon: const Icon(Icons.list_alt, size: 18),
+            label: const Text('Acompanhar meus pedidos'),
+            style: TextButton.styleFrom(foregroundColor: _navy),
           ),
         ],
       ),

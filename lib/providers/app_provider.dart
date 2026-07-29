@@ -758,18 +758,29 @@ class AppProvider extends ChangeNotifier {
   /// Resolves every item in [items] in sequence.  Items loaded from SQLite
   /// always have a local id; the Firestore update is fire-and-forget.
   Future<void> batchValidateItems(List<PendingItem> items,
-      {String by = 'Administrador'}) async {
+      {String by = 'Administrador',
+      String? note,
+      List<String>? photoUrls}) async {
     for (final item in items) {
       if (item.id != null) {
-        await DatabaseService.resolvePendingItem(item.id!, resolvedBy: by);
+        await DatabaseService.resolvePendingItem(item.id!,
+            resolvedBy: by, resolutionNote: note, resolutionPhotoUrls: photoUrls);
         if (item.firestoreId != null && item.firestoreId!.isNotEmpty) {
-          FirestoreService.resolveItem(item.firestoreId!, resolvedBy: by)
+          FirestoreService.resolveItem(item.firestoreId!,
+                  resolvedBy: by,
+                  resolutionNote: note,
+                  resolutionPhotoUrls: photoUrls)
               .catchError((_) {});
         }
       } else if (item.firestoreId != null && item.firestoreId!.isNotEmpty) {
         await DatabaseService.resolvePendingItemByFirestoreId(item.firestoreId!,
             resolvedBy: by);
-        FirestoreService.resolveItem(item.firestoreId!, resolvedBy: by)
+        await DatabaseService.setResolutionNoteByFirestoreId(item.firestoreId!,
+            note: note, photoUrls: photoUrls);
+        FirestoreService.resolveItem(item.firestoreId!,
+                resolvedBy: by,
+                resolutionNote: note,
+                resolutionPhotoUrls: photoUrls)
             .catchError((_) {});
       }
     }

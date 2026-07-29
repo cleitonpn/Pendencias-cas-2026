@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../models/pending_item.dart';
 import '../providers/app_provider.dart';
 import '../services/database_service.dart';
+import '../widgets/resolution_dialog.dart';
 
 /// Allows the admin to select one or more pending items that are awaiting
 /// validation and conclude (resolve) them all at once.
@@ -98,36 +99,21 @@ class _BatchValidationScreenState extends State<BatchValidationScreen> {
         _items.where((p) => _selected.contains(_key(p))).toList();
     if (toValidate.isEmpty) return;
 
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        title: const Text('Concluir em lote?'),
-        content: Text(
-          'Validar e concluir ${toValidate.length} '
-          'pendência${toValidate.length != 1 ? "s" : ""}? '
-          'Esta ação não pode ser desfeita.',
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancelar')),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
-                foregroundColor: Colors.white),
-            child: const Text('Concluir tudo'),
-          ),
-        ],
-      ),
+    // A nota vale para todas as selecionadas — é uma conclusão em lote.
+    final r = await showResolutionDialog(
+      context,
+      fairId: context.read<AppProvider>().currentFair?.id ?? 1,
+      title: 'Concluir em lote?',
+      message: 'Validar e concluir ${toValidate.length} '
+          'pendência${toValidate.length != 1 ? "s" : ""}. A nota e as fotos '
+          'são opcionais e serão aplicadas a todas as selecionadas.',
+      confirmLabel: 'Concluir tudo',
     );
-    if (ok != true || !mounted) return;
+    if (r == null || !mounted) return;
 
     setState(() => _saving = true);
-    await context
-        .read<AppProvider>()
-        .batchValidateItems(toValidate);
+    await context.read<AppProvider>().batchValidateItems(toValidate,
+        note: r.note, photoUrls: r.photoUrls);
     if (!mounted) return;
     _selected.clear();
     await _load(silent: true);

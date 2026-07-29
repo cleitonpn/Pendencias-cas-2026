@@ -953,7 +953,7 @@ class _PendingCard extends StatelessWidget {
               ),
             ],
             Text(item.description, style: const TextStyle(fontSize: 14)),
-            RejectionReasonBox(item: item),
+            PendingNotes(item: item),
             if (item.photoUrls.isNotEmpty) ...[
               const SizedBox(height: 8),
               PhotoStrip(urls: item.photoUrls),

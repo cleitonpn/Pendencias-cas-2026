@@ -10,6 +10,7 @@ import '../models/pending_item.dart';
 import '../services/firestore_service.dart';
 import '../services/sheets_service.dart';
 import '../services/stand_storage.dart';
+import '../widgets/pending_status.dart';
 
 /// Public web portal for the event organizer (link, no app install).
 /// The organizer identifies herself (name + PIN), then can open requests for
@@ -24,6 +25,9 @@ class OrganizerWebScreen extends StatefulWidget {
 }
 
 enum _Step { loading, pickFair, identify, menu, pickStand, form, sent, requests, error }
+
+/// Situações pelas quais a organizadora pode filtrar seus pedidos.
+enum _ReqStatus { aguardando, andamento, concluido, recusado }
 
 class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
   static const _navy = Color(0xFF0A0F64);
@@ -64,6 +68,9 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
   /// Date filters on "Meus pedidos": by opening date and by conclusion date.
   DateTimeRange? _openedRange;
   DateTimeRange? _closedRange;
+
+  /// Situações marcadas. Vazio = todas.
+  final Set<_ReqStatus> _statusFilter = {};
 
   @override
   void initState() {
@@ -1283,13 +1290,24 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
     return !day.isBefore(start) && !day.isAfter(end);
   }
 
+  /// Situação de um pedido, na ordem em que importa: recusa antes de
+  /// conclusão, já que um recusado também vem marcado como resolvido.
+  static _ReqStatus _statusOf(PendingItem r) {
+    if (r.isRejected) return _ReqStatus.recusado;
+    if (r.isPendingApproval) return _ReqStatus.aguardando;
+    if (r.isResolved) return _ReqStatus.concluido;
+    return _ReqStatus.andamento;
+  }
+
   List<PendingItem> get _filteredRequests => _myRequests
       .where((r) =>
+          (_statusFilter.isEmpty || _statusFilter.contains(_statusOf(r))) &&
           _inRange(r.createdAt, _openedRange) &&
           _inRange(r.resolvedAt, _closedRange))
       .toList();
 
-  bool get _hasDateFilter => _openedRange != null || _closedRange != null;
+  bool get _hasDateFilter =>
+      _openedRange != null || _closedRange != null || _statusFilter.isNotEmpty;
 
   Future<void> _pickRange({required bool opened}) async {
     final now = DateTime.now();
@@ -1312,6 +1330,48 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
         _closedRange = picked;
       }
     });
+  }
+
+  Widget _statusChip(String label, _ReqStatus status, Color color) {
+    final selected = _statusFilter.contains(status);
+    final count = _myRequests.where((r) => _statusOf(r) == status).length;
+    return InkWell(
+      onTap: () => setState(() {
+        if (!_statusFilter.remove(status)) _statusFilter.add(status);
+      }),
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        decoration: BoxDecoration(
+          color: selected ? color : color.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(20),
+          border:
+              Border.all(color: selected ? color : color.withOpacity(0.35)),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Text(label,
+              style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                  color: selected ? Colors.white : color)),
+          const SizedBox(width: 5),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+            decoration: BoxDecoration(
+              color: selected
+                  ? Colors.white.withOpacity(0.25)
+                  : color.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text('$count',
+                style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: selected ? Colors.white : color)),
+          ),
+        ]),
+      ),
+    );
   }
 
   Widget _dateFilterChip({
@@ -1372,6 +1432,21 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              _statusChip('Aguardando', _ReqStatus.aguardando,
+                  const Color(0xFFF57C00)),
+              _statusChip('Em andamento', _ReqStatus.andamento,
+                  const Color(0xFF1565C0)),
+              _statusChip('Concluído', _ReqStatus.concluido,
+                  const Color(0xFF2E7D32)),
+              _statusChip('Recusado', _ReqStatus.recusado,
+                  const Color(0xFFD32F2F)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Wrap(
             spacing: 8,
             runSpacing: 8,
             children: [
@@ -1392,6 +1467,7 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
                   onPressed: () => setState(() {
                     _openedRange = null;
                     _closedRange = null;
+                    _statusFilter.clear();
                   }),
                   icon: const Icon(Icons.filter_alt_off, size: 16),
                   label: const Text('Limpar',
@@ -1549,26 +1625,9 @@ class _RequestCard extends StatelessWidget {
                           fontWeight: FontWeight.w500)),
                 ]),
               ),
-            if (item.isRejected && item.rejectionReason.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Colors.red.shade50,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.red.shade200),
-                ),
-                child: Row(children: [
-                  const Icon(Icons.info_outline, color: Colors.red, size: 16),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text('Motivo: ${item.rejectionReason}',
-                        style:
-                            const TextStyle(color: Colors.red, fontSize: 12)),
-                  ),
-                ]),
-              ),
-            ],
+            // Notas da montadora (aprovação, manutenção, recusa) e as fotos do
+            // serviço — mesmo widget usado no app, para o texto ser idêntico.
+            PendingNotes(item: item, compact: true),
           ],
         ),
       ),

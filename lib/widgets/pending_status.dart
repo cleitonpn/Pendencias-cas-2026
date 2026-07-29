@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/pending_item.dart';
+import 'photo_gallery.dart';
 
 /// Situação de uma pendência para exibição.
 ///
@@ -89,6 +90,107 @@ class RejectionReasonBox extends StatelessWidget {
               style: const TextStyle(color: Colors.red, fontSize: 11)),
         ),
       ]),
+    );
+  }
+}
+
+/// Bloco com todas as anotações da montadora de um chamado: nota de aprovação,
+/// nota de manutenção da conclusão (com as fotos do serviço) e motivo da
+/// recusa. Some por completo quando não há nada a mostrar.
+///
+/// É o mesmo widget em todas as telas — app e portais — para que o texto
+/// escrito uma vez apareça igual para equipe, produtor, organizadora e
+/// expositor.
+class PendingNotes extends StatelessWidget {
+  final PendingItem item;
+
+  /// Em telas estreitas (portais web) o bloco fica mais compacto.
+  final bool compact;
+
+  const PendingNotes({super.key, required this.item, this.compact = false});
+
+  @override
+  Widget build(BuildContext context) {
+    if (!item.hasNotes) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (item.approvalNote.isNotEmpty)
+          _note(
+            icon: Icons.verified,
+            color: const Color(0xFF1565C0),
+            title: 'Nota da aprovação',
+            text: item.approvalNote,
+          ),
+        if (item.rejectionReason.isNotEmpty)
+          _note(
+            icon: Icons.cancel,
+            color: const Color(0xFFD32F2F),
+            title: 'Motivo da recusa',
+            text: item.rejectionReason,
+          ),
+        if (item.resolutionNote.isNotEmpty)
+          _note(
+            icon: Icons.build_circle,
+            color: const Color(0xFF2E7D32),
+            title: 'Nota da montadora',
+            text: item.resolutionNote,
+          ),
+        if (item.resolutionPhotoUrls.isNotEmpty) ...[
+          const SizedBox(height: 6),
+          Row(children: [
+            const Icon(Icons.photo_camera,
+                size: 13, color: Color(0xFF2E7D32)),
+            const SizedBox(width: 4),
+            Text(
+              'Fotos da manutenção (${item.resolutionPhotoUrls.length})',
+              style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF2E7D32)),
+            ),
+          ]),
+          const SizedBox(height: 4),
+          PhotoStrip(urls: item.resolutionPhotoUrls),
+        ],
+      ],
+    );
+  }
+
+  Widget _note({
+    required IconData icon,
+    required Color color,
+    required String title,
+    required String text,
+  }) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 8),
+      padding: EdgeInsets.all(compact ? 8 : 10),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Icon(icon, size: 13, color: color),
+            const SizedBox(width: 5),
+            Text(title,
+                style: TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.bold,
+                    color: color,
+                    letterSpacing: 0.3)),
+          ]),
+          const SizedBox(height: 3),
+          Text(text,
+              style: TextStyle(fontSize: compact ? 12 : 12.5)),
+        ],
+      ),
     );
   }
 }

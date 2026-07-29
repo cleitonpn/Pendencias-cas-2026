@@ -6,6 +6,7 @@ import '../models/pending_item.dart';
 import '../providers/app_provider.dart';
 import '../services/database_service.dart';
 import '../services/firestore_service.dart';
+import '../widgets/pending_status.dart';
 
 class TeamLeaderPendingListScreen extends StatefulWidget {
   final String leaderName;
@@ -415,6 +416,7 @@ class _ItemRow extends StatelessWidget {
             ),
           Text(item.description,
               style: const TextStyle(fontSize: 13)),
+          PendingNotes(item: item, compact: true),
           const SizedBox(height: 6),
           Row(children: [
             Expanded(

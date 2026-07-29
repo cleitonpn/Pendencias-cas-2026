@@ -189,6 +189,18 @@ class FirestoreService {
     });
   }
 
+  /// Grava nota/fotos de manutenção sem concluir o item — usado quando o
+  /// produtor marca como concluída e o chamado ainda vai para validação.
+  static Future<void> setResolutionNote(String firestoreId,
+      {String? note, List<String>? photoUrls}) async {
+    if (firestoreId.isEmpty) return;
+    await _db.collection('pending_items').doc(firestoreId).update({
+      if (note != null && note.isNotEmpty) 'resolutionNote': note,
+      if (photoUrls != null && photoUrls.isNotEmpty)
+        'resolutionPhotoUrls': photoUrls,
+    });
+  }
+
   static Future<void> markAwaitingValidation(String firestoreId) async {
     if (firestoreId.isEmpty) return;
     await _db.collection('pending_items').doc(firestoreId).update({
@@ -232,6 +244,21 @@ class FirestoreService {
         .map((d) => PendingItem.fromFirestore(d.id, d.data()))
         .where((item) => item.awaitingValidation && !item.isResolved)
         .toList();
+  }
+
+  /// Todos os chamados de um stand, para o expositor acompanhar os próprios
+  /// pedidos e ver as notas e fotos da manutenção.
+  static Future<List<PendingItem>> getItemsByClientId(String clientId) async {
+    if (clientId.isEmpty) return [];
+    final snapshot = await _db
+        .collection('pending_items')
+        .where('clientId', isEqualTo: clientId)
+        .get();
+    final items = snapshot.docs
+        .map((d) => PendingItem.fromFirestore(d.id, d.data()))
+        .toList();
+    items.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return items;
   }
 
   // ─── Producer PINs ──────────────────────────────────────────────────────────

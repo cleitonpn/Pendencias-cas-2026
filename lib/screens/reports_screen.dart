@@ -313,7 +313,7 @@ class _ItemCard extends StatelessWidget {
             if (item.isRejected) ...[
               const SizedBox(height: 4),
               PendingStatusBadge(item: item, fontSize: 11),
-              RejectionReasonBox(item: item),
+              PendingNotes(item: item),
             ],
             const SizedBox(height: 4),
             Text(_fmt(item.createdAt),

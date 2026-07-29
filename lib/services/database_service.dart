@@ -906,6 +906,24 @@ class DatabaseService {
     return Client.fromMap(rows.first);
   }
 
+  /// Grava nota/fotos de manutenção pelo id local. Usado quando o produtor
+  /// conclui: a nota é registrada já nesse momento, antes da validação, para
+  /// não se perder no caminho.
+  static Future<void> setResolutionNote(int id,
+      {String? note, List<String>? photoUrls}) async {
+    final database = await db;
+    await database.update(
+      'pending_items',
+      {
+        if (note != null && note.isNotEmpty) 'resolution_note': note,
+        if (photoUrls != null && photoUrls.isNotEmpty)
+          'resolution_photos': jsonEncode(photoUrls),
+      },
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
   /// Grava nota/fotos de manutenção num item identificado pelo id do Firestore.
   /// Usado quando a conclusão parte de um item que só existe na nuvem.
   static Future<void> setResolutionNoteByFirestoreId(String firestoreId,
