@@ -222,6 +222,7 @@ class _StandRequestScreenState extends State<StandRequestScreen> {
         clientId: _client!.rowId,
         clientName: _client!.displayName,
         producerName: _client!.produtor,
+        consultantName: _client!.atendimento,
         fairName: _fair!.name,
         local: _client!.local,
         hangar: _client!.hangar,

@@ -85,12 +85,37 @@ exports.onPendingCreated = onDocumentCreated(
       const where = local ? ` (Stand ${local})` : "";
       const body = `${client}${where}: ${desc}`;
 
-      const topics = [];
-      if (team) topics.push(sanitize("team", team));
+      // Só os envolvidos são notificados. Antes ia para o tópico da equipe
+      // inteira, então todo líder daquela equipe recebia pendências de
+      // clientes que não são dele.
+      const consultant = data.consultantName || "";
+      const responsible = data.responsible || "";
+      const approval = data.approvalStatus || "none";
+
+      // Pedido da organizadora aguardando aprovação: só quem aprova é avisado.
+      // Liberar para campo aqui mostraria a pendência antes da aprovação.
+      if (approval === "pendente") {
+        await sendToTopics(
+            ["admins"].concat(consultant ? [sanitize("consultant", consultant)] : []),
+            "Pedido aguardando aprovação",
+            `${client}${where}: ${desc}`,
+            {
+              type: "pending",
+              clientId: data.clientId || "",
+              pendingId: event.params.id,
+              fairName: data.fairName || "",
+            });
+        return;
+      }
+
+      const topics = ["admins", "group_analistas"];
       if (producer) topics.push(sanitize("producer", producer));
-      // Exhibitor-submitted requests also alert admins, so they stay aware.
-      if (fromClient) topics.push("admins");
-      if (topics.length === 0) return;
+      if (consultant) topics.push(sanitize("consultant", consultant));
+      // Líder: pelo nome do responsável daquele cliente/equipe. Sem
+      // responsável definido, cai no tópico da equipe para ninguém ficar sem
+      // saber do serviço.
+      if (responsible) topics.push(sanitize("leader", responsible));
+      else if (team) topics.push(sanitize("team", team));
 
       await sendToTopics(topics, title, body, {
         type: "pending",
@@ -107,25 +132,64 @@ exports.onPendingUpdated = onDocumentUpdated(
       const after = event.data && event.data.after.data();
       if (!before || !after) return;
 
-      const becameAwaiting =
-          !before.awaitingValidation &&
-          after.awaitingValidation === true &&
-          after.isResolved !== true;
-      if (!becameAwaiting) return;
-
       const client = after.clientName || "";
       const desc = after.description || "";
-      const team = after.team ? `${after.team} — ` : "";
-      await sendToTopics(
-          ["admins"],
-          "Pendência aguardando validação",
-          `${team}${client}: ${desc}`,
-          {
-            type: "pending",
-            clientId: after.clientId || "",
-            pendingId: event.params.id,
-            fairName: after.fairName || "",
-          });
+      const teamLabel = after.team ? `${after.team} — ` : "";
+      const producer = after.producerName || "";
+      const consultant = after.consultantName || "";
+      const responsible = after.responsible || "";
+      const payload = {
+        type: "pending",
+        clientId: after.clientId || "",
+        pendingId: event.params.id,
+        fairName: after.fairName || "",
+      };
+
+      /** Envolvidos no chamado: produtor e consultor do cliente, o líder
+       * responsável, mais admin/gerente e analistas.
+       * @return {string[]} tópicos
+       */
+      function involved() {
+        const t = ["admins", "group_analistas"];
+        if (producer) t.push(sanitize("producer", producer));
+        if (consultant) t.push(sanitize("consultant", consultant));
+        if (responsible) t.push(sanitize("leader", responsible));
+        else if (after.team) t.push(sanitize("team", after.team));
+        return t;
+      }
+
+      // Produtor concluiu → aguardando validação do admin.
+      if (!before.awaitingValidation &&
+          after.awaitingValidation === true &&
+          after.isResolved !== true) {
+        await sendToTopics(
+            ["admins"],
+            "Pendência aguardando validação",
+            `${teamLabel}${client}: ${desc}`,
+            payload);
+        return;
+      }
+
+      // Pedido da organizadora foi aprovado → agora libera para o campo.
+      if (before.approvalStatus === "pendente" &&
+          after.approvalStatus === "aprovada") {
+        await sendToTopics(
+            involved(),
+            "Pedido aprovado",
+            `${teamLabel}${client}: ${desc}`,
+            payload);
+        return;
+      }
+
+      // Chamado concluído.
+      if (before.isResolved !== true && after.isResolved === true) {
+        const rejected = after.approvalStatus === "recusada";
+        await sendToTopics(
+            involved(),
+            rejected ? "Chamado recusado" : "Pendência concluída",
+            `${teamLabel}${client}: ${desc}`,
+            payload);
+      }
     });
 
 // New client detected during sheet sync → notify producer + consultant.

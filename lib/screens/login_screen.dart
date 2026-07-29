@@ -428,7 +428,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final team = await FirestoreService.getTeamLeaderTeam(_selectedLeader!);
     if (!mounted) return;
     if ((team ?? '').isNotEmpty) {
-      await NotificationService.subscribeTeam(team!);
+      await NotificationService.subscribeLeader(_selectedLeader!, team!);
     }
     if (!mounted) return;
     await SessionService.save(

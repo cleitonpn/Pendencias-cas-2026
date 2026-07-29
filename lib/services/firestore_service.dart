@@ -70,6 +70,7 @@ class FirestoreService {
       'clientId': item.clientId,
       'clientName': item.clientName,
       'producerName': item.producerName,
+      'consultantName': item.consultantName,
       'local': item.local,
       'hangar': item.hangar,
       'team': item.team,
@@ -216,6 +217,13 @@ class FirestoreService {
     });
   }
 
+  /// Itens que produtor/líder NÃO devem ver: pedidos da organizadora ainda
+  /// aguardando aprovação, ou recusados. O SQLite já filtrava isso
+  /// (_visibleClause), mas as consultas do Firestore não — por isso um pedido
+  /// aparecia para o produtor antes de o admin/consultor aprovar.
+  static bool _visibleToField(PendingItem i) =>
+      i.approvalStatus != 'pendente' && i.approvalStatus != 'recusada';
+
   static Future<List<PendingItem>> getItemsByProducer(
       String producerName) async {
     final snapshot = await _db
@@ -225,6 +233,7 @@ class FirestoreService {
         .get();
     final items = snapshot.docs
         .map((d) => PendingItem.fromFirestore(d.id, d.data()))
+        .where(_visibleToField)
         .toList();
     items.sort((a, b) {
       final h = a.hangar.compareTo(b.hangar);
@@ -450,6 +459,16 @@ class FirestoreService {
   static Future<void> setFairMode(int id, String mode) async {
     await _db.collection('fairs').doc(id.toString()).set(
       {'mode': mode},
+      SetOptions(merge: true),
+    );
+  }
+
+  /// Liga/desliga a aprovação automática dos pedidos da organizadora numa
+  /// feira. Fica no Firestore para valer em todos os dispositivos e também no
+  /// portal web da organizadora.
+  static Future<void> setFairAutoApprove(int id, bool value) async {
+    await _db.collection('fairs').doc(id.toString()).set(
+      {'autoApprove': value},
       SetOptions(merge: true),
     );
   }

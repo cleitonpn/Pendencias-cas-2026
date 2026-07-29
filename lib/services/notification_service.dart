@@ -174,8 +174,17 @@ class NotificationService {
   static Future<void> subscribeConsultant(String consultantName) =>
       _subscribe([fcmTopic('consultant', consultantName), 'new_clients', 'group_consultores']);
 
-  static Future<void> subscribeTeam(String team) =>
-      _subscribe([fcmTopic('team', team), 'new_clients', 'group_lideres']);
+  /// O líder passa a receber por NOME, não pela equipe inteira: antes todo
+  /// líder de "Limpeza" recebia qualquer pendência de Limpeza, mesmo de
+  /// clientes que não são dele. O tópico da equipe continua assinado apenas
+  /// como rede de segurança para pendências sem responsável definido.
+  static Future<void> subscribeLeader(String leaderName, String team) =>
+      _subscribe([
+        fcmTopic('leader', leaderName),
+        fcmTopic('team', team),
+        'new_clients',
+        'group_lideres',
+      ]);
 
   static Future<void> subscribeAnalyst(String analystName) =>
       _subscribe([fcmTopic('analyst', analystName), 'new_clients', 'group_analistas']);

@@ -71,10 +71,13 @@ class AppProvider extends ChangeNotifier {
           createdAt: DateTime.parse(m['createdAt'] as String),
           mode: mode,
           sheetMode: sheetMode,
+          autoApprove: m['autoApprove'] == true,
         );
         await DatabaseService.upsertFairById(fair);
         if (id != null) {
           await DatabaseService.updateFairMode(id, mode);
+          await DatabaseService.updateFairAutoApprove(
+              id, m['autoApprove'] == true);
           // Sync archived state so all devices see the same list
           if (remoteArchived) {
             await DatabaseService.archiveFair(id);
@@ -182,6 +185,19 @@ class AppProvider extends ChangeNotifier {
         ),
       ));
     }, onError: (_) {});
+  }
+
+  /// Liga/desliga a aprovação automática de uma feira (nuvem + local).
+  Future<void> setFairAutoApprove(int fairId, bool value) async {
+    await DatabaseService.updateFairAutoApprove(fairId, value);
+    try {
+      await FirestoreService.setFairAutoApprove(fairId, value);
+    } catch (_) {}
+    _fairs = await DatabaseService.getFairs();
+    if (_currentFair?.id == fairId) {
+      _currentFair = _currentFair!.copyWith(autoApprove: value);
+    }
+    notifyListeners();
   }
 
   Future<void> selectFair(Fair fair) async {

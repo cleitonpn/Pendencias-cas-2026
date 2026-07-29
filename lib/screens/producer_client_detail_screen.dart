@@ -181,12 +181,14 @@ class _ProducerClientDetailScreenState
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
+      // Compacto: o botão estendido cobria os botões de ação do último card
+      // (Concluir/Peguei!) na lista de pendências.
+      floatingActionButton: FloatingActionButton.small(
         onPressed: _addPending,
         backgroundColor: Colors.orange,
         foregroundColor: Colors.white,
-        icon: const Icon(Icons.add),
-        label: const Text('Nova pendência'),
+        tooltip: 'Nova pendência',
+        child: const Icon(Icons.add),
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
@@ -547,7 +549,8 @@ class _ProducerClientDetailScreenState
                       ),
                     ),
 
-                  const SizedBox(height: 24),
+                  // Espaço para o FAB não encobrir o último card.
+                  const SizedBox(height: 88),
                 ],
               ),
             ),

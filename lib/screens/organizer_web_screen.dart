@@ -232,6 +232,7 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
         createdAt: DateTime.tryParse(m['createdAt'] as String? ?? '') ??
             DateTime.now(),
         mode: (m['mode'] as String?) ?? 'producao',
+        autoApprove: m['autoApprove'] == true,
       );
 
   Future<void> _selectFair(Fair f) async {
@@ -374,6 +375,7 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
         clientId: _client!.rowId,
         clientName: _client!.displayName,
         producerName: _client!.produtor,
+        consultantName: _client!.atendimento,
         fairName: _fair!.name,
         local: _client!.local,
         hangar: _client!.hangar,
@@ -383,7 +385,9 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
         photoUrls: urls,
         origem: 'organizadora',
         createdBy: _createdBy,
-        approvalStatus: 'pendente',
+        // Com aprovação automática ligada na feira, o pedido já entra liberado
+        // para o produtor e a equipe, sem passar por consultor/admin.
+        approvalStatus: _fair!.autoApprove ? 'aprovada' : 'pendente',
         createdAt: DateTime.now(),
       );
       final newId = await FirestoreService.savePendingItem(item, _fair!.name);

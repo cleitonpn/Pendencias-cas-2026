@@ -15,7 +15,7 @@ class DatabaseService {
 
   static Future<Database> _initDb() async {
     final path = join(await getDatabasesPath(), 'cas2026.db');
-    return openDatabase(path, version: 21, onCreate: _onCreate, onUpgrade: _onUpgrade);
+    return openDatabase(path, version: 23, onCreate: _onCreate, onUpgrade: _onUpgrade);
   }
 
   static Future<void> _onCreate(Database db, int version) async {
@@ -28,7 +28,8 @@ class DatabaseService {
         created_at TEXT NOT NULL,
         mode TEXT DEFAULT 'producao',
         sheet_mode TEXT DEFAULT 'individual',
-        archived INTEGER DEFAULT 0
+        archived INTEGER DEFAULT 0,
+        auto_approve INTEGER DEFAULT 0
       )
     ''');
     await db.execute('''
@@ -64,6 +65,7 @@ class DatabaseService {
         fair_id INTEGER DEFAULT 1,
         firestore_id TEXT,
         producer_name TEXT DEFAULT '',
+        consultant_name TEXT DEFAULT '',
         client_id TEXT, client_name TEXT, local TEXT, hangar TEXT,
         team TEXT, responsible TEXT, description TEXT,
         photo_urls TEXT DEFAULT '',
@@ -272,6 +274,20 @@ class DatabaseService {
         ''');
       } catch (_) {}
     }
+    if (oldV < 23) {
+      // Consultor do cliente, para notificar só quem está atrelado a ele.
+      try {
+        await db.execute(
+            "ALTER TABLE pending_items ADD COLUMN consultant_name TEXT DEFAULT ''");
+      } catch (_) {}
+    }
+    if (oldV < 22) {
+      // Aprovação automática por feira.
+      try {
+        await db.execute(
+            'ALTER TABLE fairs ADD COLUMN auto_approve INTEGER DEFAULT 0');
+      } catch (_) {}
+    }
     if (oldV < 21) {
       // Notas da montadora: aprovação, conclusão (manutenção) e fotos do
       // serviço realizado.
@@ -365,6 +381,12 @@ class DatabaseService {
   static Future<void> updateFairMode(int id, String mode) async {
     final database = await db;
     await database.update('fairs', {'mode': mode},
+        where: 'id = ?', whereArgs: [id]);
+  }
+
+  static Future<void> updateFairAutoApprove(int id, bool value) async {
+    final database = await db;
+    await database.update('fairs', {'auto_approve': value ? 1 : 0},
         where: 'id = ?', whereArgs: [id]);
   }
 
@@ -774,6 +796,7 @@ class DatabaseService {
           'in_progress_by': item.inProgressBy,
           'resolved_at': item.resolvedAt?.toIso8601String(),
           'resolved_by': item.resolvedBy,
+          'consultant_name': item.consultantName,
           'approval_status': item.approvalStatus,
           'rejection_reason': item.rejectionReason,
           'approval_note': item.approvalNote,

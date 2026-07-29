@@ -399,6 +399,42 @@ class _ModeToggle extends StatelessWidget {
         const SizedBox(height: 6),
         Text(_subtitle,
             style: const TextStyle(fontSize: 11, color: Colors.grey)),
+        const Divider(height: 18),
+        // Aprovação automática: pedidos da organizadora entram já liberados,
+        // sem passar por consultor/admin.
+        Row(children: [
+          Icon(
+            fair.autoApprove ? Icons.flash_on : Icons.how_to_reg,
+            size: 16,
+            color: fair.autoApprove ? Colors.amber.shade800 : Colors.grey,
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Aprovação automática',
+                    style: TextStyle(
+                        fontSize: 12.5, fontWeight: FontWeight.w600)),
+                Text(
+                  fair.autoApprove
+                      ? 'Pedidos da organizadora entram já aprovados'
+                      : 'Pedidos da organizadora aguardam aprovação',
+                  style: const TextStyle(fontSize: 10.5, color: Colors.grey),
+                ),
+              ],
+            ),
+          ),
+          Switch(
+            value: fair.autoApprove,
+            activeColor: Colors.amber.shade800,
+            onChanged: fair.id == null
+                ? null
+                : (v) => context
+                    .read<AppProvider>()
+                    .setFairAutoApprove(fair.id!, v),
+          ),
+        ]),
       ],
     );
   }

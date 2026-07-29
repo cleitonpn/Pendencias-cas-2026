@@ -6,6 +6,8 @@ class PendingItem {
   final String clientId;
   final String clientName;
   final String producerName;   // producer of this client (for Firestore queries)
+  final String consultantName; // atendimento do cliente — usado para notificar
+                               // apenas quem está atrelado a ele
   final String fairName;       // fair name (Firestore items); empty for SQLite
   final String local;
   final String hangar;
@@ -36,6 +38,7 @@ class PendingItem {
     required this.clientId,
     required this.clientName,
     this.producerName = '',
+    this.consultantName = '',
     this.fairName = '',
     required this.local,
     required this.hangar,
@@ -65,6 +68,7 @@ class PendingItem {
         'client_id': clientId,
         'client_name': clientName,
         'producer_name': producerName,
+        'consultant_name': consultantName,
         'local': local,
         'hangar': hangar,
         'team': team,
@@ -105,6 +109,7 @@ class PendingItem {
         clientId: map['client_id'] as String,
         clientName: map['client_name'] ?? '',
         producerName: map['producer_name'] ?? '',
+        consultantName: map['consultant_name'] ?? '',
         fairName: '',
         local: map['local'] ?? map['stand'] ?? '',
         hangar: map['hangar'] ?? '',
@@ -137,6 +142,7 @@ class PendingItem {
         clientId: data['clientId'] ?? '',
         clientName: data['clientName'] ?? '',
         producerName: data['producerName'] ?? '',
+        consultantName: data['consultantName'] ?? '',
         fairName: data['fairName'] ?? '',
         local: data['local'] ?? '',
         hangar: data['hangar'] ?? '',

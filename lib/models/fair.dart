@@ -11,6 +11,10 @@ class Fair {
   final String sheetMode;
   final bool archived;
 
+  /// Aprovação automática: quando ligada, os pedidos abertos pela
+  /// organizadora entram já aprovados, sem passar por consultor/admin.
+  final bool autoApprove;
+
   const Fair({
     this.id,
     required this.name,
@@ -20,6 +24,7 @@ class Fair {
     this.mode = 'producao',
     this.sheetMode = 'individual',
     this.archived = false,
+    this.autoApprove = false,
   });
 
   bool get isMaintenance => mode == 'manutencao';
@@ -29,7 +34,9 @@ class Fair {
   bool get isMestra => sheetMode == 'mestra';
   bool get isMestraChild => sheetMode == 'mestra_child';
 
-  Fair copyWith({String? mode, String? sheetMode, bool? archived}) => Fair(
+  Fair copyWith({String? mode, String? sheetMode, bool? archived,
+          bool? autoApprove}) =>
+      Fair(
         id: id,
         name: name,
         spreadsheetId: spreadsheetId,
@@ -38,6 +45,7 @@ class Fair {
         mode: mode ?? this.mode,
         sheetMode: sheetMode ?? this.sheetMode,
         archived: archived ?? this.archived,
+        autoApprove: autoApprove ?? this.autoApprove,
       );
 
   Map<String, dynamic> toMap() => {
@@ -49,6 +57,7 @@ class Fair {
     'mode': mode,
     'sheet_mode': sheetMode,
     'archived': archived ? 1 : 0,
+    'auto_approve': autoApprove ? 1 : 0,
   };
 
   factory Fair.fromMap(Map<String, dynamic> map) => Fair(
@@ -62,5 +71,6 @@ class Fair {
         ? map['sheet_mode'] as String
         : 'individual',
     archived: (map['archived'] as int? ?? 0) == 1,
+    autoApprove: (map['auto_approve'] as int? ?? 0) == 1,
   );
 }

@@ -105,6 +105,7 @@ class _AddPendingScreenState extends State<AddPendingScreen> {
       clientId: widget.client.rowId,
       clientName: widget.client.displayName,
       producerName: widget.client.produtor,
+      consultantName: widget.client.atendimento,
       local: widget.client.local,
       hangar: widget.client.hangar,
       team: _selectedTeam!,
