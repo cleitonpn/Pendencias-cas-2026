@@ -1,0 +1,51 @@
+name: Testes
+
+# Separado do build de propósito: durante uma feira, um teste quebrado não
+# pode impedir a publicação de uma correção urgente. Quando a suíte estiver
+# madura, dá para passar a barrar o build.
+on:
+  push:
+    branches:
+      - main
+      - claude/fair-setup-tracker-app-J9EOm
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  dart:
+    name: Testes Dart
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Configurar Flutter 3.24.0
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.0'
+          channel: 'stable'
+          cache: true
+
+      - name: Instalar dependências
+        run: flutter pub get
+
+      - name: Rodar testes
+        run: flutter test --reporter expanded
+
+  js:
+    name: Paridade dos tópicos FCM
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Configurar Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # Garante que o sanitizador de tópico do JS (Cloud Function, que publica)
+      # continua idêntico ao do Dart (app, que assina). Divergir significa
+      # notificação enviada para tópico que ninguém assina — falha silenciosa.
+      - name: Rodar teste de paridade
+        run: node --test tools/*.test.js
