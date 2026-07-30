@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'screens/stand_request_screen.dart';
 import 'screens/organizer_web_screen.dart';
+import 'screens/team_web_screen.dart';
 
 /// Web: the app is a public page. Two routes share the same Flutter Web build,
 /// selected by the URL fragment (hash strategy works on static hosting):
 ///   …/#/stand?f=<fair>&c=<rowId>   → exhibitor maintenance request (QR)
 ///   …/#/organizadora?f=<fair>      → event organizer request portal
+///   …/#/equipe?f=<fair>            → consultant / team leader portal (iOS)
 Widget buildHome() {
   final base = Uri.base;
   final qp = <String, String>{...base.queryParameters};
@@ -26,6 +28,11 @@ Widget buildHome() {
 
   if (path.contains('organizadora')) {
     return OrganizerWebScreen(fairId: fairId);
+  }
+
+  // Portal de consultor e líder — para quem usa iPhone e não tem o app.
+  if (path.contains('equipe')) {
+    return TeamWebScreen(fairId: fairId);
   }
 
   // URL does not identify this as an organizer link, but a saved session may
