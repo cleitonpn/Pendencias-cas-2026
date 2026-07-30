@@ -1,6 +1,7 @@
 import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/web_portal.dart';
 import 'admin_api.dart';
+import 'cloud_writes.dart';
 import 'firestore_service.dart';
 
 /// Persists the logged-in user session across app restarts using
@@ -35,6 +36,9 @@ class SessionService {
     // token continuaria valendo no aparelho para o próximo que entrasse.
     await AdminApi.clearToken();
     FirestoreService.clearUserCache();
+    // Falha de gravação pendente é do usuário que saiu; deixá-la na tela do
+    // próximo só confundiria.
+    CloudWrites.clear();
   }
 
   /// Returns `{'role', 'name', 'team'}` if a valid session exists, else null.

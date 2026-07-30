@@ -8,6 +8,7 @@ import '../services/database_service.dart';
 import '../services/firestore_service.dart';
 import '../services/notification_service.dart';
 import '../utils/fair_key.dart';
+import '../services/cloud_writes.dart';
 
 class AppProvider extends ChangeNotifier {
   List<Fair> _fairs = [];
@@ -254,7 +255,12 @@ class AppProvider extends ChangeNotifier {
     if (fair.id != null) {
       _syncClientCompletion(fair.id!).then((_) {
         if (_currentFair?.id == fair.id) _loadLocal();
-      }).catchError((_) {});
+      }).catchError((Object e) {
+        // Leitura, não gravação: não entra na fila de retentativa. Mas some
+        // do log silencioso — foi assim que os check-offs divergiram entre
+        // aparelhos sem ninguém perceber.
+        debugPrint('[check-off] não foi possível ler o estado da nuvem: $e');
+      });
     }
   }
 
@@ -669,14 +675,18 @@ class AppProvider extends ChangeNotifier {
     // Publish to the shared cloud state so every device sees the same total.
     // Fire-and-forget: the local check-off must never depend on connectivity.
     if (client.firestoreId.isNotEmpty) {
-      FirestoreService.setClientCompleted(
-        clientFirestoreId: client.firestoreId,
-        fairId: client.fairId,
-        completed: completed,
-        completedAt: now,
-        completedBy: _completionAuthor,
-        fairName: _currentFair?.name ?? '',
-      ).catchError((_) {});
+      final fairNome = _currentFair?.name ?? '';
+      CloudWrites.fireAndForget(
+        'conclusão do stand ${client.nome}',
+        () => FirestoreService.setClientCompleted(
+          clientFirestoreId: client.firestoreId,
+          fairId: client.fairId,
+          completed: completed,
+          completedAt: now,
+          completedBy: _completionAuthor,
+          fairName: fairNome,
+        ),
+      );
     }
   }
 
@@ -781,10 +791,14 @@ class AppProvider extends ChangeNotifier {
       required List<String> photoUrls}) async {
     await DatabaseService.updatePendingContent(
         sqliteId, description, photoUrls);
-    // Fire-and-forget: queued offline by Firestore, syncs on reconnect.
+    // Sai sem bloquear: no pavilhão a rede cai e o Firestore reenvia sozinho.
+    // O que não pode é a falha sumir — ver CloudWrites.
     if (firestoreId != null && firestoreId.isNotEmpty) {
-      FirestoreService.updatePendingContent(firestoreId, description, photoUrls)
-          .catchError((_) {});
+      CloudWrites.fireAndForget(
+        'edição da pendência',
+        () => FirestoreService.updatePendingContent(
+            firestoreId, description, photoUrls),
+      );
     }
     notifyListeners();
   }
@@ -806,13 +820,16 @@ class AppProvider extends ChangeNotifier {
       photoUrls: photoUrls,
     );
     if (firestoreId != null && firestoreId.isNotEmpty) {
-      FirestoreService.updatePendingFull(
-        firestoreId,
-        team: team,
-        responsible: responsible,
-        description: description,
-        photoUrls: photoUrls,
-      ).catchError((_) {});
+      CloudWrites.fireAndForget(
+        'edição da pendência',
+        () => FirestoreService.updatePendingFull(
+          firestoreId,
+          team: team,
+          responsible: responsible,
+          description: description,
+          photoUrls: photoUrls,
+        ),
+      );
     }
     notifyListeners();
   }
@@ -825,11 +842,13 @@ class AppProvider extends ChangeNotifier {
     await DatabaseService.resolvePendingItem(sqliteId,
         resolvedBy: by, resolutionNote: note, resolutionPhotoUrls: photoUrls);
     if (firestoreId != null) {
-      FirestoreService.resolveItem(firestoreId,
-              resolvedBy: by,
-              resolutionNote: note,
-              resolutionPhotoUrls: photoUrls)
-          .catchError((_) {});
+      CloudWrites.fireAndForget(
+        'conclusão da pendência',
+        () => FirestoreService.resolveItem(firestoreId,
+            resolvedBy: by,
+            resolutionNote: note,
+            resolutionPhotoUrls: photoUrls),
+      );
     }
     notifyListeners();
   }
@@ -839,8 +858,10 @@ class AppProvider extends ChangeNotifier {
       {String? firestoreId, String note = ''}) async {
     await DatabaseService.approveOrganizerItem(sqliteId, note: note);
     if (firestoreId != null && firestoreId.isNotEmpty) {
-      FirestoreService.approveOrganizerItem(firestoreId, note: note)
-          .catchError((_) {});
+      CloudWrites.fireAndForget(
+        'aprovação do pedido',
+        () => FirestoreService.approveOrganizerItem(firestoreId, note: note),
+      );
     }
     if (_currentFair != null) {
       _pendingCounts =
@@ -854,8 +875,11 @@ class AppProvider extends ChangeNotifier {
       {String? firestoreId, String reason = '', String by = ''}) async {
     await DatabaseService.rejectOrganizerItem(sqliteId, reason: reason, by: by);
     if (firestoreId != null && firestoreId.isNotEmpty) {
-      FirestoreService.rejectOrganizerItem(firestoreId, reason: reason, by: by)
-          .catchError((_) {});
+      CloudWrites.fireAndForget(
+        'recusa do pedido',
+        () => FirestoreService.rejectOrganizerItem(firestoreId,
+            reason: reason, by: by),
+      );
     }
     notifyListeners();
   }
@@ -863,7 +887,10 @@ class AppProvider extends ChangeNotifier {
   Future<void> markItemAwaitingValidation(int sqliteId, {String? firestoreId}) async {
     await DatabaseService.markItemAwaitingValidation(sqliteId);
     if (firestoreId != null) {
-      FirestoreService.markAwaitingValidation(firestoreId).catchError((_) {});
+      CloudWrites.fireAndForget(
+        'envio para validação',
+        () => FirestoreService.markAwaitingValidation(firestoreId),
+      );
     }
     notifyListeners();
   }
@@ -871,7 +898,10 @@ class AppProvider extends ChangeNotifier {
   Future<void> validateItem(int sqliteId, {String? firestoreId}) async {
     await DatabaseService.resolvePendingItem(sqliteId);
     if (firestoreId != null) {
-      FirestoreService.resolveItem(firestoreId).catchError((_) {});
+      CloudWrites.fireAndForget(
+        'validação da pendência',
+        () => FirestoreService.resolveItem(firestoreId),
+      );
     }
     notifyListeners();
   }
@@ -885,9 +915,13 @@ class AppProvider extends ChangeNotifier {
       await DatabaseService.setResolutionNoteByFirestoreId(firestoreId,
           note: note, photoUrls: photoUrls);
     }
-    FirestoreService.resolveItem(firestoreId,
-            resolvedBy: by, resolutionNote: note, resolutionPhotoUrls: photoUrls)
-        .catchError((_) {});
+    CloudWrites.fireAndForget(
+      'validação da pendência',
+      () => FirestoreService.resolveItem(firestoreId,
+          resolvedBy: by,
+          resolutionNote: note,
+          resolutionPhotoUrls: photoUrls),
+    );
     notifyListeners();
   }
 
@@ -902,22 +936,28 @@ class AppProvider extends ChangeNotifier {
         await DatabaseService.resolvePendingItem(item.id!,
             resolvedBy: by, resolutionNote: note, resolutionPhotoUrls: photoUrls);
         if (item.firestoreId != null && item.firestoreId!.isNotEmpty) {
-          FirestoreService.resolveItem(item.firestoreId!,
-                  resolvedBy: by,
-                  resolutionNote: note,
-                  resolutionPhotoUrls: photoUrls)
-              .catchError((_) {});
+          final fid = item.firestoreId!;
+          CloudWrites.fireAndForget(
+            'validação em lote (${item.clientName})',
+            () => FirestoreService.resolveItem(fid,
+                resolvedBy: by,
+                resolutionNote: note,
+                resolutionPhotoUrls: photoUrls),
+          );
         }
       } else if (item.firestoreId != null && item.firestoreId!.isNotEmpty) {
         await DatabaseService.resolvePendingItemByFirestoreId(item.firestoreId!,
             resolvedBy: by);
         await DatabaseService.setResolutionNoteByFirestoreId(item.firestoreId!,
             note: note, photoUrls: photoUrls);
-        FirestoreService.resolveItem(item.firestoreId!,
-                resolvedBy: by,
-                resolutionNote: note,
-                resolutionPhotoUrls: photoUrls)
-            .catchError((_) {});
+        final fid = item.firestoreId!;
+        CloudWrites.fireAndForget(
+          'validação em lote (${item.clientName})',
+          () => FirestoreService.resolveItem(fid,
+              resolvedBy: by,
+              resolutionNote: note,
+              resolutionPhotoUrls: photoUrls),
+        );
       }
     }
     notifyListeners();

@@ -16,6 +16,7 @@ import 'services/notification_service.dart';
 import 'services/notification_router.dart';
 import 'services/update_service.dart';
 import 'widgets/update_dialog.dart';
+import 'widgets/cloud_write_banner.dart';
 import 'app_home.dart';
 
 /// Background/terminated FCM handler. Must be a top-level function.
@@ -124,6 +125,11 @@ class _CasAppState extends State<CasApp> {
         ),
         useMaterial3: true,
       ),
+      // A faixa de "não salvo na nuvem" fica AQUI, envolvendo o app inteiro,
+      // em vez de repetida em cada tela: a gravação que falha pode ter partido
+      // de qualquer uma delas, e o usuário precisa ver o aviso onde estiver.
+      builder: (context, child) =>
+          CloudWriteScope(child: child ?? const SizedBox.shrink()),
       home: buildHome(),
     );
   }

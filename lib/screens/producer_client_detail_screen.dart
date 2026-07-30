@@ -7,6 +7,7 @@ import '../models/pending_item.dart';
 import '../providers/app_provider.dart';
 import '../services/database_service.dart';
 import '../services/firestore_service.dart';
+import '../services/cloud_writes.dart';
 import '../widgets/resolution_dialog.dart';
 import '../widgets/pending_status.dart';
 import '../widgets/photo_gallery.dart';
@@ -132,9 +133,12 @@ class _ProducerClientDetailScreenState
             note: r.note, photoUrls: r.photoUrls);
       }
       if (item.firestoreId != null && item.firestoreId!.isNotEmpty) {
-        FirestoreService.setResolutionNote(item.firestoreId!,
-                note: r.note, photoUrls: r.photoUrls)
-            .catchError((_) {});
+        final fid = item.firestoreId!;
+        CloudWrites.fireAndForget(
+          'nota de manutenção (${item.clientName})',
+          () => FirestoreService.setResolutionNote(fid,
+              note: r.note, photoUrls: r.photoUrls),
+        );
       }
     }
     if (item.id != null) {

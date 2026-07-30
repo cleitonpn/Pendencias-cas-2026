@@ -4,6 +4,7 @@ import '../models/montage_update.dart';
 import '../models/freight_request.dart';
 import '../models/meeting.dart';
 import 'admin_api.dart';
+import 'cloud_writes.dart';
 import '../utils/organizer_fairs.dart';
 import '../utils/fair_key.dart';
 
@@ -127,7 +128,7 @@ class FirestoreService {
     // Fire-and-forget: the doc id is generated client-side, so we can return it
     // immediately. Firestore's offline cache queues the write and retries when
     // the connection returns — so creating a pending works offline in the field.
-    doc.set({
+    final payload = <String, dynamic>{
       'fairName': fairName,
       'clientId': item.clientId,
       'clientName': item.clientName,
@@ -151,7 +152,14 @@ class FirestoreService {
       'awaitingValidation': false,
       'createdAt': item.createdAt.toIso8601String(),
       'resolvedAt': null,
-    }).catchError((_) {});
+    };
+    // A criação do chamado é o dado mais importante do app: se ela não subir,
+    // ninguém em campo fica sabendo do serviço. Sai sem bloquear, mas a falha
+    // entra na fila de retentativa em vez de sumir.
+    CloudWrites.fireAndForget(
+      'abertura da pendência (${item.clientName})',
+      () => doc.set(payload),
+    );
     return doc.id;
   }
 
@@ -587,14 +595,19 @@ class FirestoreService {
       fairKey(producerName),
       fairKey(consultantName),
     ].join('-');
-    _db.collection('sync_events').doc(key).set({
+    final ref = _db.collection('sync_events').doc(key);
+    final payload = <String, dynamic>{
       'clientId': clientId,
       'clientName': clientName,
       'fairName': fairName,
       'producerName': producerName,
       'consultantName': consultantName,
       'createdAt': DateTime.now().toIso8601String(),
-    }).catchError((_) {});
+    };
+    CloudWrites.fireAndForget(
+      'aviso de novo cliente ($clientName)',
+      () => ref.set(payload),
+    );
   }
 
   /// Real-time stream of all pending items for a given fair name.
@@ -666,13 +679,18 @@ class FirestoreService {
       {'editRequested': true},
       SetOptions(merge: true),
     );
-    _db.collection('spec_edit_requests').doc(clientId).set({
+    final ref = _db.collection('spec_edit_requests').doc(clientId);
+    final payload = <String, dynamic>{
       'clientId': clientId,
       'clientName': clientName,
       'fairName': fairName,
       'requestedBy': byName,
       'requestedAt': DateTime.now().toIso8601String(),
-    }).catchError((_) {});
+    };
+    CloudWrites.fireAndForget(
+      'pedido de edição de ficha ($clientName)',
+      () => ref.set(payload),
+    );
   }
 
   static Future<List<Map<String, dynamic>>> getPendingSpecEditRequests() async {
@@ -698,14 +716,18 @@ class FirestoreService {
     required String fairName,
     required String consultantName,
   }) {
-    _db.collection('spec_change_events').add({
+    final payload = <String, dynamic>{
       'clientId': clientId,
       'clientName': clientName,
       'fairName': fairName,
       'consultantName': consultantName,
       'notifyTopic': 'admins',
       'createdAt': DateTime.now().toIso8601String(),
-    }).catchError((_) {});
+    };
+    CloudWrites.fireAndForget(
+      'aviso de alteração de ficha ($clientName)',
+      () => _db.collection('spec_change_events').add(payload),
+    );
   }
 
   // ─── Analyst Notes ────────────────────────────────────────────────────────
@@ -740,13 +762,18 @@ class FirestoreService {
     required String clientName,
     required String fairName,
   }) {
-    _db.collection('new_client_broadcasts').doc(clientId).set({
+    final ref = _db.collection('new_client_broadcasts').doc(clientId);
+    final payload = <String, dynamic>{
       'clientId': clientId,
       'clientName': clientName,
       'fairName': fairName,
       'notifyTopic': 'new_clients',
       'createdAt': DateTime.now().toIso8601String(),
-    }).catchError((_) {});
+    };
+    CloudWrites.fireAndForget(
+      'aviso geral de novo cliente ($clientName)',
+      () => ref.set(payload),
+    );
   }
 
   // ─── Admin Users ──────────────────────────────────────────────────────────
