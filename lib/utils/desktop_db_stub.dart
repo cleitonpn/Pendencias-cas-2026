@@ -1,3 +1,7 @@
+// `databaseFactory` (o setter global) vem do sqflite; o pacote web só fornece
+// a fábrica. Sem este import o analyze falha em TODAS as plataformas, porque
+// ele analisa os arquivos de import condicional independentemente do alvo.
+import 'package:sqflite/sqflite.dart';
 import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
 
 /// No navegador o SQLite roda em WebAssembly, com persistência em IndexedDB.
