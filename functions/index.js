@@ -131,6 +131,112 @@ exports.onPendingCreated = onDocumentCreated(
       });
     });
 
+// ─── Histórico da pendência ─────────────────────────────────────────────────
+//
+// Sem isto não havia como reconstruir o que aconteceu com um chamado. Quando
+// a organizadora diz "abri às 9h e ninguém fez nada", a resposta dependia da
+// memória de quem estava lá.
+//
+// O que interessa é o que muda a vida de alguém: situação, equipe,
+// responsável e descrição. Foto e nota entram só como "mexeu", sem despejar o
+// conteúdo no histórico.
+
+const HISTORY_FIELDS = [
+  {key: "team", label: "Equipe"},
+  {key: "responsible", label: "Responsável"},
+  {key: "description", label: "Descrição"},
+];
+
+/** Descreve o que mudou entre duas versões do chamado.
+ * @param {object} before versão anterior
+ * @param {object} after versão nova
+ * @return {Array<object>} lista de mudanças
+ */
+function describeChanges(before, after) {
+  const out = [];
+
+  // Situação primeiro: é o que se procura ao abrir o histórico.
+  if (before.approvalStatus !== after.approvalStatus) {
+    const rotulos = {
+      aprovada: "Aprovada",
+      recusada: "Recusada",
+      pendente: "Aguardando aprovação",
+      none: "Sem aprovação",
+    };
+    out.push({
+      label: "Situação",
+      from: rotulos[before.approvalStatus] || before.approvalStatus || "",
+      to: rotulos[after.approvalStatus] || after.approvalStatus || "",
+    });
+  }
+  if (before.awaitingValidation !== after.awaitingValidation &&
+      after.awaitingValidation === true) {
+    out.push({label: "Situação", from: "Em aberto", to: "Aguardando validação"});
+  }
+  if (before.inProgress !== after.inProgress && after.inProgress === true) {
+    out.push({label: "Situação", from: "Em aberto", to: "Em andamento"});
+  }
+  if (before.isResolved !== after.isResolved && after.isResolved === true) {
+    out.push({
+      label: "Situação",
+      from: "Em aberto",
+      to: after.approvalStatus === "recusada" ? "Recusada" : "Concluída",
+    });
+  }
+
+  for (const f of HISTORY_FIELDS) {
+    const a = before[f.key] || "";
+    const b = after[f.key] || "";
+    if (a !== b) out.push({label: f.label, from: a, to: b});
+  }
+
+  // Anexos: registra que mexeu, sem copiar o conteúdo.
+  const fotosAntes = (before.photoUrls || []).length +
+      (before.resolutionPhotoUrls || []).length;
+  const fotosDepois = (after.photoUrls || []).length +
+      (after.resolutionPhotoUrls || []).length;
+  if (fotosDepois > fotosAntes) {
+    out.push({label: "Fotos", from: `${fotosAntes}`, to: `${fotosDepois}`});
+  }
+  if ((before.resolutionNote || "") !== (after.resolutionNote || "") &&
+      (after.resolutionNote || "")) {
+    out.push({label: "Nota de manutenção", from: "", to: "registrada"});
+  }
+  if ((before.rejectionReason || "") !== (after.rejectionReason || "") &&
+      (after.rejectionReason || "")) {
+    out.push({label: "Motivo da recusa", from: "", to: after.rejectionReason});
+  }
+
+  return out;
+}
+
+// Registra no histórico toda alteração do chamado.
+//
+// Separado da função que notifica: aquela tem vários caminhos com `return`
+// no meio, e o histórico não pode depender de qual deles foi tomado.
+exports.onPendingHistory = onDocumentUpdated(
+    "pending_items/{id}", async (event) => {
+      const before = event.data && event.data.before.data();
+      const after = event.data && event.data.after.data();
+      if (!before || !after) return;
+
+      // O próprio carimbo de autoria muda a cada gravação; ignorá-lo evita
+      // registrar "nada mudou".
+      const mudancas = describeChanges(before, after);
+      if (mudancas.length === 0) return;
+
+      await getFirestore().collection("pending_history").add({
+        pendingId: event.params.id,
+        clientId: after.clientId || "",
+        clientName: after.clientName || "",
+        fairName: after.fairName || "",
+        by: after.lastActionBy || after.resolvedBy || "",
+        role: after.lastActionRole || "",
+        at: after.lastActionAt || new Date().toISOString(),
+        changes: mudancas,
+      });
+    });
+
 // Producer marked item as done (awaiting validation) → notify admins.
 exports.onPendingUpdated = onDocumentUpdated(
     "pending_items/{id}", async (event) => {

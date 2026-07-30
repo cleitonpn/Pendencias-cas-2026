@@ -11,6 +11,7 @@ import 'package:timezone/timezone.dart' as tzlib;
 import 'firebase_options.dart';
 import 'providers/app_provider.dart';
 import 'utils/desktop_db.dart';
+import 'services/actor.dart';
 import 'services/auth_bootstrap.dart';
 import 'services/notification_service.dart';
 import 'services/notification_router.dart';
@@ -34,6 +35,10 @@ void main() async {
   // agenda de reuniões usa uma.
   await initializeDateFormatting('pt_BR');
   Intl.defaultLocale = 'pt_BR';
+
+  // Quem está logado, para carimbar autoria nas alterações. Sem isto, quem
+  // reabre o app já logado gravaria alterações sem autor.
+  await Actor.load();
 
   final isMobile = !kIsWeb &&
       (defaultTargetPlatform == TargetPlatform.android ||

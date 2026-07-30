@@ -5,6 +5,7 @@ import '../models/freight_request.dart';
 import '../models/meeting.dart';
 import '../models/client.dart';
 import '../utils/client_fingerprint.dart';
+import 'actor.dart';
 import 'admin_api.dart';
 import 'cloud_writes.dart';
 import '../utils/organizer_fairs.dart';
@@ -172,6 +173,7 @@ class FirestoreService {
     await _db.collection('pending_items').doc(firestoreId).update({
       'approvalStatus': 'aprovada',
       if (note.isNotEmpty) 'approvalNote': note,
+      ...Actor.stamp,
     });
   }
 
@@ -185,6 +187,7 @@ class FirestoreService {
       'isResolved': true,
       'resolvedAt': DateTime.now().toIso8601String(),
       if (by.isNotEmpty) 'resolvedBy': by,
+      ...Actor.stamp,
     });
   }
 
@@ -233,6 +236,7 @@ class FirestoreService {
         'resolutionNote': resolutionNote,
       if (resolutionPhotoUrls != null && resolutionPhotoUrls.isNotEmpty)
         'resolutionPhotoUrls': resolutionPhotoUrls,
+      ...Actor.stamp,
     });
   }
 
@@ -242,6 +246,7 @@ class FirestoreService {
     await _db.collection('pending_items').doc(firestoreId).update({
       'description': description,
       'photoUrls': photoUrls,
+      ...Actor.stamp,
     });
   }
 
@@ -259,6 +264,7 @@ class FirestoreService {
       'responsible': responsible,
       'description': description,
       'photoUrls': photoUrls,
+      ...Actor.stamp,
     });
   }
 
@@ -271,6 +277,7 @@ class FirestoreService {
       if (note != null && note.isNotEmpty) 'resolutionNote': note,
       if (photoUrls != null && photoUrls.isNotEmpty)
         'resolutionPhotoUrls': photoUrls,
+      ...Actor.stamp,
     });
   }
 
@@ -278,6 +285,7 @@ class FirestoreService {
     if (firestoreId.isEmpty) return;
     await _db.collection('pending_items').doc(firestoreId).update({
       'awaitingValidation': true,
+      ...Actor.stamp,
     });
   }
 
@@ -286,6 +294,7 @@ class FirestoreService {
     await _db.collection('pending_items').doc(firestoreId).update({
       'inProgress': true,
       'inProgressBy': by,
+      ...Actor.stamp,
     });
   }
 
@@ -965,6 +974,25 @@ class FirestoreService {
     ]);
 
     return (written: gravados, removed: removidos);
+  }
+
+  // ─── Histórico da pendência ───────────────────────────────────────────────
+
+  /// Alterações de um chamado, da mais recente para a mais antiga.
+  ///
+  /// A ordenação é feita aqui, e não na consulta, para não exigir índice
+  /// composto — o volume por chamado é de poucas dezenas de linhas.
+  static Future<List<Map<String, dynamic>>> getPendingHistory(
+      String pendingId) async {
+    if (pendingId.isEmpty) return [];
+    final snap = await _db
+        .collection('pending_history')
+        .where('pendingId', isEqualTo: pendingId)
+        .get();
+    final list = snap.docs.map((d) => {'id': d.id, ...d.data()}).toList()
+      ..sort((a, b) =>
+          ((b['at'] as String?) ?? '').compareTo((a['at'] as String?) ?? ''));
+    return list;
   }
 
   // ─── Reuniões ─────────────────────────────────────────────────────────────

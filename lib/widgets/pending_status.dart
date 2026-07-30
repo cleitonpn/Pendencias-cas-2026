@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'pending_history_sheet.dart';
 import '../models/pending_item.dart';
 import 'photo_gallery.dart';
 
@@ -107,15 +108,44 @@ class PendingNotes extends StatelessWidget {
   /// Em telas estreitas (portais web) o bloco fica mais compacto.
   final bool compact;
 
-  const PendingNotes({super.key, required this.item, this.compact = false});
+  /// Mostra o atalho para o histórico do chamado.
+  ///
+  /// Desligado nos portais públicos: o expositor e a organizadora não têm por
+  /// que ver quem da montadora mexeu no quê.
+  final bool showHistory;
+
+  const PendingNotes({
+    super.key,
+    required this.item,
+    this.compact = false,
+    this.showHistory = false,
+  });
 
   @override
   Widget build(BuildContext context) {
-    if (!item.hasNotes) return const SizedBox.shrink();
+    final temHistorico =
+        showHistory && (item.firestoreId?.isNotEmpty ?? false);
+    if (!item.hasNotes && !temHistorico) return const SizedBox.shrink();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        if (temHistorico)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              style: TextButton.styleFrom(
+                padding: EdgeInsets.zero,
+                minimumSize: const Size(0, 0),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              onPressed: () =>
+                  showPendingHistory(context, item.firestoreId!),
+              icon: const Icon(Icons.history, size: 14),
+              label: const Text('Ver histórico',
+                  style: TextStyle(fontSize: 11)),
+            ),
+          ),
         if (item.approvalNote.isNotEmpty)
           _note(
             icon: Icons.verified,

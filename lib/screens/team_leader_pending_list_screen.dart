@@ -416,7 +416,7 @@ class _ItemRow extends StatelessWidget {
             ),
           Text(item.description,
               style: const TextStyle(fontSize: 13)),
-          PendingNotes(item: item, compact: true),
+          PendingNotes(item: item, compact: true, showHistory: true),
           const SizedBox(height: 6),
           Row(children: [
             Expanded(

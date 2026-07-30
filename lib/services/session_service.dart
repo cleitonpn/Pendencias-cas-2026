@@ -1,5 +1,6 @@
 import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/web_portal.dart';
+import 'actor.dart';
 import 'admin_api.dart';
 import 'cloud_writes.dart';
 import 'firestore_service.dart';
@@ -25,6 +26,9 @@ class SessionService {
     // Marcar aqui — ponto único por onde todo login passa — é o que faz o F5
     // numa URL sem fragmento voltar para o lugar certo.
     await p.setString(kLastWebPortal, kPortalApp);
+    // Quem está logado passa a carimbar autoria nas alterações de pendência.
+    Actor.name = name;
+    Actor.role = role;
   }
 
   static Future<void> clear() async {
@@ -39,6 +43,7 @@ class SessionService {
     // Falha de gravação pendente é do usuário que saiu; deixá-la na tela do
     // próximo só confundiria.
     CloudWrites.clear();
+    Actor.clear();
   }
 
   /// Returns `{'role', 'name', 'team'}` if a valid session exists, else null.
