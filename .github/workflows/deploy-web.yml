@@ -50,12 +50,31 @@ jobs:
         env:
           FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
 
+      # O `|| echo` anterior transformava QUALQUER erro em sucesso: credencial
+      # inválida, regra inválida, falta de permissão — tudo virava verde, e o
+      # deploy só era descoberto como não aplicado quando alguém reclamava da
+      # tela antiga. Agora só a corrida de "versão já ativa" é tolerada; o
+      # resto falha o workflow.
       - name: Deploy Hosting + Firestore rules + indexes
         run: |
-          npx --yes firebase-tools@latest deploy \
-            --only hosting,firestore:rules,firestore:indexes \
-            --project montagem-uset \
-            --non-interactive \
-          || echo "Deploy skipped — version already active (race condition)"
+          set -o pipefail
+          if npx --yes firebase-tools@latest deploy \
+              --only hosting,firestore:rules,firestore:indexes \
+              --project montagem-uset \
+              --non-interactive 2>&1 | tee deploy.log; then
+            echo "Deploy concluído."
+          else
+            if grep -qiE "already active|another deploy|concurrent" deploy.log; then
+              echo "::warning::Deploy ignorado — outra publicação assumiu a versão (corrida)."
+            else
+              echo "::error::Deploy falhou. Veja o log acima."
+              exit 1
+            fi
+          fi
+          # "Deploy complete!" é o que o firebase-tools imprime ao publicar de
+          # fato. Sem essa marca, o passo passou sem publicar nada.
+          if ! grep -q "Deploy complete!" deploy.log; then
+            echo "::warning::Nenhuma publicação efetiva nesta execução."
+          fi
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/sa.json
