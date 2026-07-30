@@ -246,6 +246,16 @@ class AppProvider extends ChangeNotifier {
     _error = null;
     _setLoading(true);
     await _loadLocal();
+
+    // Aparelho que nunca sincronizou esta feira abre a tela vazia. Ler a
+    // planilha aqui não serve: quem não é admin nem produtor não tem por que
+    // esperar uma leitura de planilha inteira, e o líder sequer chega à tela
+    // de sincronizar. O espelho da nuvem resolve — é a mesma planilha, já
+    // lida por outro aparelho.
+    if (_clients.isEmpty && fair.id != null) {
+      await _loadClientsFromCloud(fair);
+    }
+
     _startPendingStream(fair.name);
     _setLoading(false);
     _restartAutoSync(fair);
@@ -261,6 +271,48 @@ class AppProvider extends ChangeNotifier {
         // aparelhos sem ninguém perceber.
         debugPrint('[check-off] não foi possível ler o estado da nuvem: $e');
       });
+    }
+  }
+
+  /// Garante que os expositores desta feira estão no banco local, buscando no
+  /// espelho se preciso. Usado por telas que precisam saber quem trabalha numa
+  /// feira que não é a aberta no momento — o aviso por feira, por exemplo.
+  Future<void> ensureFairClients(Fair fair) async {
+    if (fair.id == null) return;
+    final locais = await DatabaseService.getClients(fairId: fair.id!);
+    if (locais.isNotEmpty) return;
+    try {
+      final remotos = await FirestoreService.getFairClients(
+        fairName: fair.name,
+        fairId: fair.id!,
+      );
+      if (remotos.isNotEmpty) await DatabaseService.upsertClients(remotos);
+    } catch (e) {
+      debugPrint('[espelho] ensureFairClients ${fair.name}: $e');
+    }
+  }
+
+  /// Preenche o banco local a partir do espelho da nuvem.
+  ///
+  /// É o que faz um aparelho recém-instalado enxergar a feira sem precisar
+  /// entrar como admin, carregar tudo, sair e entrar de novo — a volta que a
+  /// equipe dava até agora.
+  Future<void> _loadClientsFromCloud(Fair fair) async {
+    try {
+      final remotos = await FirestoreService.getFairClients(
+        fairName: fair.name,
+        fairId: fair.id!,
+      );
+      if (remotos.isEmpty) return;
+      await DatabaseService.upsertClients(remotos);
+      await _syncClientCompletion(fair.id!);
+      await _loadLocal();
+      debugPrint('[espelho] ${fair.name}: ${remotos.length} expositores '
+          'carregados da nuvem');
+    } catch (e) {
+      _error = 'Não foi possível carregar os expositores desta feira. '
+          'Verifique a conexão.';
+      debugPrint('[espelho] falha ao carregar ${fair.name}: $e');
     }
   }
 
@@ -381,6 +433,41 @@ class AppProvider extends ChangeNotifier {
     }
   }
 
+  /// Publica o resultado da leitura da planilha no espelho da nuvem e devolve
+  /// quem é expositor novo DE VERDADE.
+  ///
+  /// "Novo" antes era comparado com o banco deste aparelho, o que fazia todo
+  /// cliente parecer novo num celular recém-instalado. A verdade está no
+  /// espelho: se o documento já existe lá, alguém já viu esse expositor
+  /// antes, em qualquer aparelho.
+  ///
+  /// Devolve null quando não deu para falar com a nuvem — aí não há como
+  /// saber quem é novo, e o certo é não avisar ninguém em vez de avisar
+  /// errado.
+  Future<Set<String>?> _publishClients(
+      String fairName, List<Client> clients) async {
+    try {
+      final conhecidos =
+          await FirestoreService.getFairClientFingerprints(fairName);
+      final novos = clients
+          .map((c) => c.firestoreId)
+          .where((id) => id.isNotEmpty && !conhecidos.containsKey(id))
+          .toSet();
+
+      final r = await FirestoreService.publishFairClients(
+        fairName: fairName,
+        clients: clients,
+        knownFingerprints: conhecidos,
+      );
+      debugPrint('[espelho] $fairName: ${r.written} gravados, '
+          '${r.removed} removidos, ${novos.length} novos');
+      return novos;
+    } catch (e) {
+      debugPrint('[espelho] $fairName: falhou ($e)');
+      return null;
+    }
+  }
+
   /// Standard individual-sheet sync (original behavior + new-client detection).
   Future<void> _syncIndividualSheet() async {
     final existingClients =
@@ -396,7 +483,9 @@ class AppProvider extends ChangeNotifier {
 
     _preserveCompletion(sheetClients, existingClients);
 
-    _notifyAssignments(sheetClients, existingMap, _currentFair!.name);
+    final novos = await _publishClients(_currentFair!.name, sheetClients);
+    _notifyAssignments(
+        sheetClients, existingMap, _currentFair!.name, novos);
 
     await DatabaseService.upsertClients(sheetClients);
     // Remove clients whose rows were deleted from the spreadsheet.
@@ -507,7 +596,8 @@ class AppProvider extends ChangeNotifier {
 
       _preserveCompletion(finalClients, localClients);
 
-      _notifyAssignments(finalClients, existingMap, feiraNome);
+      final novos = await _publishClients(feiraNome, finalClients);
+      _notifyAssignments(finalClients, existingMap, feiraNome, novos);
 
       await DatabaseService.upsertClients(finalClients);
       final activeIds = finalClients.map((c) => c.rowId).toSet();
@@ -568,7 +658,9 @@ class AppProvider extends ChangeNotifier {
 
     _preserveCompletion(finalClients, existingClients);
 
-    _notifyAssignments(finalClients, existingMap, _currentFair!.name);
+    final novos = await _publishClients(_currentFair!.name, finalClients);
+    _notifyAssignments(
+        finalClients, existingMap, _currentFair!.name, novos);
 
     await DatabaseService.upsertClients(finalClients);
     final activeIds = finalClients.map((c) => c.rowId).toSet();
@@ -598,17 +690,21 @@ class AppProvider extends ChangeNotifier {
   /// re-notified if they were already set.
   /// Avisa sobre clientes novos e sobre quem acabou de ser atribuído a eles.
   ///
-  /// O que conta como "novo" é comparado com o banco DESTE aparelho. Num
-  /// aparelho recém-instalado, ou na primeira vez que uma feira é sincronizada
-  /// aqui, o banco está vazio e TODO cliente parecia novo — daí a enxurrada de
-  /// "novo cliente na planilha" para a equipe inteira sempre que alguém
-  /// entrava pela primeira vez. Nesse caso não há nada a avisar: os clientes
-  /// já existiam, quem chegou foi o aparelho.
+  /// [novosNaNuvem] traz os que ainda não existiam no espelho — a única fonte
+  /// que vale para "novo". Antes isso era comparado com o banco DESTE
+  /// aparelho: num celular recém-instalado o banco está vazio e todo cliente
+  /// parecia novo, então quem entrava pela primeira vez disparava um aviso
+  /// por expositor para a equipe inteira.
+  ///
+  /// Null significa que não foi possível falar com a nuvem. Aí não dá para
+  /// saber quem é novo, e o certo é não avisar ninguém em vez de avisar
+  /// errado.
   void _notifyAssignments(
       List<Client> sheetClients,
       Map<String, Client> existingMap,
-      String fairName) {
-    if (existingMap.isEmpty) return;
+      String fairName,
+      Set<String>? novosNaNuvem) {
+    if (novosNaNuvem == null) return;
 
     // Secondary index by firestoreId to handle rowId shifts (e.g. master sheet rows reordered)
     final existingByFirestoreId = <String, Client>{};
@@ -619,11 +715,16 @@ class AppProvider extends ChangeNotifier {
     for (final nc in sheetClients) {
       final existing = existingMap[nc.rowId] ??
           (nc.firestoreId.isNotEmpty ? existingByFirestoreId[nc.firestoreId] : null);
-      final isNewClient = existing == null;
+      final isNewClient = novosNaNuvem.contains(nc.firestoreId);
+      // Atribuição nova: ou o expositor acabou de entrar, ou o campo estava
+      // vazio aqui e passou a ter nome. O sync_events tem id determinado pelo
+      // conteúdo, então se outro aparelho já avisou, este não avisa de novo.
       final newProducer =
-          (isNewClient || existing!.produtor.isEmpty) && nc.produtor.isNotEmpty;
+          (isNewClient || (existing?.produtor ?? '').isEmpty) &&
+              nc.produtor.isNotEmpty;
       final newConsultant =
-          (isNewClient || existing.atendimento.isEmpty) && nc.atendimento.isNotEmpty;
+          (isNewClient || (existing?.atendimento ?? '').isEmpty) &&
+              nc.atendimento.isNotEmpty;
       if (newProducer || newConsultant) {
         FirestoreService.writeSyncEvent(
           clientId: nc.firestoreId,

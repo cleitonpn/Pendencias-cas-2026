@@ -75,6 +75,8 @@ class _MeetingComposeScreenState extends State<MeetingComposeScreen> {
       _fair = f;
       _audienceWarning = null;
     });
+    await context.read<AppProvider>().ensureFairClients(f);
+    if (!mounted) return;
     final campo = await DatabaseService.getFairAudience(f.id!);
     final sugeridos = <AppUser>[
       ...DirectoryService.match(_allUsers, 'producer', campo.producers),
@@ -88,8 +90,8 @@ class _MeetingComposeScreenState extends State<MeetingComposeScreen> {
         ..addAll(sugeridos.map((u) => u.key));
       if (sugeridos.isEmpty) {
         _audienceWarning =
-            'Ninguém de campo foi encontrado para esta feira neste aparelho. '
-            'Sincronize a feira ou escolha os participantes na mão.';
+            'Ninguém de campo foi encontrado para esta feira, nem aqui nem '
+            'na nuvem. Escolha os participantes na mão.';
       }
     });
   }

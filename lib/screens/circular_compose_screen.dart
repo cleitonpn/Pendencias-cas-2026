@@ -108,8 +108,12 @@ class _CircularComposeScreenState extends State<CircularComposeScreen> {
     });
 
     if (_allUsers.isEmpty) await _loadUsers();
+    if (!mounted) return;
     final everyone = _allUsers;
 
+    // A feira pode não ter sido sincronizada neste aparelho. O espelho da
+    // nuvem preenche, para o aviso não sair sem metade da equipe.
+    await context.read<AppProvider>().ensureFairClients(fair);
     final campo = await DatabaseService.getFairAudience(fair.id!);
     final selecionados = <AppUser>[
       ...DirectoryService.match(everyone, 'producer', campo.producers),
@@ -148,9 +152,8 @@ class _CircularComposeScreenState extends State<CircularComposeScreen> {
       if (campo.producers.isEmpty &&
           campo.consultants.isEmpty &&
           campo.leaders.isEmpty) {
-        avisos.add('Esta feira ainda não foi sincronizada neste aparelho, '
-            'então ninguém de campo foi encontrado. Sincronize e tente '
-            'de novo.');
+        avisos.add('Ninguém de campo foi encontrado para esta feira, nem '
+            'aqui nem na nuvem. Sincronize a planilha e tente de novo.');
       }
       _audienceWarning = avisos.isEmpty ? null : avisos.join('\n');
     });

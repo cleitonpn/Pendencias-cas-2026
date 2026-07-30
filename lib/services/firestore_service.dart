@@ -3,6 +3,8 @@ import '../models/pending_item.dart';
 import '../models/montage_update.dart';
 import '../models/freight_request.dart';
 import '../models/meeting.dart';
+import '../models/client.dart';
+import '../utils/client_fingerprint.dart';
 import 'admin_api.dart';
 import 'cloud_writes.dart';
 import '../utils/organizer_fairs.dart';
@@ -827,6 +829,121 @@ class FirestoreService {
         .map((snap) => snap.docs
             .map((d) => <String, dynamic>{'id': d.id, ...d.data()})
             .toList());
+  }
+
+  // ─── Espelho dos expositores ──────────────────────────────────────────────
+  //
+  // A planilha continua sendo a fonte da verdade: o financeiro consulta, o
+  // pessoal preenche, e ela atravessa fases do processo que o app não cobre.
+  // O que muda é que o resultado da leitura dela deixa de ficar preso ao
+  // SQLite de quem sincronizou.
+  //
+  // Sem este espelho, todo aparelho só sabia dos expositores que ele mesmo
+  // baixou. Daí vinham os bugs: "cliente novo" era novo só naquele celular,
+  // "quem trabalha nesta feira" dependia de quem tinha sincronizado, e um
+  // aparelho recém-instalado não via nada até alguém entrar como admin.
+  //
+  // A chave do documento é o firestoreId do cliente — a mesma usada em
+  // client_status, para os dois lados casarem.
+
+  static CollectionReference<Map<String, dynamic>> get _clientsCol =>
+      _db.collection('fair_clients');
+
+  /// Expositores de uma feira, direto da nuvem.
+  ///
+  /// [fairId] é o id LOCAL da feira neste aparelho: os documentos guardam o
+  /// nome da feira, que é estável entre aparelhos, e os clientes voltam já
+  /// reidentificados para o id daqui.
+  static Future<List<Client>> getFairClients({
+    required String fairName,
+    required int fairId,
+  }) async {
+    final snap =
+        await _clientsCol.where('fairName', isEqualTo: fairName).get();
+    return snap.docs.map((d) {
+      final data = Map<String, dynamic>.from(d.data());
+      data['fair_id'] = fairId;
+      // row_id carrega o id da feira do aparelho que publicou; refaz com o
+      // daqui para casar com o que as telas usam.
+      final rowNum = (data['row_id'] as String? ?? '').split('_').last;
+      data['row_id'] = '${fairId}_$rowNum';
+      data['firestore_id'] = d.id;
+      return Client.fromMap(data);
+    }).toList();
+  }
+
+  /// Assinaturas do que já está publicado, por firestoreId.
+  ///
+  /// Serve para publicar só o que mudou. Uma leitura por sincronização custa
+  /// muito menos do que reescrever a planilha inteira toda vez.
+  static Future<Map<String, String>> getFairClientFingerprints(
+      String fairName) async {
+    final snap =
+        await _clientsCol.where('fairName', isEqualTo: fairName).get();
+    return {
+      for (final d in snap.docs)
+        d.id: (d.data()['fingerprint'] as String?) ?? '',
+    };
+  }
+
+  /// Publica os expositores que mudaram e remove os que saíram da planilha.
+  ///
+  /// Devolve quantos foram gravados e quantos foram removidos.
+  static Future<({int written, int removed})> publishFairClients({
+    required String fairName,
+    required List<Client> clients,
+    required Map<String, String> knownFingerprints,
+  }) async {
+    final agora = DateTime.now().toIso8601String();
+    final paraGravar = <Client, String>{};
+
+    for (final c in clients) {
+      if (c.firestoreId.isEmpty) continue;
+      final fp = clientFingerprint(c);
+      if (knownFingerprints[c.firestoreId] == fp) continue;
+      paraGravar[c] = fp;
+    }
+
+    // Quem sumiu da planilha sai do espelho. Sem isto um expositor removido
+    // continuaria aparecendo para sempre em quem lê pela nuvem.
+    final vivos = clients.map((c) => c.firestoreId).toSet();
+    final paraRemover =
+        knownFingerprints.keys.where((id) => !vivos.contains(id)).toList();
+
+    var gravados = 0;
+    var removidos = 0;
+
+    // Em lotes: o backfill dos check-offs já ensinou que centenas de
+    // gravações soltas se perdem pelo caminho.
+    Future<void> commit(List<void Function(WriteBatch)> ops) async {
+      for (var i = 0; i < ops.length; i += 400) {
+        final fim = (i + 400 < ops.length) ? i + 400 : ops.length;
+        final batch = _db.batch();
+        for (final op in ops.sublist(i, fim)) {
+          op(batch);
+        }
+        await batch.commit();
+      }
+    }
+
+    await commit([
+      ...paraGravar.entries.map((e) => (WriteBatch b) {
+            final data = Map<String, dynamic>.from(e.key.toMap())
+              ..remove('is_completed')
+              ..remove('completed_at')
+              ..['fairName'] = fairName
+              ..['fingerprint'] = e.value
+              ..['updatedAt'] = agora;
+            b.set(_clientsCol.doc(e.key.firestoreId), data);
+            gravados++;
+          }),
+      ...paraRemover.map((id) => (WriteBatch b) {
+            b.delete(_clientsCol.doc(id));
+            removidos++;
+          }),
+    ]);
+
+    return (written: gravados, removed: removidos);
   }
 
   // ─── Reuniões ─────────────────────────────────────────────────────────────
