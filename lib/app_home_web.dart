@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'screens/stand_request_screen.dart';
 import 'screens/organizer_web_screen.dart';
 import 'screens/splash_screen.dart';
+import 'services/session_service.dart';
 import 'utils/web_portal.dart';
 
 /// Web: the app is a public page. Two routes share the same Flutter Web build,
@@ -66,12 +67,17 @@ class _WebRouterState extends State<_WebRouter> {
     final prefs = await SharedPreferences.getInstance();
     final last = prefs.getString(kLastWebPortal);
     final hasOrg = (prefs.getString('org_verified_name') ?? '').isNotEmpty;
+    final hasApp = (await SessionService.get()) != null;
 
-    // A organizadora tem portal e sessão próprios. Consultor e líder usam o
-    // app completo, cuja sessão é a mesma do Android (SessionService), então
-    // não precisam de tratamento aqui.
+    // Com as duas sessões no mesmo navegador, quem decide é a última usada.
+    // Com só uma, ela vence — a marca pode estar ausente (sessão antiga) ou
+    // valer para um portal que não existe mais.
     Widget? target;
-    if (hasOrg && last != kPortalEquipe) {
+    if (hasOrg && hasApp) {
+      target = last == kPortalApp
+          ? null // null = app completo (ver build)
+          : OrganizerWebScreen(fairId: widget.fairId);
+    } else if (hasOrg) {
       target = OrganizerWebScreen(fairId: widget.fairId);
     }
 

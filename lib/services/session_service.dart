@@ -1,4 +1,5 @@
 import 'package:shared_preferences/shared_preferences.dart';
+import '../utils/web_portal.dart';
 
 /// Persists the logged-in user session across app restarts using
 /// SharedPreferences. The app has no Firebase Auth — sessions are keyed
@@ -17,6 +18,10 @@ class SessionService {
     await p.setString(_kRole, role);
     await p.setString(_kName, name);
     await p.setString(_kTeam, team);
+    // Na web o mesmo navegador pode ter também a sessão da organizadora.
+    // Marcar aqui — ponto único por onde todo login passa — é o que faz o F5
+    // numa URL sem fragmento voltar para o lugar certo.
+    await p.setString(kLastWebPortal, kPortalApp);
   }
 
   static Future<void> clear() async {

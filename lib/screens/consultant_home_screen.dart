@@ -212,18 +212,55 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.event_busy, size: 72, color: Colors.grey),
-          SizedBox(height: 16),
-          Text('Nenhuma feira com seus clientes',
-              style: TextStyle(color: Colors.grey, fontSize: 18)),
-          SizedBox(height: 8),
-          Text('Sincronize para atualizar os dados.',
-              style: TextStyle(color: Colors.grey)),
-        ],
+    final syncing = context.watch<AppProvider>().isLoading;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(syncing ? Icons.cloud_sync : Icons.event_busy,
+                size: 72, color: Colors.grey),
+            const SizedBox(height: 16),
+            Text(
+                syncing
+                    ? 'Sincronizando planilhas…'
+                    : 'Nenhuma feira com seus clientes',
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.grey, fontSize: 18)),
+            const SizedBox(height: 8),
+            Text(
+              syncing
+                  ? 'A primeira carga demora um pouco. Pode deixar aberto.'
+                  : 'Toque abaixo para carregar os dados das planilhas.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.grey),
+            ),
+            const SizedBox(height: 20),
+            // O ícone da barra some enquanto sincroniza, e no navegador o
+            // banco começa vazio — sem uma ação visível aqui não há como
+            // fazer a primeira carga.
+            if (syncing)
+              const SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            else
+              ElevatedButton.icon(
+                onPressed: () =>
+                    context.read<AppProvider>().syncAllFairs(),
+                icon: const Icon(Icons.sync),
+                label: const Text('Sincronizar planilhas'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF1E3A5F),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 20, vertical: 14),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
