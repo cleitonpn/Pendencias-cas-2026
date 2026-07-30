@@ -927,3 +927,84 @@ exports.setMinBuild = onCall(async (request) => {
 
   return {ok: true};
 });
+
+// ─── Pendência parada ───────────────────────────────────────────────────────
+//
+// O app avisa quando o chamado abre e quando conclui, mas nada avisava que um
+// serviço está aberto há horas. Numa montagem de três dias é isso que vira
+// reclamação de expositor: ninguém esqueceu de propósito, só não havia nada
+// lembrando.
+//
+// Roda de meia em meia hora, das 7h às 22h. Fora desse intervalo a equipe não
+// está em campo e o aviso só atrapalharia o sono de quem monta às 6h.
+
+const STALE_HOURS_DEFAULT = 6;
+
+/** Horas até um chamado ser considerado parado. Configurável sem novo deploy.
+ * @return {Promise<number>} horas
+ */
+async function staleHours() {
+  try {
+    const doc = await getFirestore()
+        .collection("app_config").doc("alerts").get();
+    const h = doc.exists ? Number((doc.data() || {}).staleHours) : NaN;
+    return Number.isFinite(h) && h > 0 ? h : STALE_HOURS_DEFAULT;
+  } catch (_) {
+    return STALE_HOURS_DEFAULT;
+  }
+}
+
+exports.stalePendingReminder = onSchedule(
+    {schedule: "*/30 7-22 * * *", timeZone: "America/Sao_Paulo"},
+    async () => {
+      const horas = await staleHours();
+      const limite =
+        new Date(Date.now() - horas * 60 * 60 * 1000).toISOString();
+
+      // Só os abertos. O índice é o mesmo já usado pelas outras consultas.
+      const snap = await getFirestore().collection("pending_items")
+          .where("isResolved", "==", false)
+          .where("createdAt", "<=", limite)
+          .limit(100)
+          .get();
+
+      let avisados = 0;
+      for (const doc of snap.docs) {
+        const d = doc.data() || {};
+
+        // Recusado e aguardando aprovação não estão parados por descuido de
+        // quem executa: um já acabou, o outro depende de decisão.
+        if (d.staleNotified === true) continue;
+        if (d.approvalStatus === "recusada") continue;
+        if (d.approvalStatus === "pendente") continue;
+        // Já concluído pelo produtor, esperando validação — o admin já foi
+        // avisado por outro caminho.
+        if (d.awaitingValidation === true) continue;
+
+        await doc.ref.set({staleNotified: true}, {merge: true});
+
+        const topics = ["admins", "group_analistas"];
+        if (d.producerName) topics.push(sanitize("producer", d.producerName));
+        if (d.consultantName) {
+          topics.push(sanitize("consultant", d.consultantName));
+        }
+        if (d.responsible) topics.push(sanitize("leader", d.responsible));
+        else if (d.team) topics.push(sanitize("team", d.team));
+
+        const fair = d.fairName || "";
+        const onde = d.local ? ` (Stand ${d.local})` : "";
+        await sendToTopics(
+            [...new Set(topics)],
+            `⏳ Parada há ${horas}h — ${d.team || "sem equipe"}`,
+            `${fair ? `[${fair}] ` : ""}${d.clientName || ""}${onde}: ` +
+              `${d.description || ""}`,
+            {
+              type: "pending",
+              clientId: d.clientId || "",
+              pendingId: doc.id,
+              fairName: fair,
+            });
+        avisados++;
+      }
+      if (avisados > 0) console.log(`pendências paradas avisadas: ${avisados}`);
+    });
