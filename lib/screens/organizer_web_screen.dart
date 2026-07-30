@@ -10,6 +10,7 @@ import '../models/pending_item.dart';
 import '../services/firestore_service.dart';
 import '../services/sheets_service.dart';
 import '../services/stand_storage.dart';
+import '../utils/web_portal.dart';
 import '../widgets/pending_status.dart';
 
 /// Public web portal for the event organizer (link, no app install).
@@ -277,6 +278,8 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
     // Save session so page refresh doesn't require re-identification.
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_kOrgName, _organizerName!);
+    // Marca o portal para o F5 na URL nua voltar para cá (ver _WebRouter).
+    await prefs.setString(kLastWebPortal, kPortalOrganizadora);
     await _loadFairs();
   }
 

@@ -7,6 +7,7 @@ import '../models/fair.dart';
 import '../models/pending_item.dart';
 import '../services/firestore_service.dart';
 import '../services/sheets_service.dart';
+import '../utils/web_portal.dart';
 import '../widgets/pending_status.dart';
 import '../widgets/resolution_dialog.dart';
 
@@ -61,10 +62,16 @@ class _TeamWebScreenState extends State<TeamWebScreen> {
   Fair? _fair;
 
   List<Client> _clients = [];
+  final Map<int, List<Client>> _clientCache = {};
   List<PendingItem> _items = [];
   StreamSubscription? _sub;
 
   _Filter _filter = _Filter.atencao;
+
+  /// Aba: 0 = pendências, 1 = stands. O consultor precisa da lista de
+  /// expositores, não só do fluxo de pendências.
+  int _tab = 0;
+  Client? _openClient;
 
   /// Quantidade que já estava na tela; serve para destacar o que chegou depois.
   int _seenCount = 0;
@@ -146,6 +153,9 @@ class _TeamWebScreenState extends State<TeamWebScreen> {
       await prefs.setString(_kRole, _role == _Role.lider ? 'lider' : 'consultor');
       await prefs.setString(_kName, _name!);
       await prefs.setString(_kTeam, _team);
+      // Marca o portal para o F5 na URL nua voltar para cá, e não para a
+      // organizadora.
+      await prefs.setString(kLastWebPortal, kPortalEquipe);
 
       FirestoreService.updatePresence(
         name: _name!,
@@ -168,7 +178,7 @@ class _TeamWebScreenState extends State<TeamWebScreen> {
 
   Future<void> _logout() async {
     final prefs = await SharedPreferences.getInstance();
-    for (final k in [_kRole, _kName, _kTeam, _kFairId]) {
+    for (final k in [_kRole, _kName, _kTeam, _kFairId, kLastWebPortal]) {
       await prefs.remove(k);
     }
     _sub?.cancel();
@@ -180,6 +190,8 @@ class _TeamWebScreenState extends State<TeamWebScreen> {
       _fair = null;
       _clients = [];
       _items = [];
+      _openClient = null;
+      _tab = 0;
       _pinCtrl.clear();
       _step = _Step.identify;
     });
@@ -201,21 +213,43 @@ class _TeamWebScreenState extends State<TeamWebScreen> {
   Future<void> _loadFairs(int? preferredId) async {
     setState(() => _step = _Step.loading);
     try {
-      _fairs = (await FirestoreService.getFairs())
+      final all = (await FirestoreService.getFairs())
           .map(_fairFrom)
           .where((f) =>
               f.id != null &&
               f.spreadsheetId.isNotEmpty &&
               f.sheetName.isNotEmpty)
-          .toList()
-        ..sort((a, b) => a.name.compareTo(b.name));
+          .toList();
+
+      // Só as feiras em que a pessoa realmente tem stand. Sem esta varredura
+      // a lista traz todas, inclusive as de outros atendimentos/equipes.
+      // Os clientes ficam em cache para a feira abrir instantânea depois.
+      final mine = <Fair>[];
+      await Future.wait(all.map((f) async {
+        try {
+          final clients = await SheetsService.fetchClients(
+            spreadsheetId: f.spreadsheetId,
+            sheetName: f.sheetName,
+            fairId: f.id!,
+            fairName: f.name,
+          );
+          if (clients.any(_ownsClient)) {
+            _clientCache[f.id!] = clients;
+            mine.add(f);
+          }
+        } catch (_) {
+          // Planilha indisponível: a feira fica de fora em vez de derrubar tudo.
+        }
+      }));
+      mine.sort((a, b) => a.name.compareTo(b.name));
+      _fairs = mine;
 
       if (_fairs.isEmpty) {
-        _fail('Nenhuma feira disponível.');
+        _fail('Nenhum stand atribuído a você no momento.\n\n'
+            'Verifique com a administração se o seu nome está na planilha.');
         return;
       }
-      final preferred =
-          _fairs.where((f) => f.id == preferredId).toList();
+      final preferred = _fairs.where((f) => f.id == preferredId).toList();
       if (preferred.isNotEmpty) {
         await _openFair(preferred.first);
       } else if (_fairs.length == 1) {
@@ -237,12 +271,14 @@ class _TeamWebScreenState extends State<TeamWebScreen> {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setInt(_kFairId, f.id!);
 
-      _clients = await SheetsService.fetchClients(
-        spreadsheetId: f.spreadsheetId,
-        sheetName: f.sheetName,
-        fairId: f.id!,
-        fairName: f.name,
-      );
+      _clients = _clientCache[f.id!] ??
+          await SheetsService.fetchClients(
+            spreadsheetId: f.spreadsheetId,
+            sheetName: f.sheetName,
+            fairId: f.id!,
+            fairName: f.name,
+          );
+      _clientCache[f.id!] = _clients;
 
       _listenPendings(f.name);
       _setStep(_Step.home);
@@ -299,15 +335,26 @@ class _TeamWebScreenState extends State<TeamWebScreen> {
     }
   }
 
-  Set<String> get _myClientIds {
-    final n = (_name ?? '').toLowerCase().trim();
-    return _clients
-        .where((c) => _role == _Role.consultor
-            ? c.atendimento.toLowerCase().trim() == n
-            : _leaderOwnsClient(c))
-        .map((c) => c.rowId)
-        .toSet();
+  /// O stand é meu? Consultor pelo atendimento; líder pela coluna da equipe.
+  bool _ownsClient(Client c) {
+    if (_role == _Role.consultor) {
+      return c.atendimento.toLowerCase().trim() ==
+          (_name ?? '').toLowerCase().trim();
+    }
+    return _leaderOwnsClient(c);
   }
+
+  List<Client> get _myClients {
+    final list = _clients.where(_ownsClient).toList()
+      ..sort((a, b) {
+        final h = a.hangar.compareTo(b.hangar);
+        if (h != 0) return h;
+        return a.local.compareTo(b.local);
+      });
+    return list;
+  }
+
+  Set<String> get _myClientIds => _myClients.map((c) => c.rowId).toSet();
 
   bool _isMine(PendingItem i) {
     if (_role == _Role.lider) {
@@ -327,6 +374,12 @@ class _TeamWebScreenState extends State<TeamWebScreen> {
     if (_role == _Role.consultor) return i.isPendingApproval;
     return !i.isResolved && !i.awaitingValidation;
   }
+
+  List<PendingItem> _itemsOf(Client c) =>
+      _items.where((i) => i.clientId == c.rowId).toList();
+
+  int _openCountOf(Client c) =>
+      _itemsOf(c).where((i) => !i.isResolved).length;
 
   Client? _clientOf(PendingItem i) {
     for (final c in _clients) {
@@ -480,6 +533,7 @@ class _TeamWebScreenState extends State<TeamWebScreen> {
       case _Step.pickFair:
         return _pickFairView();
       case _Step.home:
+        if (_openClient != null) return _clientView(_openClient!);
         return _homeView();
     }
   }
@@ -723,42 +777,236 @@ class _TeamWebScreenState extends State<TeamWebScreen> {
         ]),
       ),
 
-      // Filtros
+      // Abas
       Container(
         color: Colors.white,
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        child: SizedBox(
-          height: 34,
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            children: [
-              _chip('Precisa de ação', _Filter.atencao, Colors.deepOrange),
-              _chip('Em andamento', _Filter.andamento, Colors.deepPurple),
-              _chip('Aguardando validação', _Filter.aguardando,
-                  Colors.amber.shade800),
-              _chip('Concluídas', _Filter.concluidas, Colors.green),
-              _chip('Todas', _Filter.todas, _navy),
-            ],
-          ),
-        ),
+        child: Row(children: [
+          _tabButton(0, 'Pendências', Icons.assignment_late),
+          _tabButton(1, 'Stands', Icons.storefront),
+        ]),
       ),
 
-      Expanded(
-        child: list.isEmpty
-            ? _message(Icons.check_circle_outline, Colors.green.shade300,
-                'Nada por aqui', 'Nenhuma pendência neste filtro.')
-            : RefreshIndicator(
-                onRefresh: () async => _openFair(_fair!),
-                child: ListView.builder(
+      if (_tab == 0) ...[
+        Container(
+          color: Colors.white,
+          padding: const EdgeInsets.only(bottom: 8),
+          child: SizedBox(
+            height: 34,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              children: [
+                _chip('Precisa de ação', _Filter.atencao, Colors.deepOrange),
+                _chip('Em andamento', _Filter.andamento, Colors.deepPurple),
+                _chip('Aguardando validação', _Filter.aguardando,
+                    Colors.amber.shade800),
+                _chip('Concluídas', _Filter.concluidas, Colors.green),
+                _chip('Todas', _Filter.todas, _navy),
+              ],
+            ),
+          ),
+        ),
+        Expanded(
+          child: list.isEmpty
+              ? _message(Icons.check_circle_outline, Colors.green.shade300,
+                  'Nada por aqui', 'Nenhuma pendência neste filtro.')
+              : ListView.builder(
                   padding: const EdgeInsets.all(12),
                   itemCount: list.length,
                   itemBuilder: (_, i) => _card(list[i]),
                 ),
+        ),
+      ] else
+        Expanded(child: _standsView()),
+    ]);
+  }
+
+  Widget _tabButton(int index, String label, IconData icon) {
+    final sel = _tab == index;
+    return Expanded(
+      child: InkWell(
+        onTap: () => setState(() => _tab = index),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(
+                color: sel ? Colors.orange : Colors.transparent,
+                width: 3,
+              ),
+            ),
+          ),
+          child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+            Icon(icon, size: 17, color: sel ? _navy : Colors.grey),
+            const SizedBox(width: 6),
+            Text(label,
+                style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13.5,
+                    color: sel ? _navy : Colors.grey)),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  /// Lista de expositores sob responsabilidade de quem está logado — é o que
+  /// o consultor usa para navegar por stand, e não só pela fila de pendências.
+  Widget _standsView() {
+    final clients = _myClients;
+    if (clients.isEmpty) {
+      return _message(Icons.storefront, Colors.grey,
+          'Nenhum stand', 'Você não tem stands nesta feira.');
+    }
+    return ListView.builder(
+      padding: const EdgeInsets.all(12),
+      itemCount: clients.length,
+      itemBuilder: (_, i) {
+        final c = clients[i];
+        final open = _openCountOf(c);
+        return Card(
+          margin: const EdgeInsets.only(bottom: 8),
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10)),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(10),
+            onTap: () => setState(() => _openClient = c),
+            child: Padding(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              child: Row(children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: _navy.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(c.local.isEmpty ? '—' : c.local,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                          color: _navy)),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(c.displayName,
+                          style: const TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 15)),
+                      if (c.montagem.isNotEmpty)
+                        Text(c.montagem,
+                            style: TextStyle(
+                                color: Colors.grey.shade600, fontSize: 12)),
+                      if (c.hangar.isNotEmpty)
+                        Text('Hangar ${c.hangar}',
+                            style: const TextStyle(
+                                color: _navy,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600)),
+                    ],
+                  ),
+                ),
+                if (open > 0)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: Colors.orange,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text('$open',
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold)),
+                  ),
+                const SizedBox(width: 6),
+                const Icon(Icons.chevron_right, color: Colors.grey),
+              ]),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _clientView(Client c) {
+    final items = _itemsOf(c)
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return Column(children: [
+      Container(
+        color: _navy,
+        padding: const EdgeInsets.fromLTRB(8, 10, 16, 14),
+        child: Row(children: [
+          IconButton(
+            onPressed: () => setState(() => _openClient = null),
+            icon: const Icon(Icons.arrow_back, color: Colors.white),
+            tooltip: 'Voltar',
+          ),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(c.displayName,
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 17)),
+                Text(
+                  [
+                    if (c.local.isNotEmpty) 'Stand ${c.local}',
+                    if (c.hangar.isNotEmpty) 'Hangar ${c.hangar}',
+                    if (c.area.isNotEmpty) '${c.area} m²',
+                  ].join(' · '),
+                  style: TextStyle(
+                      color: Colors.white.withOpacity(0.75), fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+        ]),
+      ),
+      // Responsáveis, para o consultor saber a quem recorrer sem sair da tela.
+      Container(
+        color: Colors.white,
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        child: Wrap(spacing: 6, runSpacing: 6, children: [
+          if (c.produtor.isNotEmpty) _resp('Produtor', c.produtor),
+          if (c.atendimento.isNotEmpty) _resp('Atendimento', c.atendimento),
+          if (c.marceneiro.isNotEmpty) _resp('Marcenaria', c.marceneiro),
+          if (c.eletricista.isNotEmpty) _resp('Elétrica', c.eletricista),
+          if (c.tapeceiro.isNotEmpty) _resp('Tapeçaria', c.tapeceiro),
+          if (c.faxineira.isNotEmpty) _resp('Limpeza', c.faxineira),
+        ]),
+      ),
+      Expanded(
+        child: items.isEmpty
+            ? _message(Icons.check_circle_outline, Colors.green.shade300,
+                'Sem pendências', 'Este stand não tem chamados registrados.')
+            : ListView.builder(
+                padding: const EdgeInsets.all(12),
+                itemCount: items.length,
+                itemBuilder: (_, i) => _card(items[i]),
               ),
       ),
     ]);
   }
+
+  Widget _resp(String label, String name) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: _navy.withOpacity(0.06),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: _navy.withOpacity(0.15)),
+        ),
+        child: Text('$label: $name',
+            style: const TextStyle(fontSize: 11, color: _navy)),
+      );
 
   Widget _bell(int count) => Stack(clipBehavior: Clip.none, children: [
         IconButton(

@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'screens/stand_request_screen.dart';
 import 'screens/organizer_web_screen.dart';
 import 'screens/team_web_screen.dart';
+import 'utils/web_portal.dart';
 
 /// Web: the app is a public page. Two routes share the same Flutter Web build,
 /// selected by the URL fragment (hash strategy works on static hosting):
@@ -52,7 +53,7 @@ class _WebRouter extends StatefulWidget {
 
 class _WebRouterState extends State<_WebRouter> {
   bool _ready = false;
-  bool _isOrganizer = false;
+  Widget? _target;
 
   @override
   void initState() {
@@ -62,10 +63,26 @@ class _WebRouterState extends State<_WebRouter> {
 
   Future<void> _detect() async {
     final prefs = await SharedPreferences.getInstance();
-    final name = prefs.getString('org_verified_name');
+    final last = prefs.getString(kLastWebPortal);
+    final hasOrg = (prefs.getString('org_verified_name') ?? '').isNotEmpty;
+    final hasTeam = (prefs.getString('team_web_name') ?? '').isNotEmpty;
+
+    Widget? target;
+    // O último portal usado tem precedência: dá para ter as duas sessões
+    // salvas no mesmo navegador.
+    if (last == kPortalEquipe && hasTeam) {
+      target = TeamWebScreen(fairId: widget.fairId);
+    } else if (last == kPortalOrganizadora && hasOrg) {
+      target = OrganizerWebScreen(fairId: widget.fairId);
+    } else if (hasTeam) {
+      target = TeamWebScreen(fairId: widget.fairId);
+    } else if (hasOrg) {
+      target = OrganizerWebScreen(fairId: widget.fairId);
+    }
+
     if (mounted) {
       setState(() {
-        _isOrganizer = name != null && name.isNotEmpty;
+        _target = target;
         _ready = true;
       });
     }
@@ -79,9 +96,7 @@ class _WebRouterState extends State<_WebRouter> {
         body: Center(child: CircularProgressIndicator()),
       );
     }
-    if (_isOrganizer) {
-      return OrganizerWebScreen(fairId: widget.fairId);
-    }
-    return StandRequestScreen(fairId: widget.fairId, rowId: widget.rowId);
+    return _target ??
+        StandRequestScreen(fairId: widget.fairId, rowId: widget.rowId);
   }
 }
