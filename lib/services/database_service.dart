@@ -783,6 +783,33 @@ class DatabaseService {
     return result.map((r) => r['atendimento'] as String).toList();
   }
 
+  /// Nomes distintos de uma coluna de pessoa, em TODAS as feiras.
+  ///
+  /// A tela de cadastro filtrava pela feira aberta, e por isso não enxergava
+  /// quem só existe na planilha mestra: os clientes da mestra são gravados
+  /// sob as feiras derivadas (mestra_child), nunca sob o id da própria
+  /// mestra. Com a mestra aberta, a consulta não achava ninguém — e sem uma
+  /// feira aberta, ninguém aparecia de lugar nenhum. Cadastro de pessoa não é
+  /// por feira: o PIN vale para todas.
+  static Future<List<String>> _allPeopleIn(String column) async {
+    final database = await db;
+    final result = await database.rawQuery(
+        "SELECT DISTINCT $column AS nome FROM clients "
+        "WHERE $column IS NOT NULL AND TRIM($column) != '' ORDER BY $column");
+    return result
+        .map((r) => (r['nome'] as String).trim())
+        .where((n) => n.isNotEmpty)
+        .toList();
+  }
+
+  static Future<List<String>> getAllProducers() => _allPeopleIn('produtor');
+
+  static Future<List<String>> getAllConsultants() =>
+      _allPeopleIn('atendimento');
+
+  static Future<List<String>> getAllOrganizers() =>
+      _allPeopleIn('organizadora');
+
   static Future<List<PendingItem>> getPendingItemsByProdutor(
       String produtor, {required int fairId}) async {
     final database = await db;

@@ -3,6 +3,7 @@ import '../models/pending_item.dart';
 import '../models/montage_update.dart';
 import '../models/freight_request.dart';
 import 'admin_api.dart';
+import '../utils/organizer_fairs.dart';
 
 class FirestoreService {
   static FirebaseFirestore get _db => FirebaseFirestore.instance;
@@ -367,21 +368,29 @@ class FirestoreService {
   static Future<void> deleteOrganizerPin(String name) =>
       _removeUser('organizer', name);
 
-  /// Returns the fair ID linked to this organizer, or null if not set.
+  /// Feiras vinculadas a esta organizadora.
   ///
-  /// Só a gestão passa por aqui. O portal da organizadora recebe a feira já
-  /// no retorno do login (`verifyPin`) e, quando precisa redescobri-la, usa
+  /// Só a gestão passa por aqui. O portal da organizadora recebe as feiras já
+  /// no retorno do login (`verifyPin`) e, quando precisa redescobri-las, usa
   /// `PinService.listUsers`, que não devolve PIN nenhum.
-  static Future<int?> getOrganizerFairId(String name) async {
-    final v = await _userField<Object>('organizer', name, 'fairId');
-    if (v is int) return v;
-    if (v is String) return int.tryParse(v);
-    return null;
+  static Future<List<int>> getOrganizerFairIds(String name) async {
+    final list = await _userField<List>('organizer', name, 'fairIds');
+    if (list != null) return organizerFairIdsFrom(list, null);
+    // Cadastro antigo, de uma feira só.
+    return organizerFairIdsFrom(
+        null, await _userField<Object>('organizer', name, 'fairId'));
   }
 
-  /// Associates an organizer with a specific fair (merges into existing doc).
-  static Future<void> setOrganizerFairId(String name, int fairId) =>
-      _setUser('organizer', name, extra: {'fairId': fairId});
+  /// Vincula a organizadora a um conjunto de feiras.
+  ///
+  /// `fairId` continua sendo gravado com a primeira da lista: os aparelhos que
+  /// ainda não atualizaram leem só esse campo, e sem ele a organizadora
+  /// perderia o vínculo até trocar de versão.
+  static Future<void> setOrganizerFairIds(String name, List<int> ids) =>
+      _setUser('organizer', name, extra: {
+        'fairIds': ids,
+        'fairId': ids.isEmpty ? null : ids.first,
+      });
 
   static Future<List<String>> getOrganizersWithPins() =>
       _listNames('organizer');

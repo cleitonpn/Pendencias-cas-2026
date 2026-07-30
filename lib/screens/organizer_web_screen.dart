@@ -13,6 +13,7 @@ import '../services/stand_storage.dart';
 import '../utils/web_portal.dart';
 import '../widgets/pending_status.dart';
 import '../services/pin_service.dart';
+import '../utils/organizer_fairs.dart';
 
 /// Public web portal for the event organizer (link, no app install).
 /// The organizer identifies herself (name + PIN), then can open requests for
@@ -107,11 +108,12 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
       final saved = prefs.getString(_kOrgName);
       if (saved != null && _organizers.contains(saved)) {
         _organizerName = saved;
-        // If we already know which fair and the URL doesn't override it, jump
-        // directly to that fair without scanning every spreadsheet.
-        final savedFairId = widget.fairId ?? prefs.getInt(_kFairId);
-        if (savedFairId != null) {
-          await _loadFairById(savedFairId);
+        // A feira do link manda. Fora isso, quem decide é o vínculo em
+        // _loadFairs: ir direto para a última escolhida trancaria numa só
+        // quem tem várias, porque a tela de troca de feira depende da lista
+        // estar montada.
+        if (widget.fairId != null) {
+          await _loadFairById(widget.fairId!);
         } else {
           await _loadFairs();
         }
@@ -161,11 +163,47 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
         // leitura direta da coleção agora é exclusiva da gestão.
         final r = await PinService.listUsers('organizer');
         final match = r.users.where((u) => u['name'] == _organizerName);
-        final raw = match.isEmpty ? null : match.first['fairId'];
-        final assignedId =
-            raw is int ? raw : (raw is String ? int.tryParse(raw) : null);
-        if (assignedId != null) {
-          await _loadFairById(assignedId);
+        final me = match.isEmpty ? null : match.first;
+        final assigned =
+            organizerFairIdsFrom(me?['fairIds'], me?['fairId']);
+
+        if (assigned.length == 1) {
+          await _loadFairById(assigned.first);
+          return;
+        }
+        if (assigned.length > 1) {
+          // Várias feiras atribuídas: monta a lista pelos metadados, sem
+          // varrer planilha nenhuma. A varredura completa existe só para
+          // quem não tem vínculo definido, e leva dezenas de segundos.
+          final byId = {
+            for (final f in (await FirestoreService.getFairs())
+                .map(_fairFromData)
+                .where((f) =>
+                    f.id != null &&
+                    f.spreadsheetId.isNotEmpty &&
+                    f.sheetName.isNotEmpty))
+              f.id!: f
+          };
+          final mine = assigned
+              .map((id) => byId[id])
+              .whereType<Fair>()
+              .toList()
+            ..sort((a, b) => a.name.compareTo(b.name));
+
+          if (mine.isNotEmpty) {
+            _fairs = mine;
+            _setStep(_Step.pickFair);
+            return;
+          }
+        }
+
+        // Sem vínculo definido: se ela já escolheu uma feira antes neste
+        // aparelho, vale a escolha — a varredura completa das planilhas leva
+        // dezenas de segundos.
+        final prefs = await SharedPreferences.getInstance();
+        final savedFairId = prefs.getInt(_kFairId);
+        if (assigned.isEmpty && savedFairId != null) {
+          await _loadFairById(savedFairId);
           return;
         }
       }
@@ -244,9 +282,9 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
       );
 
   Future<void> _selectFair(Fair f) async {
-    // Persist in both Firestore and SharedPreferences so future sessions
-    // go straight to this fair without the full spreadsheet scan.
-    await FirestoreService.setOrganizerFairId(_organizerName!, f.id!);
+    // Só no aparelho. Escolher por onde entrar hoje não é o mesmo que mudar o
+    // vínculo da organizadora — isso é do admin. Antes esta tela regravava o
+    // cadastro, o que com várias feiras apagaria as outras.
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_kFairId, f.id!);
     setState(() {

@@ -27,7 +27,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   // Organizers
   List<String> _organizers = [];
   Map<String, String?> _organizerPins = {};
-  Map<String, int?> _organizerFairIds = {};
+  Map<String, List<int>> _organizerFairIds = {};
   List<Map<String, dynamic>> _allFairs = [];
 
   // Team leaders
@@ -108,13 +108,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _loadPinsInner() async {
-    final fairId = context.read<AppProvider>().currentFair?.id;
+    // Os nomes vêm de TODAS as feiras, não só da aberta. Filtrar pela feira
+    // atual escondia quem só existe na planilha mestra — os clientes dela são
+    // gravados sob as feiras derivadas, nunca sob o id da mestra — e escondia
+    // todo mundo quando nenhuma feira estava aberta.
 
-    // Producers: merge local DB names (if a fair is open) with Firestore PIN holders
+    // Producers: merge local DB names with Firestore PIN holders
     final firestoreProducers = await FirestoreService.getProducersWithPins();
-    final localProducers = fairId != null
-        ? await DatabaseService.getProducers(fairId: fairId)
-        : <String>[];
+    final localProducers = await DatabaseService.getAllProducers();
     final allProducers = {...localProducers, ...firestoreProducers}.toList()..sort();
     final pins = <String, String?>{};
     for (final p in allProducers) {
@@ -123,9 +124,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     // Consultants
     final firestoreConsultants = await FirestoreService.getConsultantsWithPins();
-    final localConsultants = fairId != null
-        ? await DatabaseService.getConsultants(fairId: fairId)
-        : <String>[];
+    final localConsultants = await DatabaseService.getAllConsultants();
     final allConsultants =
         {...localConsultants, ...firestoreConsultants}.toList()..sort();
     final consultantPins = <String, String?>{};
@@ -135,16 +134,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     // Organizers
     final firestoreOrganizers = await FirestoreService.getOrganizersWithPins();
-    final localOrganizers = fairId != null
-        ? await DatabaseService.getOrganizers(fairId: fairId)
-        : <String>[];
+    final localOrganizers = await DatabaseService.getAllOrganizers();
     final allOrganizers =
         {...localOrganizers, ...firestoreOrganizers}.toList()..sort();
     final organizerPins = <String, String?>{};
-    final organizerFairIds = <String, int?>{};
+    final organizerFairIds = <String, List<int>>{};
     for (final o in allOrganizers) {
       organizerPins[o] = await FirestoreService.getOrganizerPin(o);
-      organizerFairIds[o] = await FirestoreService.getOrganizerFairId(o);
+      organizerFairIds[o] = await FirestoreService.getOrganizerFairIds(o);
     }
     final allFairs = await FirestoreService.getFairs();
 
@@ -332,10 +329,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await _loadPins();
   }
 
+  /// Resumo mostrado no card: PIN e quantas feiras estão vinculadas.
+  ///
+  /// Com mais de uma feira por organizadora, saber só que "tem PIN" não
+  /// basta — o erro que interessa é ter esquecido de marcar uma das feiras.
+  String _organizerSubtitle(String name, bool hasPin) {
+    if (!hasPin) return 'Sem PIN';
+    final ids = _organizerFairIds[name] ?? const <int>[];
+    if (ids.isEmpty) return 'PIN configurado · todas as feiras da planilha';
+    if (ids.length == 1) {
+      final f = _allFairs.where((e) => e['id'] == ids.first);
+      final nome = f.isEmpty ? 'feira removida' : f.first['name'] as String;
+      return 'PIN configurado · $nome';
+    }
+    return 'PIN configurado · ${ids.length} feiras';
+  }
+
   Future<void> _editOrganizerPin(String name) async {
     final currentPin = _organizerPins[name];
     final ctrl = TextEditingController(text: currentPin ?? '');
-    int? selectedFairId = _organizerFairIds[name];
+    // Uma organizadora pode tocar várias feiras ao mesmo tempo — a NMB tem
+    // três na mesma semana. Antes só cabia uma, e marcar a segunda apagava a
+    // primeira.
+    final selected = {...?_organizerFairIds[name]};
 
     final fairs = _allFairs
         .where((f) =>
@@ -351,46 +367,87 @@ class _SettingsScreenState extends State<SettingsScreen> {
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
           title: Text('Organizadora — $name'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              DropdownButtonFormField<int?>(
-                value: selectedFairId,
-                decoration: const InputDecoration(
-                  labelText: 'Feira vinculada',
-                  prefixIcon: Icon(Icons.event_outlined),
+          content: SizedBox(
+            width: 420,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.event_outlined,
+                        size: 18, color: Colors.grey),
+                    const SizedBox(width: 8),
+                    Text(
+                      selected.isEmpty
+                          ? 'Feiras vinculadas — nenhuma'
+                          : 'Feiras vinculadas — ${selected.length}',
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w600, fontSize: 13),
+                    ),
+                  ],
                 ),
-                items: [
-                  const DropdownMenuItem<int?>(
-                      value: null, child: Text('— sem vínculo —')),
-                  ...fairs.map((f) => DropdownMenuItem<int?>(
-                        value: f['id'] as int,
-                        child: Text(f['name'] as String),
-                      )),
-                ],
-                onChanged: (v) => setDialogState(() => selectedFairId = v),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: ctrl,
-                keyboardType: TextInputType.number,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                maxLength: 6,
-                autofocus: true,
-                decoration: const InputDecoration(
-                  hintText: 'PIN (4–6 dígitos)',
-                  prefixIcon: Icon(Icons.lock_outline),
+                const SizedBox(height: 4),
+                const Text(
+                  'Sem nenhuma marcada, ela enxerga as feiras onde o nome '
+                  'dela aparece na planilha.',
+                  style: TextStyle(fontSize: 11, color: Colors.grey),
                 ),
-                onSubmitted: (_) => Navigator.pop(
-                    ctx, _OrganizerPinResult(ctrl.text, selectedFairId)),
-              ),
-            ],
+                const SizedBox(height: 8),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 260),
+                  child: fairs.isEmpty
+                      ? const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 12),
+                          child: Text('Nenhuma feira cadastrada.',
+                              style: TextStyle(color: Colors.grey)),
+                        )
+                      : Scrollbar(
+                          child: ListView(
+                            shrinkWrap: true,
+                            children: fairs.map((f) {
+                              final id = f['id'] as int;
+                              return CheckboxListTile(
+                                dense: true,
+                                contentPadding: EdgeInsets.zero,
+                                controlAffinity:
+                                    ListTileControlAffinity.leading,
+                                value: selected.contains(id),
+                                title: Text(f['name'] as String,
+                                    style: const TextStyle(fontSize: 14)),
+                                onChanged: (v) => setDialogState(() {
+                                  if (v == true) {
+                                    selected.add(id);
+                                  } else {
+                                    selected.remove(id);
+                                  }
+                                }),
+                              );
+                            }).toList(),
+                          ),
+                        ),
+                ),
+                const Divider(),
+                TextField(
+                  controller: ctrl,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  maxLength: 6,
+                  decoration: const InputDecoration(
+                    hintText: 'PIN (4–6 dígitos)',
+                    prefixIcon: Icon(Icons.lock_outline),
+                  ),
+                  onSubmitted: (_) => Navigator.pop(ctx,
+                      _OrganizerPinResult(ctrl.text, selected.toList())),
+                ),
+              ],
+            ),
           ),
           actions: [
             if (currentPin != null)
               TextButton(
                 onPressed: () =>
-                    Navigator.pop(ctx, _OrganizerPinResult('', null)),
+                    Navigator.pop(ctx, const _OrganizerPinResult('', [])),
                 child:
                     const Text('Remover', style: TextStyle(color: Colors.red)),
               ),
@@ -399,7 +456,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 child: const Text('Cancelar')),
             ElevatedButton(
               onPressed: () => Navigator.pop(
-                  ctx, _OrganizerPinResult(ctrl.text, selectedFairId)),
+                  ctx, _OrganizerPinResult(ctrl.text, selected.toList())),
               style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF1E3A5F),
                   foregroundColor: Colors.white),
@@ -415,9 +472,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       await _guard(() => FirestoreService.deleteOrganizerPin(name));
     } else {
       await _guard(() => FirestoreService.setOrganizerPin(name, result.pin));
-      if (result.fairId != null) {
-        await _guard(() => FirestoreService.setOrganizerFairId(name, result.fairId!));
-      }
+      // Sempre grava, inclusive vazio: é assim que se desfaz um vínculo.
+      await _guard(
+          () => FirestoreService.setOrganizerFairIds(name, result.fairIds));
     }
     await _loadPins();
   }
@@ -1516,7 +1573,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   style: const TextStyle(
                                       fontWeight: FontWeight.w600)),
                               subtitle: Text(
-                                  hasPin ? 'PIN configurado' : 'Sem PIN',
+                                  _organizerSubtitle(p, hasPin),
                                   style: TextStyle(
                                       fontSize: 12,
                                       color:
@@ -2102,6 +2159,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
 class _OrganizerPinResult {
   final String pin;
-  final int? fairId;
-  const _OrganizerPinResult(this.pin, this.fairId);
+  final List<int> fairIds;
+  const _OrganizerPinResult(this.pin, this.fairIds);
 }

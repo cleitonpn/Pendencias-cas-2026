@@ -12,7 +12,7 @@ const {onCall, HttpsError} = require("firebase-functions/v2/https");
 const {onSchedule} = require("firebase-functions/v2/scheduler");
 const {initializeApp} = require("firebase-admin/app");
 const {getMessaging} = require("firebase-admin/messaging");
-const {getFirestore} = require("firebase-admin/firestore");
+const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {randomBytes} = require("crypto");
 
 initializeApp();
@@ -433,7 +433,9 @@ const PIN_SOURCES = {
   manager: {collection: "manager_pins"},
   leader: {collection: "team_leader_pins", extra: ["team"]},
   analyst: {collection: "analyst_pins"},
-  organizer: {collection: "organizer_pins", extra: ["fairId"]},
+  // fairIds é a lista de feiras da organizadora; fairId é o campo antigo, de
+  // uma feira só, mantido para os aparelhos que ainda não atualizaram.
+  organizer: {collection: "organizer_pins", extra: ["fairId", "fairIds"]},
   admin: {collection: "admin_users", byField: true},
   logistica: {collection: "logistics_users", byField: true},
 };
@@ -744,7 +746,10 @@ exports.manageUsers = onCall(async (request) => {
     if (source.byField) payload.name = name;
     if (pin != null) payload.pin = String(pin);
     for (const f of source.extra || []) {
-      if (extra && extra[f] != null) payload[f] = extra[f];
+      if (!extra || !(f in extra)) continue;
+      // null explícito apaga o campo. Sem isto não haveria como desfazer um
+      // vínculo — o merge preservaria o valor antigo para sempre.
+      payload[f] = extra[f] === null ? FieldValue.delete() : extra[f];
     }
     // merge para não apagar a equipe do líder ao trocar só o PIN, nem o
     // contrário.

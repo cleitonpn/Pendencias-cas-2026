@@ -1,4 +1,5 @@
 import 'package:cloud_functions/cloud_functions.dart';
+import '../utils/organizer_fairs.dart';
 
 /// Resultado da verificação de PIN feita no servidor.
 class PinResult {
@@ -17,12 +18,9 @@ class PinResult {
   /// Sessão de gestão, devolvida só no login de administrador.
   String? get token => extra['token'] as String?;
 
-  int? get fairId {
-    final v = extra['fairId'];
-    if (v is int) return v;
-    if (v is String) return int.tryParse(v);
-    return null;
-  }
+  /// Feiras da organizadora. Entende o formato atual (`fairIds`) e o antigo,
+  /// de uma feira só (`fairId`).
+  List<int> get fairIds => organizerFairIdsFrom(extra['fairIds'], extra['fairId']);
 }
 
 /// Acesso aos PINs pelo servidor.
