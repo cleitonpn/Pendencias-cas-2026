@@ -8,6 +8,7 @@
  */
 const {onDocumentCreated, onDocumentUpdated} =
     require("firebase-functions/v2/firestore");
+const {onCall, HttpsError} = require("firebase-functions/v2/https");
 const {onSchedule} = require("firebase-functions/v2/scheduler");
 const {initializeApp} = require("firebase-admin/app");
 const {getMessaging} = require("firebase-admin/messaging");
@@ -408,3 +409,99 @@ exports.dailyMontageReminder = onSchedule(
         );
       }
     });
+
+// ─── Autenticação de PIN no servidor ────────────────────────────────────────
+//
+// Hoje o app lê a coleção de PINs direto do Firestore para montar a lista de
+// nomes e para conferir o código digitado. Como a regra atual libera leitura a
+// qualquer sessão autenticada — e o app faz login anônimo, inclusive nos
+// portais públicos —, os PINs de todos os papéis ficam legíveis por quem abrir
+// o link.
+//
+// Estas duas funções movem isso para o servidor. Enquanto as regras não forem
+// fechadas elas convivem com o acesso direto; depois passam a ser o único
+// caminho, e o cliente deixa de ver PIN algum.
+
+/** Coleções por papel. Cada uma guarda o PIN num campo `pin`.
+ * `byField` marca as que identificam o usuário por um campo `name` em vez do
+ * id do documento.
+ */
+const PIN_SOURCES = {
+  producer: {collection: "producer_pins"},
+  consultant: {collection: "consultant_pins"},
+  manager: {collection: "manager_pins"},
+  leader: {collection: "team_leader_pins", extra: ["team"]},
+  analyst: {collection: "analyst_pins"},
+  organizer: {collection: "organizer_pins", extra: ["fairId"]},
+  admin: {collection: "admin_users", byField: true},
+  logistica: {collection: "logistics_users", byField: true},
+};
+
+/** Normaliza o nome para o formato de id usado nas coleções por documento.
+ * @param {string} name nome do usuário
+ * @return {string} chave do documento
+ */
+function userKey(name) {
+  return String(name || "").toLowerCase().trim()
+      .replace(/ /g, "_").replace(/[^a-z0-9_]/g, "");
+}
+
+/** Lista os nomes de um papel, sem devolver PIN nenhum.
+ * Substitui as chamadas get*WithPins() do app, que hoje trazem o PIN junto
+ * só para exibir a lista.
+ */
+exports.listUsers = onCall(async (request) => {
+  const role = request.data && request.data.role;
+  const source = PIN_SOURCES[role];
+  if (!source) throw new HttpsError("invalid-argument", "papel inválido");
+
+  const snap = await getFirestore().collection(source.collection).get();
+  const users = snap.docs.map((d) => {
+    const data = d.data() || {};
+    const entry = {name: source.byField ? (data.name || "") : d.id};
+    for (const f of source.extra || []) entry[f] = data[f] ?? null;
+    return entry;
+  }).filter((u) => u.name);
+
+  users.sort((a, b) => a.name.localeCompare(b.name));
+  return {users};
+});
+
+/** Confere o PIN no servidor. O código digitado sobe; o cadastrado nunca desce.
+ * Devolve também os campos auxiliares do papel (a equipe do líder, a feira da
+ * organizadora), que o app precisa logo após entrar.
+ */
+exports.verifyPin = onCall(async (request) => {
+  const {role, name, pin} = request.data || {};
+  const source = PIN_SOURCES[role];
+  if (!source || !name) {
+    throw new HttpsError("invalid-argument", "papel ou nome ausente");
+  }
+
+  let data = null;
+  if (source.byField) {
+    const snap = await getFirestore().collection(source.collection)
+        .where("name", "==", name).limit(1).get();
+    if (!snap.empty) data = snap.docs[0].data();
+  } else {
+    // As coleções por documento usam o nome como id; admin_users e
+    // logistics_users usam a chave normalizada.
+    const doc = await getFirestore().collection(source.collection)
+        .doc(name).get();
+    if (doc.exists) data = doc.data();
+    if (!data) {
+      const alt = await getFirestore().collection(source.collection)
+          .doc(userKey(name)).get();
+      if (alt.exists) data = alt.data();
+    }
+  }
+
+  if (!data || !data.pin) return {ok: false, reason: "nao_cadastrado"};
+  if (String(data.pin) !== String(pin || "")) {
+    return {ok: false, reason: "pin_incorreto"};
+  }
+
+  const out = {ok: true};
+  for (const f of source.extra || []) out[f] = data[f] ?? null;
+  return out;
+});
