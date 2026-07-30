@@ -814,6 +814,31 @@ class DatabaseService {
   static Future<List<String>> getAllOrganizers() =>
       _allPeopleIn('organizadora');
 
+  /// Busca expositores em TODAS as feiras.
+  ///
+  /// A busca é local porque os dados já estão aqui: o espelho da nuvem enche
+  /// o banco das feiras que interessam a quem está logado. Consultar o
+  /// Firestore a cada tecla custaria leitura e não acharia nada que já não
+  /// esteja aqui.
+  ///
+  /// Procura por nome, stand e pavilhão — os três jeitos pelos quais alguém
+  /// se lembra de um expositor.
+  static Future<List<Map<String, dynamic>>> searchClients(String query) async {
+    final termo = query.trim();
+    if (termo.length < 2) return [];
+    final database = await db;
+    final like = '%${termo.toLowerCase()}%';
+    final rows = await database.rawQuery(
+      "SELECT c.*, f.name AS fair_name FROM clients c "
+      "LEFT JOIN fairs f ON f.id = c.fair_id "
+      "WHERE LOWER(c.nome) LIKE ? OR LOWER(c.local) LIKE ? "
+      "   OR LOWER(c.pavilhao) LIKE ? "
+      "ORDER BY c.nome LIMIT 60",
+      [like, like, like],
+    );
+    return rows.map((r) => Map<String, dynamic>.from(r)).toList();
+  }
+
   /// Quem trabalha numa feira: produtores, consultores e líderes.
   ///
   /// Os líderes saem das colunas por equipe da planilha (eletricista,

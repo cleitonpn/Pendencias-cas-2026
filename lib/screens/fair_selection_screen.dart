@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_provider.dart';
+import '../widgets/inbox_bell.dart';
+import 'global_search_screen.dart';
 import '../models/fair.dart';
 import '../services/session_service.dart';
 import '../services/firestore_service.dart';
@@ -64,7 +66,15 @@ class FairSelectionScreen extends StatelessWidget {
               },
             ),
           ],
-          // Sync all button — visible to any authenticated role
+          const InboxBell(),
+          IconButton(
+            icon: const Icon(Icons.search, color: Colors.white),
+            tooltip: 'Buscar stand',
+            onPressed: () => Navigator.push(context,
+                MaterialPageRoute(
+                    builder: (_) => const GlobalSearchScreen())),
+          ),
+          // Sincronizar — visível para qualquer papel autenticado.
           isSyncing
               ? const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 14),

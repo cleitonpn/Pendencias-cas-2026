@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/fair.dart';
 import '../providers/app_provider.dart';
+import '../widgets/inbox_bell.dart';
+import 'global_search_screen.dart';
 import '../services/firestore_service.dart';
 import '../services/session_service.dart';
 import '../widgets/app_drawer.dart';
@@ -36,6 +38,14 @@ class LogisticsHomeScreen extends StatelessWidget {
           ],
         ),
         actions: [
+          const InboxBell(),
+          IconButton(
+            icon: const Icon(Icons.search, color: Colors.white),
+            tooltip: 'Buscar stand',
+            onPressed: () => Navigator.push(context,
+                MaterialPageRoute(
+                    builder: (_) => const GlobalSearchScreen())),
+          ),
           isSyncing
               ? const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 14),
