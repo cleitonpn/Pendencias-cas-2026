@@ -54,6 +54,11 @@ class AppProvider extends ChangeNotifier {
     return null;
   }
 
+  /// Verdadeiro quando a última tentativa de carregar as feiras da nuvem
+  /// falhou. Sem isso a falha era invisível e o app seguia com a lista vazia.
+  bool _fairsLoadFailed = false;
+  bool get fairsLoadFailed => _fairsLoadFailed;
+
   Future<void> init() async {
     // Sync fairs from Firestore so all devices share the same fair list
     try {
@@ -86,13 +91,44 @@ class AppProvider extends ChangeNotifier {
           }
         }
       }
+      _fairsLoadFailed = false;
     } catch (_) {
-      // Firestore unavailable — continue with local fairs only
+      // Firestore indisponível: segue com o que houver local, mas registra a
+      // falha — antes ela sumia e o app ficava com a lista vazia para sempre,
+      // já que init() só roda na splash.
+      _fairsLoadFailed = true;
     }
     _fairs = await DatabaseService.getFairs();
     notifyListeners();
     _startFairsStream();
     _startCircularStream();
+  }
+
+  /// Recarrega a lista de feiras da nuvem. Usado quando o app está sem feiras
+  /// — normalmente por uma falha de rede no arranque.
+  Future<void> _reloadFairsFromCloud() async {
+    try {
+      final remote = await FirestoreService.getFairs();
+      for (final m in remote) {
+        final id = m['id'] as int?;
+        if (id == null) continue;
+        await DatabaseService.upsertFairById(Fair(
+          id: id,
+          name: (m['name'] as String?) ?? '',
+          spreadsheetId: (m['spreadsheetId'] as String?) ?? '',
+          sheetName: (m['sheetName'] as String?) ?? '',
+          createdAt: DateTime.tryParse(m['createdAt'] as String? ?? '') ??
+              DateTime.now(),
+          mode: (m['mode'] as String?) ?? 'producao',
+          sheetMode: (m['sheetMode'] as String?) ?? 'individual',
+          autoApprove: m['autoApprove'] == true,
+        ));
+      }
+      _fairs = await DatabaseService.getFairs();
+      _fairsLoadFailed = false;
+    } catch (_) {
+      _fairsLoadFailed = true;
+    }
   }
 
   /// Listens to Firestore fair changes so mode, archive, and deletion propagate to all devices.
@@ -298,7 +334,19 @@ class AppProvider extends ChangeNotifier {
     final savedFair = _currentFair;
     final errors = <String>[];
     try {
+      // Num aparelho recém-instalado a lista pode estar vazia: init() roda uma
+      // única vez na splash e, se o Firestore falhar lá, nada mais a recarrega.
+      // O laço abaixo então não fazia nada e o botão parecia morto — daí a
+      // necessidade de entrar como admin para popular o banco antes.
+      if (_fairs.isEmpty) {
+        await _reloadFairsFromCloud();
+      }
       final snapshot = List<Fair>.of(_fairs);
+      if (snapshot.isEmpty) {
+        _error = 'Não foi possível carregar a lista de feiras. '
+            'Verifique a conexão e tente de novo.';
+        return;
+      }
       for (final fair in snapshot) {
         // mestra_child fairs are covered when their parent mestra syncs
         if (fair.sheetMode == 'mestra_child') continue;

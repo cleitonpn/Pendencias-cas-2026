@@ -51,9 +51,9 @@ class AnalystHomeScreen extends StatelessWidget {
               : IconButton(
                   icon: const Icon(Icons.sync, color: Colors.white),
                   tooltip: 'Sincronizar todas as feiras',
-                  onPressed: fairs.isEmpty
-                      ? null
-                      : () => context.read<AppProvider>().syncAllFairs(),
+                  // Desabilitar quando a lista está vazia trancava o botão
+                  // justamente no aparelho novo, que é quando ele é preciso.
+                  onPressed: () => context.read<AppProvider>().syncAllFairs(),
                 ),
           IconButton(
             icon: const Icon(Icons.logout, color: Colors.white),

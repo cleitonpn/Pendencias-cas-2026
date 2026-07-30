@@ -80,9 +80,9 @@ class FairSelectionScreen extends StatelessWidget {
               : IconButton(
                   icon: const Icon(Icons.sync, color: Colors.white),
                   tooltip: 'Sincronizar todas as feiras',
-                  onPressed: fairs.isEmpty
-                      ? null
-                      : () => context.read<AppProvider>().syncAllFairs(),
+                  // Desabilitar com a lista vazia trancava o botão justamente
+                  // no aparelho novo, que é quando ele é preciso.
+                  onPressed: () => context.read<AppProvider>().syncAllFairs(),
                 ),
           IconButton(
             icon: const Icon(Icons.logout, color: Colors.white),
@@ -484,18 +484,50 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.event_busy, size: 72, color: Colors.grey),
-          SizedBox(height: 16),
-          Text('Nenhuma feira cadastrada',
-              style: TextStyle(color: Colors.grey, fontSize: 18)),
-          SizedBox(height: 8),
-          Text('Toque em "Nova Feira" para começar',
-              style: TextStyle(color: Colors.grey)),
-        ],
+    final provider = context.watch<AppProvider>();
+    final syncing = provider.isLoading;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(syncing ? Icons.cloud_sync : Icons.event_busy,
+                size: 72, color: Colors.grey),
+            const SizedBox(height: 16),
+            Text(syncing ? 'Sincronizando planilhas…' : 'Nenhuma feira aqui',
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.grey, fontSize: 18)),
+            const SizedBox(height: 8),
+            Text(
+              syncing
+                  ? 'A primeira carga demora um pouco. Pode deixar aberto.'
+                  : 'Num aparelho novo os dados ainda não foram baixados. '
+                      'Toque abaixo para carregar.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.grey),
+            ),
+            const SizedBox(height: 20),
+            if (syncing)
+              const SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            else
+              ElevatedButton.icon(
+                onPressed: () => context.read<AppProvider>().syncAllFairs(),
+                icon: const Icon(Icons.sync),
+                label: const Text('Sincronizar planilhas'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF1E3A5F),
+                  foregroundColor: Colors.white,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }

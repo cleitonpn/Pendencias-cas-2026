@@ -75,12 +75,14 @@ class _TeamLeaderHomeScreenState extends State<TeamLeaderHomeScreen> {
               : IconButton(
                   icon: const Icon(Icons.sync, color: Colors.white),
                   tooltip: 'Sincronizar todas as feiras',
-                  onPressed: fairs.isEmpty && _fairIds.isEmpty
-                      ? null
-                      : () async {
-                          await context.read<AppProvider>().syncAllFairs();
-                          await _loadFairs();
-                        },
+                  // Estava desabilitado justamente quando não havia dados —
+                  // ou seja, no aparelho novo, que é quando mais se precisa
+                  // dele. É por isso que só funcionava depois de entrar como
+                  // admin para popular o banco.
+                  onPressed: () async {
+                    await context.read<AppProvider>().syncAllFairs();
+                    await _loadFairs();
+                  },
                 ),
           IconButton(
             icon: const Icon(Icons.logout, color: Colors.white),
@@ -100,7 +102,7 @@ class _TeamLeaderHomeScreenState extends State<TeamLeaderHomeScreen> {
         ],
       ),
       body: fairs.isEmpty
-          ? const _EmptyState()
+          ? _EmptyState(onSynced: _loadFairs)
           : ListView.builder(
               padding: const EdgeInsets.all(16),
               itemCount: fairs.length,
@@ -191,22 +193,67 @@ class _FairCard extends StatelessWidget {
 }
 
 class _EmptyState extends StatelessWidget {
-  const _EmptyState();
+  /// Recarrega a lista de feiras do líder depois do sync — sem isso o banco
+  /// enche mas a tela continua vazia, porque o filtro por líder é calculado
+  /// uma única vez no initState.
+  final Future<void> Function() onSynced;
+  const _EmptyState({required this.onSynced});
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.event_busy, size: 72, color: Colors.grey),
-          SizedBox(height: 16),
-          Text('Nenhuma feira cadastrada',
-              style: TextStyle(color: Colors.grey, fontSize: 18)),
-          SizedBox(height: 8),
-          Text('Contate o administrador.',
-              style: TextStyle(color: Colors.grey)),
-        ],
+    final provider = context.watch<AppProvider>();
+    final syncing = provider.isLoading;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(syncing ? Icons.cloud_sync : Icons.event_busy,
+                size: 72, color: Colors.grey),
+            const SizedBox(height: 16),
+            Text(syncing ? 'Sincronizando planilhas…' : 'Nenhuma feira aqui',
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.grey, fontSize: 18)),
+            const SizedBox(height: 8),
+            Text(
+              syncing
+                  ? 'A primeira carga demora um pouco. Pode deixar aberto.'
+                  : 'Num aparelho novo os dados ainda não foram baixados. '
+                      'Toque abaixo para carregar.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.grey),
+            ),
+            if (provider.error != null) ...[
+              const SizedBox(height: 12),
+              Text(provider.error!,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.red, fontSize: 12)),
+            ],
+            const SizedBox(height: 20),
+            if (syncing)
+              const SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            else
+              ElevatedButton.icon(
+                onPressed: () async {
+                  await context.read<AppProvider>().syncAllFairs();
+                  await onSynced();
+                },
+                icon: const Icon(Icons.sync),
+                label: const Text('Sincronizar planilhas'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF1E3A5F),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 20, vertical: 14),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
