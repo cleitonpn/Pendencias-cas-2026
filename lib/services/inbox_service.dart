@@ -41,10 +41,18 @@ class InboxService {
 
   static Future<DateTime> lastSeen() async {
     final p = await SharedPreferences.getInstance();
-    final raw = p.getString(_kSeen);
-    // Primeira vez: começa agora, para a caixa não nascer com meses de
+    final salvo = DateTime.tryParse(p.getString(_kSeen) ?? '');
+    if (salvo != null) return salvo;
+
+    // Primeira vez: o marco é agora, para a caixa não nascer com meses de
     // histórico marcado como novidade.
-    return DateTime.tryParse(raw ?? '') ?? DateTime.now();
+    //
+    // Gravar aqui é o que faz o sino funcionar. Sem gravar, cada leitura
+    // devolvia um "agora" novo — e nada é mais recente do que agora, então o
+    // contador nunca saía do zero por mais serviço que chegasse.
+    final agora = DateTime.now();
+    await p.setString(_kSeen, agora.toIso8601String());
+    return agora;
   }
 
   static Future<void> markSeen() async {

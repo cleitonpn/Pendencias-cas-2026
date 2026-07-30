@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -20,14 +21,34 @@ class InboxBell extends StatefulWidget {
   State<InboxBell> createState() => _InboxBellState();
 }
 
-class _InboxBellState extends State<InboxBell> {
+class _InboxBellState extends State<InboxBell> with WidgetsBindingObserver {
   List<InboxItem> _itens = [];
   bool _carregando = false;
+  Timer? _timer;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) => _carregar());
+    // Sem isto o sino só contava o que existia no instante em que a tela
+    // abriu: quem deixa o app aberto — o caso normal em campo — nunca veria
+    // o contador subir.
+    _timer = Timer.periodic(const Duration(minutes: 2), (_) => _carregar());
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Voltar ao app é quando mais se quer saber o que chegou; esperar até dois
+    // minutos pelo próximo ciclo pareceria que o sino não funciona.
+    if (state == AppLifecycleState.resumed) _carregar();
   }
 
   Future<void> _carregar() async {
