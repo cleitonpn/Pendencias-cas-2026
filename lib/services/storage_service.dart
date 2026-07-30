@@ -1,29 +1,38 @@
-import 'dart:io';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:image_picker/image_picker.dart' show XFile;
 
+/// Upload de fotos para o Firebase Storage.
+///
+/// Trabalha com [XFile] e bytes em vez de `dart:io File`: é o que permite o
+/// mesmo código rodar no Android e no navegador. No web não existe caminho de
+/// arquivo — o `putFile` simplesmente não compila lá.
 class StorageService {
   static final _storage = FirebaseStorage.instance;
 
-  /// Uploads a local image file to Firebase Storage and returns its public
-  /// download URL. Path: pending_photos/<fairId>/<timestamp>_<index>.jpg
-  static Future<String> uploadPendingPhoto({
-    required int fairId,
-    required File file,
-    required int index,
-  }) async {
-    final ts = DateTime.now().millisecondsSinceEpoch;
-    final ref = _storage.ref('pending_photos/$fairId/${ts}_$index.jpg');
-    final task = await ref.putFile(
-      file,
-      SettableMetadata(contentType: 'image/jpeg'),
-    );
+  static Future<String> _upload(String path, XFile file) async {
+    final bytes = await file.readAsBytes();
+    final task = await _storage.ref(path).putData(
+          bytes,
+          SettableMetadata(contentType: 'image/jpeg'),
+        );
     return task.ref.getDownloadURL();
   }
 
-  /// Uploads several photos and returns their download URLs (in order).
+  /// Envia uma foto de pendência e devolve a URL pública.
+  /// Caminho: pending_photos/<fairId>/<timestamp>_<index>.jpg
+  static Future<String> uploadPendingPhoto({
+    required int fairId,
+    required XFile file,
+    required int index,
+  }) {
+    final ts = DateTime.now().millisecondsSinceEpoch;
+    return _upload('pending_photos/$fairId/${ts}_$index.jpg', file);
+  }
+
+  /// Envia várias fotos e devolve as URLs, na ordem.
   static Future<List<String>> uploadPendingPhotos({
     required int fairId,
-    required List<File> files,
+    required List<XFile> files,
   }) async {
     final urls = <String>[];
     for (var i = 0; i < files.length; i++) {
@@ -32,18 +41,11 @@ class StorageService {
     return urls;
   }
 
-  /// Uploads a receipt photo for a freight request and returns the download URL.
-  /// Path: freight_receipts/<requestId>.jpg
+  /// Comprovante de um pedido de frete.
+  /// Caminho: freight_receipts/<requestId>.jpg
   static Future<String> uploadReceiptPhoto({
     required String requestId,
-    required String filePath,
-  }) async {
-    final file = File(filePath);
-    final ref = _storage.ref('freight_receipts/$requestId.jpg');
-    final task = await ref.putFile(
-      file,
-      SettableMetadata(contentType: 'image/jpeg'),
-    );
-    return task.ref.getDownloadURL();
-  }
+    required XFile file,
+  }) =>
+      _upload('freight_receipts/$requestId.jpg', file);
 }

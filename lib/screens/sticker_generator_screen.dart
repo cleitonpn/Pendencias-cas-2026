@@ -1,6 +1,4 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:share_plus/share_plus.dart';
@@ -75,13 +73,15 @@ class _StickerGeneratorScreenState extends State<StickerGeneratorScreen> {
         );
       }
       final bytes = await doc.save();
-      final dir = await getTemporaryDirectory();
       final safeName =
           widget.fair.name.replaceAll(RegExp(r'[^A-Za-z0-9]+'), '_');
-      final file = File('${dir.path}/adesivos_$safeName.pdf');
-      await file.writeAsBytes(bytes);
-      await Share.shareXFiles([XFile(file.path)],
-          text: 'Adesivos — ${widget.fair.name}');
+      final filename = 'adesivos_$safeName.pdf';
+      // Bytes em vez de arquivo temporário: funciona também no navegador.
+      await Share.shareXFiles(
+        [XFile.fromData(bytes, name: filename, mimeType: 'application/pdf')],
+        fileNameOverrides: [filename],
+        text: 'Adesivos — ${widget.fair.name}',
+      );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(

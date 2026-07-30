@@ -504,6 +504,8 @@ class _LoginScreenState extends State<LoginScreen> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     padding: const EdgeInsets.all(4),
+                    // Mesmos papéis no app e na web: uma experiência só, sem
+                    // ramificação por plataforma.
                     child: Row(
                       children: [
                         _ToggleBtn(

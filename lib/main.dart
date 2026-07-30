@@ -28,8 +28,11 @@ void main() async {
       (defaultTargetPlatform == TargetPlatform.android ||
           defaultTargetPlatform == TargetPlatform.iOS);
 
-  // Initialize FFI SQLite on desktop (no-op on web and mobile).
-  if (!kIsWeb) initDesktopDatabase();
+  // Driver do SQLite por plataforma (import condicional em utils/desktop_db):
+  // FFI no desktop, WebAssembly + IndexedDB no navegador, nativo no celular.
+  // Precisa rodar na web também — é o que mantém as telas do app funcionando
+  // lá sem nenhuma alteração.
+  initDesktopDatabase();
 
   // Initialize timezone data for local notification scheduling (native only).
   if (!kIsWeb) {

@@ -1,6 +1,4 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -42,16 +40,18 @@ class PdfService {
     }
   }
 
-  /// Salva o PDF em arquivo temporário e abre o compartilhamento do Android
+  /// Abre o compartilhamento com o PDF gerado.
+  ///
+  /// Compartilha a partir dos bytes, não de um arquivo temporário: no
+  /// navegador não existe diretório temporário nem `dart:io`, e era isso que
+  /// impedia o app de compilar para web.
   static Future<void> _saveAndShare(pw.Document pdf, String filename) async {
     final bytes = await pdf.save();
-    final dir = await getTemporaryDirectory();
-    final file = File('${dir.path}/$filename');
-    await file.writeAsBytes(bytes);
     // ignore: deprecated_member_use
     await Share.shareXFiles(
-      [XFile(file.path, mimeType: 'application/pdf')],
+      [XFile.fromData(bytes, name: filename, mimeType: 'application/pdf')],
       subject: filename.replaceAll('_', ' ').replaceAll('.pdf', ''),
+      fileNameOverrides: [filename],
     );
   }
 

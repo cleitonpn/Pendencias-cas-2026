@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../models/montage_update.dart';
@@ -57,7 +56,7 @@ class _MontageSectionState extends State<MontageSection> {
       setState(() => _sending = true);
       final url = await StorageService.uploadPendingPhoto(
         fairId: widget.fairId,
-        file: File(shot.path),
+        file: shot,
         index: 0,
       );
       await FirestoreService.saveMontageUpdate(

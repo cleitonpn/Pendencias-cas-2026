@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -7,6 +6,7 @@ import '../providers/app_provider.dart';
 import '../models/client.dart';
 import '../models/pending_item.dart';
 import '../services/storage_service.dart';
+import '../widgets/local_image_preview.dart';
 
 class AddPendingScreen extends StatefulWidget {
   final Client client;
@@ -89,7 +89,7 @@ class _AddPendingScreenState extends State<AddPendingScreen> {
       try {
         photoUrls = await StorageService.uploadPendingPhotos(
           fairId: widget.client.fairId,
-          files: _photos.map((x) => File(x.path)).toList(),
+          files: _photos,
         );
       } catch (_) {
         if (mounted) {
@@ -366,12 +366,7 @@ class _AddPendingScreenState extends State<AddPendingScreen> {
                     children: [
                       ClipRRect(
                         borderRadius: BorderRadius.circular(8),
-                        child: Image.file(
-                          File(_photos[i].path),
-                          width: 84,
-                          height: 84,
-                          fit: BoxFit.cover,
-                        ),
+                        child: LocalImagePreview(file: _photos[i]),
                       ),
                       Positioned(
                         top: 2,

@@ -42,6 +42,11 @@ jobs:
       - name: Instalar dependências
         run: flutter pub get
 
+      # Copia sqlite3.wasm e o worker para web/. Sem isso o SQLite não sobe no
+      # navegador e o app abre com o banco vazio.
+      - name: Preparar SQLite WebAssembly
+        run: dart run sqflite_common_ffi_web:setup
+
       - name: Build Web release
         run: flutter build web --release
 

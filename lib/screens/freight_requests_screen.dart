@@ -302,7 +302,7 @@ class _RequestCardState extends State<_RequestCard> {
       if (photo != null) {
         photoUrl = await StorageService.uploadReceiptPhoto(
           requestId: widget.request.id!,
-          filePath: photo.path,
+          file: photo,
         );
       }
       await FirestoreService.updateFreightRequestStatus(

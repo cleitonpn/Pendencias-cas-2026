@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
@@ -6,6 +5,7 @@ import '../providers/app_provider.dart';
 import '../models/client.dart';
 import '../models/pending_item.dart';
 import '../services/storage_service.dart';
+import '../widgets/local_image_preview.dart';
 
 /// Edits team, responsible, description and photos of an unresolved pending item.
 class EditPendingScreen extends StatefulWidget {
@@ -100,7 +100,7 @@ class _EditPendingScreenState extends State<EditPendingScreen> {
       if (_newPhotos.isNotEmpty) {
         final uploaded = await StorageService.uploadPendingPhotos(
           fairId: widget.client.fairId,
-          files: _newPhotos.map((x) => File(x.path)).toList(),
+          files: _newPhotos,
         );
         urls.addAll(uploaded);
       }
@@ -281,8 +281,8 @@ class _EditPendingScreenState extends State<EditPendingScreen> {
               const SizedBox(height: 6),
               _photoRow(
                 count: _newPhotos.length,
-                imageBuilder: (i) => Image.file(File(_newPhotos[i].path),
-                    width: 84, height: 84, fit: BoxFit.cover),
+                imageBuilder: (i) =>
+                    LocalImagePreview(file: _newPhotos[i]),
                 onRemove: (i) => setState(() => _newPhotos.removeAt(i)),
               ),
             ],

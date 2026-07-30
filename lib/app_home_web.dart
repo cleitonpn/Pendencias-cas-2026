@@ -2,14 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'screens/stand_request_screen.dart';
 import 'screens/organizer_web_screen.dart';
-import 'screens/team_web_screen.dart';
+import 'screens/splash_screen.dart';
 import 'utils/web_portal.dart';
 
 /// Web: the app is a public page. Two routes share the same Flutter Web build,
 /// selected by the URL fragment (hash strategy works on static hosting):
 ///   …/#/stand?f=<fair>&c=<rowId>   → exhibitor maintenance request (QR)
 ///   …/#/organizadora?f=<fair>      → event organizer request portal
-///   …/#/equipe?f=<fair>            → consultant / team leader portal (iOS)
+///
+/// Qualquer outra URL abre o APP COMPLETO — as mesmas telas do Android,
+/// possível porque o SQLite roda em WebAssembly no navegador (ver
+/// utils/desktop_db_stub.dart). É o acesso de consultor e líder que usam
+/// iPhone: mesma experiência, não uma versão paralela.
 Widget buildHome() {
   final base = Uri.base;
   final qp = <String, String>{...base.queryParameters};
@@ -31,10 +35,7 @@ Widget buildHome() {
     return OrganizerWebScreen(fairId: fairId);
   }
 
-  // Portal de consultor e líder — para quem usa iPhone e não tem o app.
-  if (path.contains('equipe')) {
-    return TeamWebScreen(fairId: fairId);
-  }
+
 
   // URL does not identify this as an organizer link, but a saved session may
   // exist (e.g. after the organizer refreshed to the bare root URL). Check
@@ -65,18 +66,12 @@ class _WebRouterState extends State<_WebRouter> {
     final prefs = await SharedPreferences.getInstance();
     final last = prefs.getString(kLastWebPortal);
     final hasOrg = (prefs.getString('org_verified_name') ?? '').isNotEmpty;
-    final hasTeam = (prefs.getString('team_web_name') ?? '').isNotEmpty;
 
+    // A organizadora tem portal e sessão próprios. Consultor e líder usam o
+    // app completo, cuja sessão é a mesma do Android (SessionService), então
+    // não precisam de tratamento aqui.
     Widget? target;
-    // O último portal usado tem precedência: dá para ter as duas sessões
-    // salvas no mesmo navegador.
-    if (last == kPortalEquipe && hasTeam) {
-      target = TeamWebScreen(fairId: widget.fairId);
-    } else if (last == kPortalOrganizadora && hasOrg) {
-      target = OrganizerWebScreen(fairId: widget.fairId);
-    } else if (hasTeam) {
-      target = TeamWebScreen(fairId: widget.fairId);
-    } else if (hasOrg) {
+    if (hasOrg && last != kPortalEquipe) {
       target = OrganizerWebScreen(fairId: widget.fairId);
     }
 
@@ -96,7 +91,11 @@ class _WebRouterState extends State<_WebRouter> {
         body: Center(child: CircularProgressIndicator()),
       );
     }
-    return _target ??
-        StandRequestScreen(fairId: widget.fairId, rowId: widget.rowId);
+    // Sem link público de stand e sem sessão de organizadora, abre o app.
+    if (_target != null) return _target!;
+    if (widget.rowId != null) {
+      return StandRequestScreen(fairId: widget.fairId, rowId: widget.rowId);
+    }
+    return const SplashScreen();
   }
 }
