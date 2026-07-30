@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/pending_item.dart';
 import '../models/montage_update.dart';
 import '../models/freight_request.dart';
+import '../models/meeting.dart';
 import 'admin_api.dart';
 import '../utils/organizer_fairs.dart';
 import '../utils/fair_key.dart';
@@ -576,7 +577,17 @@ class FirestoreService {
     required String consultantName,
   }) {
     if (producerName.isEmpty && consultantName.isEmpty) return;
-    _db.collection('sync_events').add({
+    // Id determinado pelo conteúdo: a função só dispara na CRIAÇÃO do
+    // documento, então gravar de novo a mesma atribuição não notifica outra
+    // vez. Antes cada aparelho que sincronizasse mandava a sua, e a mesma
+    // atribuição virava três ou quatro notificações.
+    final key = [
+      fairKey(fairName),
+      fairKey(clientId),
+      fairKey(producerName),
+      fairKey(consultantName),
+    ].join('-');
+    _db.collection('sync_events').doc(key).set({
       'clientId': clientId,
       'clientName': clientName,
       'fairName': fairName,
@@ -760,6 +771,7 @@ class FirestoreService {
     required List<String> targetGroups,
     String targetType = 'groups',
     List<Map<String, dynamic>> targetUsers = const [],
+    String fairName = '',
   }) async {
     await _db.collection('avisos').add({
       'title': title,
@@ -768,6 +780,9 @@ class FirestoreService {
       'targetGroups': targetGroups,
       'targetType': targetType,
       'targetUsers': targetUsers,
+      // Guardado para a lista mostrar de qual feira era o aviso; quem recebe
+      // é decidido pela lista de pessoas, resolvida no app.
+      'fairName': fairName,
       'createdAt': DateTime.now().toIso8601String(),
     });
   }
@@ -785,6 +800,31 @@ class FirestoreService {
         .map((snap) => snap.docs
             .map((d) => <String, dynamic>{'id': d.id, ...d.data()})
             .toList());
+  }
+
+  // ─── Reuniões ─────────────────────────────────────────────────────────────
+
+  static Future<String> createMeeting(Meeting m) async {
+    final ref = await _db.collection('meetings').add(m.toFirestore());
+    return ref.id;
+  }
+
+  static Future<void> cancelMeeting(String id) =>
+      _db.collection('meetings').doc(id).set(
+        {'canceled': true},
+        SetOptions(merge: true),
+      );
+
+  /// Reuniões mais recentes primeiro. O limite existe para a tela não crescer
+  /// sem fim; a filtragem por participante é feita no app.
+  static Stream<List<Meeting>> streamMeetings() {
+    return _db
+        .collection('meetings')
+        .orderBy('startsAt', descending: true)
+        .limit(200)
+        .snapshots()
+        .map((snap) =>
+            snap.docs.map((d) => Meeting.fromFirestore(d.id, d.data())).toList());
   }
 
   // ─── Presence ─────────────────────────────────────────────────────────────

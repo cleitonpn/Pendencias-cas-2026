@@ -9,6 +9,7 @@ import '../screens/client_detail_screen.dart';
 import '../screens/producer_client_detail_screen.dart';
 import '../screens/consultant_client_detail_screen.dart';
 import '../screens/analyst_client_detail_screen.dart';
+import '../screens/meeting_list_screen.dart';
 
 /// Abre a tela correspondente quando o usuário toca numa notificação.
 ///
@@ -47,6 +48,13 @@ class NotificationRouter {
     final nav = navigatorKey?.currentState;
     final context = navigatorKey?.currentContext;
     if (nav == null || context == null) return;
+
+    // Convite ou lembrete de reunião: não há stand para abrir, a tela certa é
+    // a agenda.
+    if ((data['type'] ?? '').toString() == 'meeting') {
+      nav.push(MaterialPageRoute(builder: (_) => const MeetingListScreen()));
+      return;
+    }
 
     final clientId = (data['clientId'] ?? '').toString();
     if (clientId.isEmpty) return;

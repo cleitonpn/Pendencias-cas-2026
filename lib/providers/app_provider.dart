@@ -590,10 +590,20 @@ class AppProvider extends ChangeNotifier {
   /// producer or consultant assignment (including brand-new clients).
   /// Only the newly assigned party is included so the other side isn't
   /// re-notified if they were already set.
+  /// Avisa sobre clientes novos e sobre quem acabou de ser atribuído a eles.
+  ///
+  /// O que conta como "novo" é comparado com o banco DESTE aparelho. Num
+  /// aparelho recém-instalado, ou na primeira vez que uma feira é sincronizada
+  /// aqui, o banco está vazio e TODO cliente parecia novo — daí a enxurrada de
+  /// "novo cliente na planilha" para a equipe inteira sempre que alguém
+  /// entrava pela primeira vez. Nesse caso não há nada a avisar: os clientes
+  /// já existiam, quem chegou foi o aparelho.
   void _notifyAssignments(
       List<Client> sheetClients,
       Map<String, Client> existingMap,
       String fairName) {
+    if (existingMap.isEmpty) return;
+
     // Secondary index by firestoreId to handle rowId shifts (e.g. master sheet rows reordered)
     final existingByFirestoreId = <String, Client>{};
     for (final c in existingMap.values) {

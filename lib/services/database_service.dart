@@ -810,6 +810,51 @@ class DatabaseService {
   static Future<List<String>> getAllOrganizers() =>
       _allPeopleIn('organizadora');
 
+  /// Quem trabalha numa feira: produtores, consultores e líderes.
+  ///
+  /// Os líderes saem das colunas por equipe da planilha (eletricista,
+  /// faxineira, marceneiro, tapeceiro, teto50). Comunicação Visual e
+  /// Vidraceiro não têm coluna por cliente — quem lidera essas equipes atende
+  /// todas as feiras e por isso não dá para deduzir daqui; a tela de aviso
+  /// completa esse caso.
+  static Future<({
+    List<String> producers,
+    List<String> consultants,
+    List<String> leaders,
+  })> getFairAudience(int fairId) async {
+    final database = await db;
+
+    Future<List<String>> distinct(String column) async {
+      final rows = await database.rawQuery(
+        "SELECT DISTINCT $column AS nome FROM clients "
+        "WHERE fair_id = ? AND $column IS NOT NULL AND TRIM($column) != '' "
+        "ORDER BY $column",
+        [fairId],
+      );
+      return rows
+          .map((r) => (r['nome'] as String).trim())
+          .where((n) => n.isNotEmpty)
+          .toList();
+    }
+
+    final leaders = <String>{};
+    for (final col in const [
+      'eletricista',
+      'faxineira',
+      'marceneiro',
+      'tapeceiro',
+      'teto50',
+    ]) {
+      leaders.addAll(await distinct(col));
+    }
+
+    return (
+      producers: await distinct('produtor'),
+      consultants: await distinct('atendimento'),
+      leaders: leaders.toList()..sort(),
+    );
+  }
+
   static Future<List<PendingItem>> getPendingItemsByProdutor(
       String produtor, {required int fairId}) async {
     final database = await db;

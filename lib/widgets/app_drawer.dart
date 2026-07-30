@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../screens/cronograma_screen.dart';
 import '../screens/gallery_screen.dart';
 import '../screens/circular_list_screen.dart';
+import '../screens/meeting_list_screen.dart';
 import '../screens/presence_screen.dart';
 import '../services/session_service.dart';
 import '../screens/freight_requests_screen.dart';
@@ -98,6 +99,18 @@ class _AppDrawerState extends State<AppDrawer> {
               Navigator.push(context,
                   MaterialPageRoute(
                       builder: (_) => const CircularListScreen()));
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.event_note_outlined,
+                color: Color(0xFF1E3A5F)),
+            title: const Text('Agenda de Reuniões',
+                style: TextStyle(fontWeight: FontWeight.w500)),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(context,
+                  MaterialPageRoute(
+                      builder: (_) => const MeetingListScreen()));
             },
           ),
           if (_showFreight)

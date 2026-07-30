@@ -431,7 +431,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final pinRes = await _checkPin('manager', _selectedManager!);
     if (pinRes == null) return;
     if (!mounted) return;
-    await NotificationService.subscribeAdmin();
+    await NotificationService.subscribeManager(_selectedManager!);
     await SessionService.save(role: 'manager', name: _selectedManager!);
     await FirestoreService.updatePresence(
       name: _selectedManager!,

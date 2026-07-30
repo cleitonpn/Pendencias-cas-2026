@@ -73,6 +73,7 @@ class _CircularListScreenState extends State<CircularListScreen> {
       case 'lideres': return 'Líderes';
       case 'analistas': return 'Analistas';
       case 'admins': return 'Admins';
+      case 'logistica': return 'Logística';
       default: return g;
     }
   }
@@ -135,8 +136,18 @@ class _CircularListScreenState extends State<CircularListScreen> {
               final createdBy = (c['createdBy'] as String?) ?? '';
               final createdAt = _formatDate(c['createdAt'] as String?);
               final targetType = (c['targetType'] as String?) ?? 'groups';
+              final fairName = (c['fairName'] as String?) ?? '';
               final List<String> chips;
-              if (targetType == 'users') {
+              if (targetType == 'fair') {
+                // Num aviso de feira o que importa é de qual feira ele era;
+                // listar as vinte pessoas alcançadas só faria ruído.
+                final users = (c['targetUsers'] as List?) ?? [];
+                chips = [
+                  if (fairName.isNotEmpty) '📅 $fairName',
+                  if (users.isNotEmpty) '${users.length} pessoas',
+                ];
+                if (chips.isEmpty) chips.add('Feira');
+              } else if (targetType == 'users') {
                 final users = (c['targetUsers'] as List?) ?? [];
                 chips = users.map((u) => (u['name'] as String?) ?? '').where((s) => s.isNotEmpty).toList();
                 if (chips.isEmpty) chips.add('Usuários específicos');

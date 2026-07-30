@@ -226,10 +226,10 @@ exports.onNewClientSynced = onDocumentCreated(
         fairName: fair,
       });
 
-      // Delete the transient event document after processing.
-      try {
-        await event.data.ref.delete();
-      } catch (_) {}
+      // O documento FICA. O id dele é determinado pelo conteúdo e a função só
+      // dispara na criação, então mantê-lo é o que impede a mesma atribuição
+      // de ser notificada de novo por cada aparelho que sincronizar. A
+      // limpeza diária remove os antigos.
     });
 
 // New client broadcast → notifies all users subscribed to the `new_clients` topic.
@@ -250,6 +250,42 @@ exports.onNewClientBroadcast = onDocumentCreated(
       await sendToTopics(["new_clients"], title, body);
     });
 
+const GROUP_TOPICS = {
+  todos: "new_clients",
+  produtores: "group_produtores",
+  consultores: "group_consultores",
+  lideres: "group_lideres",
+  analistas: "group_analistas",
+  admins: "admins",
+  logistica: "group_logistica",
+};
+
+/** Tópicos para falar com UMA pessoa.
+ *
+ * O líder ia para o tópico da equipe: um aviso dirigido a um líder chegava a
+ * todos os líderes daquela equipe. O gerente ia para "admins", o que
+ * espalhava para toda a administração. Os dois agora têm tópico por nome.
+ *
+ * @param {object} user {name, role, team}
+ * @return {string[]} tópicos
+ */
+function userTopics(user) {
+  const name = (user && user.name) || "";
+  const role = (user && user.role) || "";
+  if (!name || !role) return [];
+  switch (role) {
+    case "producer": return [sanitize("producer", name)];
+    case "consultant": return [sanitize("consultant", name)];
+    case "analyst": return [sanitize("analyst", name)];
+    case "leader": return [sanitize("leader", name)];
+    case "logistica": return [sanitize("logistica", name)];
+    case "manager": return [sanitize("manager", name)];
+    // Admin não tem tópico por nome: todos compartilham "admins".
+    case "admin": return ["admins"];
+    default: return [];
+  }
+}
+
 // New aviso published by admin → notifies selected target groups or users via FCM.
 exports.onAvisoCreated = onDocumentCreated(
     "avisos/{docId}", async (event) => {
@@ -259,37 +295,25 @@ exports.onAvisoCreated = onDocumentCreated(
       const title = data.title || "Aviso";
       const body = data.body || "";
 
+      // Grupos e pessoas se SOMAM. Antes era um ou outro: o aviso por feira
+      // precisa das duas coisas — as pessoas daquela feira mais os papéis que
+      // entram sempre.
       const targetType = data.targetType || "groups";
+      const users = Array.isArray(data.targetUsers) ? data.targetUsers : [];
+      const groups = Array.isArray(data.targetGroups) ? data.targetGroups : [];
       let topics = [];
 
-      if (targetType === "users" && Array.isArray(data.targetUsers) && data.targetUsers.length > 0) {
-        // Send to each user's individual FCM topic
-        for (const user of data.targetUsers) {
-          const name = user.name || "";
-          const role = user.role || "";
-          const team = user.team || "";
-          if (!name || !role) continue;
-          if (role === "producer") topics.push(sanitize("producer", name));
-          else if (role === "consultant") topics.push(sanitize("consultant", name));
-          else if (role === "analyst") topics.push(sanitize("analyst", name));
-          else if (role === "leader") topics.push(sanitize("team", team || name));
-          else if (role === "admin" || role === "manager") topics.push("admins");
-        }
-      } else {
-        // existing group logic
-        const groupToTopic = {
-          todos: "new_clients",
-          produtores: "group_produtores",
-          consultores: "group_consultores",
-          lideres: "group_lideres",
-          analistas: "group_analistas",
-          admins: "admins",
-        };
-        const groups = Array.isArray(data.targetGroups) && data.targetGroups.length > 0
-            ? data.targetGroups
-            : ["todos"];
-        topics = [...new Set(groups.map((g) => groupToTopic[g]).filter(Boolean))];
+      for (const user of users) {
+        topics.push(...userTopics(user));
       }
+
+      // Sem nenhum alvo definido o aviso é geral — mas só quando o envio não
+      // era dirigido. Um aviso por pessoa ou por feira que perdeu a lista não
+      // pode virar aviso para todo mundo.
+      const dirigido = targetType === "users" || targetType === "fair";
+      const gruposFinais =
+          groups.length > 0 ? groups : (dirigido ? [] : ["todos"]);
+      topics.push(...gruposFinais.map((g) => GROUP_TOPICS[g]).filter(Boolean));
 
       topics = [...new Set(topics)];
       if (topics.length === 0) return;
@@ -759,3 +783,122 @@ exports.manageUsers = onCall(async (request) => {
 
   throw new HttpsError("invalid-argument", "operação inválida");
 });
+
+// ─── Reuniões ───────────────────────────────────────────────────────────────
+//
+// Uma reunião é sempre de uma feira. Quem convida escolhe os participantes; o
+// app manda a lista já resolvida porque só ele sabe quem trabalha em cada
+// feira — os clientes vivem no SQLite de cada aparelho, não no Firestore.
+
+/** Texto de data e hora no fuso de São Paulo.
+ * @param {string} iso data em ISO
+ * @return {string} "31/07 às 14:30"
+ */
+function meetingWhen(iso) {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  const f = new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit",
+  }).formatToParts(d);
+  const p = {};
+  for (const {type, value} of f) p[type] = value;
+  return `${p.day}/${p.month} às ${p.hour}:${p.minute}`;
+}
+
+/** Tópicos de todos os participantes de uma reunião.
+ * @param {object} data documento da reunião
+ * @return {string[]} tópicos sem repetição
+ */
+function meetingTopics(data) {
+  const list = Array.isArray(data.participants) ? data.participants : [];
+  const topics = [];
+  for (const p of list) topics.push(...userTopics(p));
+  return [...new Set(topics)];
+}
+
+// Reunião agendada → avisa os participantes.
+exports.onMeetingCreated = onDocumentCreated(
+    "meetings/{id}", async (event) => {
+      const data = event.data && event.data.data();
+      if (!data || data.canceled === true) return;
+
+      const topics = meetingTopics(data);
+      if (topics.length === 0) return;
+
+      const fair = data.fairName || "";
+      const local = data.location || "";
+      const quando = meetingWhen(data.startsAt || "");
+
+      await sendToTopics(
+          topics,
+          `📅 Reunião — ${data.title || "sem título"}`,
+          `${fair ? `[${fair}] ` : ""}${quando}` +
+            `${local ? ` · ${local}` : ""}`,
+          {
+            type: "meeting",
+            meetingId: event.params.id,
+            fairName: fair,
+          });
+    });
+
+// Reunião cancelada → avisa quem tinha sido convidado.
+exports.onMeetingUpdated = onDocumentUpdated(
+    "meetings/{id}", async (event) => {
+      const before = event.data && event.data.before.data();
+      const after = event.data && event.data.after.data();
+      if (!before || !after) return;
+      if (before.canceled === true || after.canceled !== true) return;
+
+      const topics = meetingTopics(after);
+      if (topics.length === 0) return;
+
+      await sendToTopics(
+          topics,
+          `❌ Reunião cancelada — ${after.title || ""}`,
+          `${after.fairName ? `[${after.fairName}] ` : ""}` +
+            `${meetingWhen(after.startsAt || "")}`,
+          {type: "meeting", meetingId: event.params.id});
+    });
+
+// Lembrete 30 minutos antes.
+//
+// Roda a cada 5 minutos e pega tudo o que começa nos próximos 30. A marca
+// reminderSent é gravada ANTES do envio: repetir o lembrete incomoda mais do
+// que perder um, e sem a marca uma falha no meio do envio faria a próxima
+// rodada avisar todo mundo de novo.
+exports.meetingReminders = onSchedule(
+    {schedule: "*/5 * * * *", timeZone: "America/Sao_Paulo"},
+    async () => {
+      const agora = Date.now();
+      const limite = new Date(agora + 30 * 60 * 1000).toISOString();
+      const passado = new Date(agora - 5 * 60 * 1000).toISOString();
+
+      const snap = await getFirestore().collection("meetings")
+          .where("startsAt", "<=", limite)
+          .where("startsAt", ">=", passado)
+          .limit(50)
+          .get();
+
+      let enviados = 0;
+      for (const doc of snap.docs) {
+        const data = doc.data() || {};
+        if (data.reminderSent === true || data.canceled === true) continue;
+
+        await doc.ref.set({reminderSent: true}, {merge: true});
+
+        const topics = meetingTopics(data);
+        if (topics.length === 0) continue;
+
+        const local = data.location || "";
+        await sendToTopics(
+            topics,
+            `⏰ Reunião em 30 minutos — ${data.title || ""}`,
+            `${data.fairName ? `[${data.fairName}] ` : ""}` +
+              `${meetingWhen(data.startsAt || "")}` +
+              `${local ? ` · ${local}` : ""}`,
+            {type: "meeting", meetingId: doc.id, fairName: data.fairName || ""});
+        enviados++;
+      }
+      if (enviados > 0) console.log(`lembretes de reunião: ${enviados}`);
+    });

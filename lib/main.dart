@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
+import 'package:intl/intl.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:timezone/data/latest.dart' as tz;
@@ -23,6 +25,12 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Nomes de dia e mês em português para o DateFormat. Sem isto, qualquer
+  // formatação com locale explícito estoura em tempo de execução — e a
+  // agenda de reuniões usa uma.
+  await initializeDateFormatting('pt_BR');
+  Intl.defaultLocale = 'pt_BR';
 
   final isMobile = !kIsWeb &&
       (defaultTargetPlatform == TargetPlatform.android ||

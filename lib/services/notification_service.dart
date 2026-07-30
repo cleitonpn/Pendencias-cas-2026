@@ -168,6 +168,17 @@ class NotificationService {
   static Future<void> subscribeAdmin() =>
       _subscribe(['admins', 'new_clients', 'group_admins']);
 
+  /// O gerente entrava só pelo tópico coletivo 'admins', então um aviso
+  /// dirigido a um gerente específico caía em todos os administradores. O
+  /// tópico por nome é o que permite falar com um só.
+  static Future<void> subscribeManager(String name) =>
+      _subscribe([
+        fcmTopic('manager', name),
+        'admins',
+        'new_clients',
+        'group_admins',
+      ]);
+
   static Future<void> subscribeProducer(String producerName) =>
       _subscribe([fcmTopic('producer', producerName), 'new_clients', 'group_produtores']);
 
