@@ -1,5 +1,7 @@
 import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/web_portal.dart';
+import 'admin_api.dart';
+import 'firestore_service.dart';
 
 /// Persists the logged-in user session across app restarts using
 /// SharedPreferences. The app has no Firebase Auth — sessions are keyed
@@ -29,6 +31,10 @@ class SessionService {
     await p.remove(_kRole);
     await p.remove(_kName);
     await p.remove(_kTeam);
+    // Sair do app tem de derrubar também a sessão de gestão; do contrário o
+    // token continuaria valendo no aparelho para o próximo que entrasse.
+    await AdminApi.clearToken();
+    FirestoreService.clearUserCache();
   }
 
   /// Returns `{'role', 'name', 'team'}` if a valid session exists, else null.

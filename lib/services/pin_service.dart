@@ -13,6 +13,10 @@ class PinResult {
   const PinResult({required this.ok, this.reason, this.extra = const {}});
 
   String? get team => extra['team'] as String?;
+
+  /// Sessão de gestão, devolvida só no login de administrador.
+  String? get token => extra['token'] as String?;
+
   int? get fairId {
     final v = extra['fairId'];
     if (v is int) return v;
@@ -83,6 +87,14 @@ class PinService {
         reason: data['reason'] as String?,
         extra: data,
       );
+    } on FirebaseFunctionsException catch (e) {
+      // Excesso de tentativas precisa de mensagem própria: dizer "confira a
+      // conexão" para quem está bloqueado manda a pessoa caçar o problema no
+      // lugar errado.
+      if (e.code == 'resource-exhausted') {
+        return const PinResult(ok: false, reason: 'bloqueado');
+      }
+      return const PinResult(ok: false, reason: 'erro');
     } catch (_) {
       // Falha de rede/função não pode ser lida como "PIN errado": seria
       // acusar o usuário de digitar errado por um problema nosso.

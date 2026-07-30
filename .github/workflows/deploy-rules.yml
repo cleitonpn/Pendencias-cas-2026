@@ -1,0 +1,37 @@
+name: Deploy Regras do Firestore
+
+# Manual de propósito.
+#
+# Publicar estas regras fecha as coleções de PIN para o cliente. Qualquer
+# aparelho que ainda esteja numa versão anterior do app deixa de conseguir
+# entrar, porque essa versão lê os PINs direto do Firestore.
+#
+# Ordem correta:
+#   1. Deploy Firebase (functions) — as funções precisam estar no ar antes.
+#   2. Todos os aparelhos na versão nova do app (APK e web).
+#   3. Rodar este workflow.
+#
+# Deploy só das regras: os índices ficam de fora para não haver surpresa de
+# reconstrução de índice no meio de uma feira.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy firestore.rules
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Gravar credencial de serviço
+        run: printf '%s' "$FIREBASE_SA" > "$RUNNER_TEMP/sa.json"
+        env:
+          FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+
+      - name: Deploy das regras
+        run: npx --yes firebase-tools@latest deploy --only firestore:rules --project montagem-uset --non-interactive --force
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/sa.json

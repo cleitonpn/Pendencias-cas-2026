@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 import '../services/firestore_service.dart';
 import '../services/notification_service.dart';
 import '../services/session_service.dart';
-import '../utils/admin_pin.dart';
+import '../services/admin_api.dart';
 import 'fair_selection_screen.dart';
 import 'producer_home_screen.dart';
 import 'team_leader_home_screen.dart';
@@ -103,6 +103,11 @@ class _LoginScreenState extends State<LoginScreen> {
           break;
         case 'pin_incorreto':
           _error = 'PIN incorreto.';
+          _pinCtrl.clear();
+          break;
+        case 'bloqueado':
+          _error = 'Muitas tentativas erradas. '
+              'Aguarde 15 minutos e tente de novo.';
           _pinCtrl.clear();
           break;
         default:
@@ -317,36 +322,36 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
-    bool pinValid = false;
-    String adminName = _selectedAdmin ?? 'Admin';
-
-    if (_admins.isNotEmpty && _selectedAdmin != null) {
-      final r = await PinService.verify(
-          role: 'admin', name: _selectedAdmin!, pin: _pinCtrl.text);
-      if (r.ok) {
-        pinValid = true;
-      } else if (r.reason == 'nao_cadastrado') {
-        // Sem cadastro no Firestore, vale o PIN local de instalação.
-        final adminPin = await getAdminPin();
-        pinValid = _pinCtrl.text == adminPin;
-      } else if (r.reason == 'erro') {
-        if (mounted) {
-          setState(() => _error = 'Não foi possível verificar agora. '
-              'Confira a conexão e tente de novo.');
-        }
-        return;
-      }
-    } else {
-      // No admins in Firestore — use SharedPreferences PIN
-      final adminPin = await getAdminPin();
-      pinValid = _pinCtrl.text == adminPin;
+    // O antigo caminho alternativo comparava com um PIN gravado no aparelho,
+    // cujo padrão estava escrito no código do app — quem abrisse o APK entrava
+    // como admin. Agora só o servidor decide.
+    if (_admins.isEmpty || _selectedAdmin == null) {
+      setState(() => _error = 'Não foi possível carregar a lista de '
+          'administradores. Confira a conexão e tente de novo.');
+      return;
     }
 
-    if (!pinValid) {
+    final adminName = _selectedAdmin!;
+    final r = await PinService.verify(
+        role: 'admin', name: adminName, pin: _pinCtrl.text);
+
+    if (r.reason == 'erro' || r.reason == 'bloqueado') {
+      if (mounted) {
+        setState(() => _error = r.reason == 'bloqueado'
+            ? 'Muitas tentativas erradas. Aguarde 15 minutos e tente de novo.'
+            : 'Não foi possível verificar agora. '
+                'Confira a conexão e tente de novo.');
+      }
+      return;
+    }
+    if (!r.ok) {
       setState(() => _error = 'PIN incorreto.');
       _pinCtrl.clear();
       return;
     }
+    // Sessão de gestão já vem do login: quem entrou como admin não precisa
+    // digitar o PIN de novo para abrir Configurações.
+    if (r.token != null) await AdminApi.saveToken(r.token!);
     if (!mounted) return;
     await NotificationService.subscribeAdmin();
     await SessionService.save(role: 'admin', name: adminName);

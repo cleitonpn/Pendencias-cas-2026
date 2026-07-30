@@ -13,6 +13,7 @@ const {onSchedule} = require("firebase-functions/v2/scheduler");
 const {initializeApp} = require("firebase-admin/app");
 const {getMessaging} = require("firebase-admin/messaging");
 const {getFirestore} = require("firebase-admin/firestore");
+const {randomBytes} = require("crypto");
 
 initializeApp();
 
@@ -477,6 +478,8 @@ exports.verifyPin = onCall(async (request) => {
   if (!source || !name) {
     throw new HttpsError("invalid-argument", "papel ou nome ausente");
   }
+  const target = `${role}|${name}`;
+  await checkAttempts(request, target);
 
   let data = null;
   if (source.byField) {
@@ -498,10 +501,256 @@ exports.verifyPin = onCall(async (request) => {
 
   if (!data || !data.pin) return {ok: false, reason: "nao_cadastrado"};
   if (String(data.pin) !== String(pin || "")) {
+    await recordAttempt(request, target, false);
     return {ok: false, reason: "pin_incorreto"};
   }
+  await recordAttempt(request, target, true);
 
   const out = {ok: true};
   for (const f of source.extra || []) out[f] = data[f] ?? null;
+  // Quem entra como admin já sai com a sessão de gestão pronta, para não
+  // pedir o PIN de novo ao abrir Configurações.
+  if (role === "admin") out.token = await mintAdminSession(name);
   return out;
+});
+
+// ─── Sessão de administrador ────────────────────────────────────────────────
+//
+// Sem isto a tela de gestão precisaria escrever direto nas coleções de PIN, e
+// aí as regras do Firestore teriam de continuar abertas para qualquer sessão
+// autenticada — o buraco que estamos fechando. O app guarda só o token; o
+// servidor é quem sabe a quem ele pertence e até quando vale.
+
+const ADMIN_SESSION_TTL_MS = 12 * 60 * 60 * 1000;
+
+// ─── Freio de tentativas ────────────────────────────────────────────────────
+//
+// Com o PIN saindo do cliente, a única forma de descobri-lo passa a ser
+// tentar. São seis dígitos: sem freio, um script varre o espaço inteiro em
+// poucas horas. O contador é por origem e some sozinho ao fim da janela.
+
+const ATTEMPT_WINDOW_MS = 15 * 60 * 1000;
+const ATTEMPT_LIMIT = 12;
+
+/** Identificador da tentativa.
+ *
+ * A chave inclui o alvo (papel + nome), não só a origem: num pavilhão a
+ * equipe inteira sai pelo mesmo IP, e contar só por IP faria o erro de um
+ * trancar o login de todos. Assim o freio vale por conta, que é o que a
+ * força bruta precisa atacar.
+ *
+ * @param {object} request requisição da callable
+ * @param {string} target papel|nome sendo tentado ("" no portão de admin)
+ * @return {string} chave do contador
+ */
+function callerKey(request, target) {
+  const raw = request.rawRequest || {};
+  const ip = (raw.headers && raw.headers["x-forwarded-for"]) || raw.ip || "";
+  const first = String(ip).split(",")[0].trim();
+  const uid = (request.auth && request.auth.uid) || "";
+  const origin = first || uid || "desconhecido";
+  return `${origin}|${target || ""}`
+      .replace(/[^a-zA-Z0-9.:|_-]/g, "_").slice(0, 200);
+}
+
+/** Recusa quando a origem já errou demais na janela.
+ * @param {object} request requisição da callable
+ * @param {string} target papel|nome sendo tentado
+ */
+async function checkAttempts(request, target) {
+  const ref = getFirestore().collection("pin_attempts")
+      .doc(callerKey(request, target));
+  const doc = await ref.get();
+  const data = doc.exists ? doc.data() : null;
+  if (!data || (data.windowStart || 0) + ATTEMPT_WINDOW_MS < Date.now()) return;
+  if ((data.fails || 0) >= ATTEMPT_LIMIT) {
+    throw new HttpsError("resource-exhausted", "muitas_tentativas");
+  }
+}
+
+/** Registra o resultado da tentativa: erro soma, acerto zera.
+ * @param {object} request requisição da callable
+ * @param {string} target papel|nome sendo tentado
+ * @param {boolean} ok se o PIN conferiu
+ */
+async function recordAttempt(request, target, ok) {
+  const ref = getFirestore().collection("pin_attempts")
+      .doc(callerKey(request, target));
+  if (ok) {
+    await ref.delete().catch(() => {});
+    return;
+  }
+  const now = Date.now();
+  await getFirestore().runTransaction(async (tx) => {
+    const doc = await tx.get(ref);
+    const data = doc.exists ? doc.data() : null;
+    const fresh = !data || (data.windowStart || 0) + ATTEMPT_WINDOW_MS < now;
+    tx.set(ref, {
+      windowStart: fresh ? now : data.windowStart,
+      fails: fresh ? 1 : (data.fails || 0) + 1,
+    });
+  }).catch(() => {
+    // Não deixar o freio derrubar o login de quem digitou certo.
+  });
+}
+
+/** Cria uma sessão de administrador e devolve o token.
+ * @param {string} name nome do administrador
+ * @return {Promise<string>} token da sessão
+ */
+async function mintAdminSession(name) {
+  const token = randomBytes(32).toString("hex");
+  const now = Date.now();
+  await getFirestore().collection("admin_sessions").doc(token).set({
+    name: String(name || ""),
+    createdAt: now,
+    expiresAt: now + ADMIN_SESSION_TTL_MS,
+  });
+  return token;
+}
+
+/** Valida o token e devolve o nome do administrador. Lança se inválido.
+ * @param {string} token token recebido do app
+ * @return {Promise<string>} nome do administrador
+ */
+async function requireAdminSession(token) {
+  if (!token) throw new HttpsError("unauthenticated", "sessao_ausente");
+  const doc = await getFirestore().collection("admin_sessions")
+      .doc(String(token)).get();
+  if (!doc.exists) throw new HttpsError("permission-denied", "sessao_invalida");
+  const data = doc.data() || {};
+  if (!data.expiresAt || data.expiresAt < Date.now()) {
+    await doc.ref.delete().catch(() => {});
+    throw new HttpsError("permission-denied", "sessao_expirada");
+  }
+  return data.name || "";
+}
+
+/** Portão de administrador por PIN, sem escolher nome.
+ *
+ * Substitui a comparação que era feita no aparelho contra um PIN padrão
+ * embutido no código — qualquer um que abrisse o APK tinha acesso de admin.
+ * Aqui o PIN digitado é conferido contra os administradores cadastrados e o
+ * app recebe apenas um token de sessão.
+ */
+exports.adminGate = onCall(async (request) => {
+  const pin = String((request.data && request.data.pin) || "");
+  if (!pin) throw new HttpsError("invalid-argument", "pin ausente");
+  await checkAttempts(request, "admin|gate");
+
+  const snap = await getFirestore().collection("admin_users").get();
+  if (snap.empty) return {ok: false, reason: "nenhum_admin"};
+
+  const match = snap.docs.find((d) => String((d.data() || {}).pin) === pin);
+  if (!match) {
+    await recordAttempt(request, "admin|gate", false);
+    return {ok: false, reason: "pin_incorreto"};
+  }
+  await recordAttempt(request, "admin|gate", true);
+
+  const name = (match.data() || {}).name || match.id;
+  return {ok: true, name, token: await mintAdminSession(name)};
+});
+
+/** Encerra a sessão de gestão (logout do admin). */
+exports.adminLogout = onCall(async (request) => {
+  const token = (request.data && request.data.token) || "";
+  if (token) {
+    await getFirestore().collection("admin_sessions").doc(String(token))
+        .delete().catch(() => {});
+  }
+  return {ok: true};
+});
+
+/** Limpa sessões vencidas. Sem isso a coleção só cresce. */
+exports.cleanupAdminSessions = onSchedule(
+    {schedule: "0 4 * * *", timeZone: "America/Sao_Paulo"},
+    async () => {
+      const db = getFirestore();
+      const batch = db.batch();
+
+      const sessions = await db.collection("admin_sessions")
+          .where("expiresAt", "<", Date.now()).limit(400).get();
+      sessions.docs.forEach((d) => batch.delete(d.ref));
+
+      // Contadores de tentativa também: a janela é de 15 minutos, então
+      // qualquer registro do dia anterior já não vale mais nada.
+      const attempts = await db.collection("pin_attempts")
+          .where("windowStart", "<", Date.now() - ATTEMPT_WINDOW_MS)
+          .limit(400).get();
+      attempts.docs.forEach((d) => batch.delete(d.ref));
+
+      if (sessions.size + attempts.size > 0) await batch.commit();
+      console.log(
+          `limpeza: ${sessions.size} sessões, ${attempts.size} tentativas`);
+    });
+
+// ─── Gestão de usuários e PINs ──────────────────────────────────────────────
+
+/** Id do documento para o papel indicado.
+ * @param {object} source entrada de PIN_SOURCES
+ * @param {string} name nome do usuário
+ * @return {string} id do documento
+ */
+function docIdFor(source, name) {
+  // admin_users e logistics_users guardam o nome num campo e usam a chave
+  // normalizada como id; as demais usam o próprio nome como id.
+  return source.byField ? userKey(name) : name;
+}
+
+/** Gestão dos usuários e PINs, restrita a quem tem sessão de admin.
+ *
+ * Uma função só com várias operações: a tela de Configurações mexe em oito
+ * coleções e trinta chamadas separadas seriam trinta pontos para manter em pé.
+ *
+ * Operações:
+ *  - list   {role}                       → [{name, pin, ...extra}]
+ *  - set    {role, name, pin, extra}     → grava (merge nos campos auxiliares)
+ *  - delete {role, name}                 → remove
+ */
+exports.manageUsers = onCall(async (request) => {
+  const {token, op, role, name, pin, extra} = request.data || {};
+  await requireAdminSession(token);
+
+  const source = PIN_SOURCES[role];
+  if (!source) throw new HttpsError("invalid-argument", "papel inválido");
+  const col = getFirestore().collection(source.collection);
+
+  if (op === "list") {
+    const snap = await col.get();
+    const users = snap.docs.map((d) => {
+      const data = d.data() || {};
+      const entry = {
+        name: source.byField ? (data.name || "") : d.id,
+        pin: data.pin != null ? String(data.pin) : null,
+      };
+      for (const f of source.extra || []) entry[f] = data[f] ?? null;
+      return entry;
+    }).filter((u) => u.name);
+    users.sort((a, b) => a.name.localeCompare(b.name));
+    return {users};
+  }
+
+  if (!name) throw new HttpsError("invalid-argument", "nome ausente");
+  const ref = col.doc(docIdFor(source, name));
+
+  if (op === "delete") {
+    await ref.delete();
+    return {ok: true};
+  }
+
+  if (op === "set") {
+    const payload = {};
+    if (source.byField) payload.name = name;
+    if (pin != null) payload.pin = String(pin);
+    for (const f of source.extra || []) {
+      if (extra && extra[f] != null) payload[f] = extra[f];
+    }
+    // merge para não apagar a equipe do líder ao trocar só o PIN, nem o
+    // contrário.
+    await ref.set(payload, {merge: true});
+    return {ok: true};
+  }
+
+  throw new HttpsError("invalid-argument", "operação inválida");
 });

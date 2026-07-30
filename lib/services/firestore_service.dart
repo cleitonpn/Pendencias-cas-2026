@@ -2,9 +2,68 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/pending_item.dart';
 import '../models/montage_update.dart';
 import '../models/freight_request.dart';
+import 'admin_api.dart';
 
 class FirestoreService {
   static FirebaseFirestore get _db => FirebaseFirestore.instance;
+
+  // ─── PINs: leitura e escrita pelo servidor ────────────────────────────────
+  //
+  // As coleções de PIN não são mais acessíveis pelo cliente (ver
+  // firestore.rules). Os métodos abaixo mantêm as mesmas assinaturas de antes
+  // para que a tela de Configurações continue igual, mas por dentro falam com
+  // a função `manageUsers`, que exige sessão de administrador.
+  //
+  // A tela pede a lista de nomes e depois o PIN de cada um, um por um. Sem
+  // este cache seriam dezenas de chamadas de função por abertura de tela.
+
+  static final Map<String, List<Map<String, dynamic>>> _userCache = {};
+
+  static Future<List<Map<String, dynamic>>> _listUsers(String role) async {
+    final users = await AdminApi.list(role);
+    _userCache[role] = users;
+    return users;
+  }
+
+  static Map<String, dynamic>? _cachedUser(String role, String name) {
+    for (final u in _userCache[role] ?? const <Map<String, dynamic>>[]) {
+      if (u['name'] == name) return u;
+    }
+    return null;
+  }
+
+  static Future<T?> _userField<T>(String role, String name, String field) async {
+    // Só busca se o papel ainda não foi carregado. A tela mistura nomes vindos
+    // da planilha com os que têm PIN cadastrado, então "não achou" é comum e
+    // não pode virar uma nova chamada de função a cada nome.
+    if (!_userCache.containsKey(role)) await _listUsers(role);
+    final v = _cachedUser(role, name)?[field];
+    return v is T ? v : null;
+  }
+
+  static Future<void> _setUser(String role, String name,
+      {String? pin, Map<String, dynamic>? extra}) async {
+    await AdminApi.set(role, name, pin: pin, extra: extra);
+    _userCache.remove(role);
+  }
+
+  static Future<void> _removeUser(String role, String name) async {
+    await AdminApi.remove(role, name);
+    _userCache.remove(role);
+  }
+
+  static Future<List<String>> _listNames(String role) async {
+    final users = await _listUsers(role);
+    final names = users
+        .map((u) => (u['name'] as String?) ?? '')
+        .where((n) => n.isNotEmpty)
+        .toList()
+      ..sort();
+    return names;
+  }
+
+  /// Descarta os PINs em memória — chamado ao sair da tela de Configurações.
+  static void clearUserCache() => _userCache.clear();
 
   // ─── Montage updates (fotos de andamento da montagem) ────────────────────────
 
@@ -272,130 +331,86 @@ class FirestoreService {
 
   // ─── Producer PINs ──────────────────────────────────────────────────────────
 
-  static Future<String?> getProducerPin(String producerName) async {
-    final doc =
-        await _db.collection('producer_pins').doc(producerName).get();
-    if (!doc.exists) return null;
-    return doc.data()?['pin'] as String?;
-  }
+  static Future<String?> getProducerPin(String producerName) =>
+      _userField<String>('producer', producerName, 'pin');
 
-  static Future<void> setProducerPin(String producerName, String pin) async {
-    await _db
-        .collection('producer_pins')
-        .doc(producerName)
-        .set({'pin': pin});
-  }
+  static Future<void> setProducerPin(String producerName, String pin) =>
+      _setUser('producer', producerName, pin: pin);
 
-  static Future<void> deleteProducerPin(String producerName) async {
-    await _db.collection('producer_pins').doc(producerName).delete();
-  }
+  static Future<void> deleteProducerPin(String producerName) =>
+      _removeUser('producer', producerName);
 
-  static Future<List<String>> getProducersWithPins() async {
-    final snapshot = await _db.collection('producer_pins').get();
-    final names = snapshot.docs.map((d) => d.id).toList()..sort();
-    return names;
-  }
+  static Future<List<String>> getProducersWithPins() => _listNames('producer');
 
   // ─── Consultant PINs ──────────────────────────────────────────────────────────
 
-  static Future<String?> getConsultantPin(String name) async {
-    final doc = await _db.collection('consultant_pins').doc(name).get();
-    if (!doc.exists) return null;
-    return doc.data()?['pin'] as String?;
-  }
+  static Future<String?> getConsultantPin(String name) =>
+      _userField<String>('consultant', name, 'pin');
 
-  static Future<void> setConsultantPin(String name, String pin) async {
-    await _db.collection('consultant_pins').doc(name).set({'pin': pin});
-  }
+  static Future<void> setConsultantPin(String name, String pin) =>
+      _setUser('consultant', name, pin: pin);
 
-  static Future<void> deleteConsultantPin(String name) async {
-    await _db.collection('consultant_pins').doc(name).delete();
-  }
+  static Future<void> deleteConsultantPin(String name) =>
+      _removeUser('consultant', name);
 
-  static Future<List<String>> getConsultantsWithPins() async {
-    final snapshot = await _db.collection('consultant_pins').get();
-    final names = snapshot.docs.map((d) => d.id).toList()..sort();
-    return names;
-  }
+  static Future<List<String>> getConsultantsWithPins() =>
+      _listNames('consultant');
 
   // ─── Organizer PINs ───────────────────────────────────────────────────────────
 
-  static Future<String?> getOrganizerPin(String name) async {
-    final doc = await _db.collection('organizer_pins').doc(name).get();
-    if (!doc.exists) return null;
-    return doc.data()?['pin'] as String?;
-  }
+  static Future<String?> getOrganizerPin(String name) =>
+      _userField<String>('organizer', name, 'pin');
 
-  static Future<void> setOrganizerPin(String name, String pin) async {
-    await _db
-        .collection('organizer_pins')
-        .doc(name)
-        .set({'pin': pin}, SetOptions(merge: true));
-  }
+  static Future<void> setOrganizerPin(String name, String pin) =>
+      _setUser('organizer', name, pin: pin);
 
-  static Future<void> deleteOrganizerPin(String name) async {
-    await _db.collection('organizer_pins').doc(name).delete();
-  }
+  static Future<void> deleteOrganizerPin(String name) =>
+      _removeUser('organizer', name);
 
   /// Returns the fair ID linked to this organizer, or null if not set.
+  ///
+  /// Só a gestão passa por aqui. O portal da organizadora recebe a feira já
+  /// no retorno do login (`verifyPin`) e, quando precisa redescobri-la, usa
+  /// `PinService.listUsers`, que não devolve PIN nenhum.
   static Future<int?> getOrganizerFairId(String name) async {
-    final doc = await _db.collection('organizer_pins').doc(name).get();
-    if (!doc.exists) return null;
-    final v = doc.data()?['fairId'];
+    final v = await _userField<Object>('organizer', name, 'fairId');
     if (v is int) return v;
     if (v is String) return int.tryParse(v);
     return null;
   }
 
   /// Associates an organizer with a specific fair (merges into existing doc).
-  static Future<void> setOrganizerFairId(String name, int fairId) async {
-    await _db
-        .collection('organizer_pins')
-        .doc(name)
-        .set({'fairId': fairId}, SetOptions(merge: true));
-  }
+  static Future<void> setOrganizerFairId(String name, int fairId) =>
+      _setUser('organizer', name, extra: {'fairId': fairId});
 
-  static Future<List<String>> getOrganizersWithPins() async {
-    final snapshot = await _db.collection('organizer_pins').get();
-    final names = snapshot.docs.map((d) => d.id).toList()..sort();
-    return names;
-  }
+  static Future<List<String>> getOrganizersWithPins() =>
+      _listNames('organizer');
 
   // ─── Team Leader PINs ───────────────────────────────────────────────────────
 
-  static Future<String?> getTeamLeaderPin(String name) async {
-    final doc = await _db.collection('team_leader_pins').doc(name).get();
-    if (!doc.exists) return null;
-    return doc.data()?['pin'] as String?;
-  }
+  static Future<String?> getTeamLeaderPin(String name) =>
+      _userField<String>('leader', name, 'pin');
 
-  static Future<String?> getTeamLeaderTeam(String name) async {
-    final doc = await _db.collection('team_leader_pins').doc(name).get();
-    if (!doc.exists) return null;
-    return doc.data()?['team'] as String?;
-  }
+  static Future<String?> getTeamLeaderTeam(String name) =>
+      _userField<String>('leader', name, 'team');
 
   static Future<void> setTeamLeaderPin(
-      String name, String pin, String team) async {
-    await _db
-        .collection('team_leader_pins')
-        .doc(name)
-        .set({'pin': pin, 'team': team});
-  }
+          String name, String pin, String team) =>
+      _setUser('leader', name, pin: pin, extra: {'team': team});
 
-  static Future<void> deleteTeamLeaderPin(String name) async {
-    await _db.collection('team_leader_pins').doc(name).delete();
-  }
+  static Future<void> deleteTeamLeaderPin(String name) =>
+      _removeUser('leader', name);
 
   /// Returns list of {name, team} maps, sorted by name.
   static Future<List<Map<String, String>>> getTeamLeadersWithPins() async {
-    final snapshot = await _db.collection('team_leader_pins').get();
-    final list = snapshot.docs.map((d) {
-      return {
-        'name': d.id,
-        'team': (d.data()['team'] as String?) ?? '',
-      };
-    }).toList();
+    final users = await _listUsers('leader');
+    final list = users
+        .map((u) => {
+              'name': (u['name'] as String?) ?? '',
+              'team': (u['team'] as String?) ?? '',
+            })
+        .where((e) => e['name']!.isNotEmpty)
+        .toList();
     list.sort((a, b) => a['name']!.compareTo(b['name']!));
     return list;
   }
@@ -538,47 +553,29 @@ class FirestoreService {
 
   // ─── Manager PINs ────────────────────────────────────────────────────────────
 
-  static Future<String?> getManagerPin(String name) async {
-    final doc = await _db.collection('manager_pins').doc(name).get();
-    if (!doc.exists) return null;
-    return doc.data()?['pin'] as String?;
-  }
+  static Future<String?> getManagerPin(String name) =>
+      _userField<String>('manager', name, 'pin');
 
-  static Future<void> setManagerPin(String name, String pin) async {
-    await _db.collection('manager_pins').doc(name).set({'pin': pin});
-  }
+  static Future<void> setManagerPin(String name, String pin) =>
+      _setUser('manager', name, pin: pin);
 
-  static Future<void> deleteManagerPin(String name) async {
-    await _db.collection('manager_pins').doc(name).delete();
-  }
+  static Future<void> deleteManagerPin(String name) =>
+      _removeUser('manager', name);
 
-  static Future<List<String>> getManagersWithPins() async {
-    final snapshot = await _db.collection('manager_pins').get();
-    final names = snapshot.docs.map((d) => d.id).toList()..sort();
-    return names;
-  }
+  static Future<List<String>> getManagersWithPins() => _listNames('manager');
 
   // ─── Analyst PINs ────────────────────────────────────────────────────────────
 
-  static Future<String?> getAnalystPin(String name) async {
-    final doc = await _db.collection('analyst_pins').doc(name).get();
-    if (!doc.exists) return null;
-    return doc.data()?['pin'] as String?;
-  }
+  static Future<String?> getAnalystPin(String name) =>
+      _userField<String>('analyst', name, 'pin');
 
-  static Future<void> setAnalystPin(String name, String pin) async {
-    await _db.collection('analyst_pins').doc(name).set({'pin': pin});
-  }
+  static Future<void> setAnalystPin(String name, String pin) =>
+      _setUser('analyst', name, pin: pin);
 
-  static Future<void> deleteAnalystPin(String name) async {
-    await _db.collection('analyst_pins').doc(name).delete();
-  }
+  static Future<void> deleteAnalystPin(String name) =>
+      _removeUser('analyst', name);
 
-  static Future<List<String>> getAnalystsWithPins() async {
-    final snapshot = await _db.collection('analyst_pins').get();
-    final names = snapshot.docs.map((d) => d.id).toList()..sort();
-    return names;
-  }
+  static Future<List<String>> getAnalystsWithPins() => _listNames('analyst');
 
   // ─── Spec Locking ─────────────────────────────────────────────────────────
 
@@ -697,34 +694,16 @@ class FirestoreService {
 
   // ─── Admin Users ──────────────────────────────────────────────────────────
 
-  static Future<List<String>> getAdminUsers() async {
-    try {
-      final snap = await _db.collection('admin_users').orderBy('name').get();
-      return snap.docs.map((d) => (d.data()['name'] as String?) ?? '').where((s) => s.isNotEmpty).toList();
-    } catch (_) {
-      return [];
-    }
-  }
+  static Future<List<String>> getAdminUsers() => _listNames('admin');
 
-  static Future<String?> getAdminUserPin(String name) async {
-    try {
-      final snap = await _db.collection('admin_users').where('name', isEqualTo: name).limit(1).get();
-      if (snap.docs.isEmpty) return null;
-      return snap.docs.first.data()['pin'] as String?;
-    } catch (_) {
-      return null;
-    }
-  }
+  static Future<String?> getAdminUserPin(String name) =>
+      _userField<String>('admin', name, 'pin');
 
-  static Future<void> saveAdminUser(String name, String pin) async {
-    final key = name.toLowerCase().trim().replaceAll(' ', '_').replaceAll(RegExp(r'[^a-z0-9_]'), '');
-    await _db.collection('admin_users').doc(key).set({'name': name, 'pin': pin});
-  }
+  static Future<void> saveAdminUser(String name, String pin) =>
+      _setUser('admin', name, pin: pin);
 
-  static Future<void> deleteAdminUser(String name) async {
-    final key = name.toLowerCase().trim().replaceAll(' ', '_').replaceAll(RegExp(r'[^a-z0-9_]'), '');
-    await _db.collection('admin_users').doc(key).delete();
-  }
+  static Future<void> deleteAdminUser(String name) =>
+      _removeUser('admin', name);
 
   // ─── Avisos ───────────────────────────────────────────────────────────────
 
@@ -842,44 +821,16 @@ class FirestoreService {
 
   // ─── Logistics Users ──────────────────────────────────────────────────────
 
-  static Future<List<String>> getLogisticsUsers() async {
-    try {
-      final snap = await _db.collection('logistics_users').orderBy('name').get();
-      return snap.docs
-          .map((d) => (d.data()['name'] as String?) ?? '')
-          .where((s) => s.isNotEmpty)
-          .toList();
-    } catch (_) {
-      return [];
-    }
-  }
+  static Future<List<String>> getLogisticsUsers() => _listNames('logistica');
 
-  static Future<String?> getLogisticsUserPin(String name) async {
-    try {
-      final key = name.toLowerCase().trim()
-          .replaceAll(' ', '_')
-          .replaceAll(RegExp(r'[^a-z0-9_]'), '');
-      final doc = await _db.collection('logistics_users').doc(key).get();
-      if (!doc.exists) return null;
-      return doc.data()?['pin'] as String?;
-    } catch (_) {
-      return null;
-    }
-  }
+  static Future<String?> getLogisticsUserPin(String name) =>
+      _userField<String>('logistica', name, 'pin');
 
-  static Future<void> saveLogisticsUser(String name, String pin) async {
-    final key = name.toLowerCase().trim()
-        .replaceAll(' ', '_')
-        .replaceAll(RegExp(r'[^a-z0-9_]'), '');
-    await _db.collection('logistics_users').doc(key).set({'name': name, 'pin': pin});
-  }
+  static Future<void> saveLogisticsUser(String name, String pin) =>
+      _setUser('logistica', name, pin: pin);
 
-  static Future<void> deleteLogisticsUser(String name) async {
-    final key = name.toLowerCase().trim()
-        .replaceAll(' ', '_')
-        .replaceAll(RegExp(r'[^a-z0-9_]'), '');
-    await _db.collection('logistics_users').doc(key).delete();
-  }
+  static Future<void> deleteLogisticsUser(String name) =>
+      _removeUser('logistica', name);
 
   // ─── Freight Requests ─────────────────────────────────────────────────────
 

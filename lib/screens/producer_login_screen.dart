@@ -71,6 +71,11 @@ class _ProducerLoginScreenState extends State<ProducerLoginScreen> {
               _error = 'PIN incorreto. Tente novamente.';
               _pinCtrl.clear();
               break;
+            case 'bloqueado':
+              _error = 'Muitas tentativas erradas.\n'
+                  'Aguarde 15 minutos e tente de novo.';
+              _pinCtrl.clear();
+              break;
             default:
               _error = 'Não foi possível verificar agora.\n'
                   'Confira a conexão e tente de novo.';

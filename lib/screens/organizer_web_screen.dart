@@ -157,8 +157,13 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
       // Fast path: if the organizer has a specific fair assigned in Firestore,
       // skip the slow spreadsheet-by-spreadsheet scan.
       if (widget.fairId == null) {
+        // Pela listagem pública de nomes, que não devolve PIN nenhum — a
+        // leitura direta da coleção agora é exclusiva da gestão.
+        final r = await PinService.listUsers('organizer');
+        final match = r.users.where((u) => u['name'] == _organizerName);
+        final raw = match.isEmpty ? null : match.first['fairId'];
         final assignedId =
-            await FirestoreService.getOrganizerFairId(_organizerName!);
+            raw is int ? raw : (raw is String ? int.tryParse(raw) : null);
         if (assignedId != null) {
           await _loadFairById(assignedId);
           return;
@@ -275,6 +280,11 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
           break;
         case 'pin_incorreto':
           _toast('PIN incorreto. Tente novamente.', error: true);
+          _pinCtrl.clear();
+          break;
+        case 'bloqueado':
+          _toast('Muitas tentativas erradas. Aguarde 15 minutos.',
+              error: true);
           _pinCtrl.clear();
           break;
         default:

@@ -1,22 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import '../services/admin_api.dart';
+import '../services/session_service.dart';
 
-const _kDefaultPin = '563982';
-const _kPinKey = 'admin_pin';
-
-Future<String> getAdminPin() async {
-  final prefs = await SharedPreferences.getInstance();
-  return prefs.getString(_kPinKey) ?? _kDefaultPin;
-}
-
-Future<void> saveAdminPin(String pin) async {
-  final prefs = await SharedPreferences.getInstance();
-  await prefs.setString(_kPinKey, pin);
-}
-
-/// Shows an admin PIN dialog and returns true if the correct PIN was entered.
+/// Portão de administrador.
+///
+/// Antes o PIN era conferido no próprio aparelho, contra um valor padrão
+/// escrito no código (e guardado em SharedPreferences quando trocado). Quem
+/// abrisse o APK tinha acesso de admin, e a troca de PIN valia só naquele
+/// celular. Agora quem confere é o servidor, contra os administradores
+/// cadastrados, e o app guarda apenas um token de sessão de 12 horas.
 Future<bool> requireAdminPin(BuildContext context) async {
+  // Quem entrou no app como administrador já provou quem é no login e saiu de
+  // lá com a sessão de gestão. Pedir o PIN de novo aqui só atrapalharia — e,
+  // pior, travaria o trabalho em campo quando o sinal do pavilhão cai, já que
+  // a conferência agora depende do servidor.
+  final session = await SessionService.get();
+  if (session?['role'] == 'admin' && await AdminApi.hasValidSession()) {
+    return true;
+  }
+
+  if (!context.mounted) return false;
   final ctrl = TextEditingController();
   final confirmed = await showDialog<bool>(
     context: context,
@@ -62,15 +66,18 @@ Future<bool> requireAdminPin(BuildContext context) async {
 
   if (confirmed != true) return false;
 
-  final adminPin = await getAdminPin();
-  if (ctrl.text == adminPin) return true;
+  final r = await AdminApi.gate(ctrl.text);
+  if (r.ok) return true;
 
   if (context.mounted) {
+    final msg = switch (r.reason) {
+      'erro' => 'Não foi possível verificar agora. Confira a conexão.',
+      'bloqueado' => 'Muitas tentativas erradas. Tente de novo em 15 minutos.',
+      'nenhum_admin' => 'Nenhum administrador cadastrado no sistema.',
+      _ => 'PIN incorreto. Acesso negado.',
+    };
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('PIN incorreto. Acesso negado.'),
-        backgroundColor: Colors.red,
-      ),
+      SnackBar(content: Text(msg), backgroundColor: Colors.red),
     );
   }
   return false;

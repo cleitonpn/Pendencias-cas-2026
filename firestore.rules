@@ -2,25 +2,52 @@ rules_version = '2';
 
 // ── Modelo de segurança ────────────────────────────────────────────────────
 //
-// O controle de acesso fica dentro do app (PIN admin, PIN produtor, token QR
-// do stand). O Firebase Auth é usado apenas para dar uma identidade anônima
-// a cada cliente, permitindo que as regras do Firestore rejeitem requisições
-// não autenticadas vindas de fora do app.
+// O Firebase Auth dá uma identidade anônima a cada cliente; as regras usam
+// isso apenas para rejeitar requisições vindas de fora do app. O controle de
+// quem é quem continua no PIN — mas o PIN não mora mais no cliente.
 //
-// PASSOS DA MIGRAÇÃO (Etapa 2):
-//  1. Ative Autenticação Anônima no Firebase Console:
-//     Authentication → Sign-in methods → Anonymous → Ativar
-//  2. Garanta que todos os dispositivos estejam na v1.0.9+ do app.
-//  3. Troque `if true` por `if request.auth != null` abaixo e faça deploy.
+// As coleções listadas em isProtected() estão fechadas para qualquer cliente.
+// Elas são lidas e escritas somente pelo Admin SDK, dentro das Cloud
+// Functions:
 //
-// O app v1.0.9+ já chama signInAnonymously() na inicialização, então depois
-// que todos os dispositivos atualizarem, o passo 3 é seguro.
+//   listUsers    → nomes de um papel, sem PIN (tela de login)
+//   verifyPin    → confere o PIN digitado (o cadastrado nunca desce)
+//   adminGate    → portão de administrador, devolve um token de sessão
+//   manageUsers  → gestão de usuários e PINs, exige sessão de administrador
+//   adminLogout / cleanupAdminSessions → encerram as sessões
+//
+// Antes desta versão a regra geral (`allow read, write: if request.auth
+// != null`) valia também para as coleções de PIN, e a sessão anônima dos
+// portais públicos — o do stand, o da organizadora — bastava para baixar
+// todos os PINs do sistema.
+//
+// As regras do Firestore são somadas com OU: não dá para restringir uma
+// coleção acrescentando um `match` mais específico, porque o `match` genérico
+// continuaria autorizando. Por isso o curinga abaixo é `{col}/{doc}` (um
+// nível) com as coleções protegidas excluídas, em vez de `{document=**}`.
+// Não há subcoleções em uso.
 // ──────────────────────────────────────────────────────────────────────────
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
-      allow read, write: if request.auth != null;
+
+    function isProtected(col) {
+      return col in [
+        'producer_pins',
+        'consultant_pins',
+        'manager_pins',
+        'team_leader_pins',
+        'analyst_pins',
+        'organizer_pins',
+        'admin_users',
+        'logistics_users',
+        'admin_sessions',
+        'pin_attempts'
+      ];
+    }
+
+    match /{col}/{doc} {
+      allow read, write: if request.auth != null && !isProtected(col);
     }
   }
 }

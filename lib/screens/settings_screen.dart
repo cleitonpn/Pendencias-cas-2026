@@ -4,7 +4,8 @@ import 'package:provider/provider.dart';
 import '../providers/app_provider.dart';
 import '../services/database_service.dart';
 import '../services/firestore_service.dart';
-import '../utils/admin_pin.dart';
+import '../services/session_service.dart';
+import '../services/admin_api.dart';
 import '../utils/stand_link.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -65,7 +66,48 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _loadPins();
   }
 
+  /// Executa uma gravação de cadastro avisando quando ela falha.
+  ///
+  /// A gestão passou a ir pelo servidor, então gravar pode falhar por rede ou
+  /// por sessão vencida. Sem isto o erro sumiria e a tela recarregaria o valor
+  /// antigo, dando a impressão de que a alteração simplesmente não pegou.
+  Future<bool> _guard(Future<void> Function() op) async {
+    try {
+      await op();
+      return true;
+    } catch (e) {
+      if (mounted) {
+        _snack(
+          AdminApi.isSessionError(e)
+              ? 'Sua sessão de administrador expirou. Entre de novo.'
+              : 'Não foi possível salvar. Confira a conexão e tente de novo.',
+          isError: true,
+        );
+      }
+      return false;
+    }
+  }
+
+  /// Carrega os cadastros. A gestão passa por Cloud Function e exige sessão
+  /// de administrador — se ela caiu, a tela avisa e volta em vez de ficar
+  /// vazia sem explicação.
   Future<void> _loadPins() async {
+    try {
+      await _loadPinsInner();
+    } catch (e) {
+      if (!mounted) return;
+      final expired = AdminApi.isSessionError(e);
+      _snack(
+        expired
+            ? 'Sua sessão de administrador expirou. Entre de novo.'
+            : 'Não foi possível carregar os cadastros. Confira a conexão.',
+        isError: true,
+      );
+      if (expired) Navigator.of(context).maybePop();
+    }
+  }
+
+  Future<void> _loadPinsInner() async {
     final fairId = context.read<AppProvider>().currentFair?.id;
 
     // Producers: merge local DB names (if a fair is open) with Firestore PIN holders
@@ -233,9 +275,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     if (result == null) return;
     if (result.isEmpty) {
-      await FirestoreService.deleteProducerPin(producerName);
+      await _guard(() => FirestoreService.deleteProducerPin(producerName));
     } else {
-      await FirestoreService.setProducerPin(producerName, result);
+      await _guard(() => FirestoreService.setProducerPin(producerName, result));
     }
     await _loadPins();
   }
@@ -283,9 +325,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     if (result == null) return;
     if (result.isEmpty) {
-      await FirestoreService.deleteConsultantPin(name);
+      await _guard(() => FirestoreService.deleteConsultantPin(name));
     } else {
-      await FirestoreService.setConsultantPin(name, result);
+      await _guard(() => FirestoreService.setConsultantPin(name, result));
     }
     await _loadPins();
   }
@@ -370,11 +412,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     if (result == null) return;
     if (result.pin.isEmpty) {
-      await FirestoreService.deleteOrganizerPin(name);
+      await _guard(() => FirestoreService.deleteOrganizerPin(name));
     } else {
-      await FirestoreService.setOrganizerPin(name, result.pin);
+      await _guard(() => FirestoreService.setOrganizerPin(name, result.pin));
       if (result.fairId != null) {
-        await FirestoreService.setOrganizerFairId(name, result.fairId!);
+        await _guard(() => FirestoreService.setOrganizerFairId(name, result.fairId!));
       }
     }
     await _loadPins();
@@ -451,9 +493,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (result == null) return;
     if (result == false) {
       // Remove PIN but keep leader entry with team
-      await FirestoreService.setTeamLeaderPin(name, '', selectedTeam);
+      await _guard(() => FirestoreService.setTeamLeaderPin(name, '', selectedTeam));
     } else {
-      await FirestoreService.setTeamLeaderPin(name, pinCtrl.text, selectedTeam);
+      await _guard(() => FirestoreService.setTeamLeaderPin(name, pinCtrl.text, selectedTeam));
     }
     await _loadPins();
   }
@@ -523,7 +565,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (result != true) return;
     final name = nameCtrl.text.trim();
     if (name.isEmpty) return;
-    await FirestoreService.setTeamLeaderPin(name, pinCtrl.text, selectedTeam);
+    await _guard(() => FirestoreService.setTeamLeaderPin(name, pinCtrl.text, selectedTeam));
     await _loadPins();
   }
 
@@ -549,7 +591,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
     );
     if (confirmed != true) return;
-    await FirestoreService.deleteTeamLeaderPin(name);
+    await _guard(() => FirestoreService.deleteTeamLeaderPin(name));
     await _loadPins();
   }
 
@@ -596,9 +638,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     if (result == null) return;
     if (result.isEmpty) {
-      await FirestoreService.deleteManagerPin(name);
+      await _guard(() => FirestoreService.deleteManagerPin(name));
     } else {
-      await FirestoreService.setManagerPin(name, result);
+      await _guard(() => FirestoreService.setManagerPin(name, result));
     }
     await _loadPins();
   }
@@ -655,7 +697,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (result != true) return;
     final name = nameCtrl.text.trim();
     if (name.isEmpty) return;
-    await FirestoreService.setManagerPin(name, pinCtrl.text);
+    await _guard(() => FirestoreService.setManagerPin(name, pinCtrl.text));
     await _loadPins();
   }
 
@@ -681,7 +723,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
     );
     if (confirmed != true) return;
-    await FirestoreService.deleteManagerPin(name);
+    await _guard(() => FirestoreService.deleteManagerPin(name));
     await _loadPins();
   }
 
@@ -728,9 +770,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     if (result == null) return;
     if (result.isEmpty) {
-      await FirestoreService.deleteAnalystPin(name);
+      await _guard(() => FirestoreService.deleteAnalystPin(name));
     } else {
-      await FirestoreService.setAnalystPin(name, result);
+      await _guard(() => FirestoreService.setAnalystPin(name, result));
     }
     await _loadPins();
   }
@@ -787,7 +829,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (result != true) return;
     final name = nameCtrl.text.trim();
     if (name.isEmpty) return;
-    await FirestoreService.setAnalystPin(name, pinCtrl.text);
+    await _guard(() => FirestoreService.setAnalystPin(name, pinCtrl.text));
     await _loadPins();
   }
 
@@ -813,7 +855,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
     );
     if (confirmed != true) return;
-    await FirestoreService.deleteAnalystPin(name);
+    await _guard(() => FirestoreService.deleteAnalystPin(name));
     await _loadPins();
   }
 
@@ -869,7 +911,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (result != true) return;
     final name = nameCtrl.text.trim();
     if (name.isEmpty) return;
-    await FirestoreService.saveAdminUser(name, pinCtrl.text);
+    await _guard(() => FirestoreService.saveAdminUser(name, pinCtrl.text));
     await _loadPins();
   }
 
@@ -895,7 +937,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
     );
     if (confirmed != true) return;
-    await FirestoreService.deleteAdminUser(name);
+    await _guard(() => FirestoreService.deleteAdminUser(name));
     await _loadPins();
   }
 
@@ -936,7 +978,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
 
     if (result == null) return;
-    await FirestoreService.saveAdminUser(name, result);
+    await _guard(() => FirestoreService.saveAdminUser(name, result));
     await _loadPins();
   }
 
@@ -992,7 +1034,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (result != true) return;
     final name = nameCtrl.text.trim();
     if (name.isEmpty) return;
-    await FirestoreService.saveLogisticsUser(name, pinCtrl.text);
+    await _guard(() => FirestoreService.saveLogisticsUser(name, pinCtrl.text));
     await _loadPins();
   }
 
@@ -1039,9 +1081,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     if (result == null) return;
     if (result.isEmpty) {
-      await FirestoreService.deleteLogisticsUser(name);
+      await _guard(() => FirestoreService.deleteLogisticsUser(name));
     } else {
-      await FirestoreService.saveLogisticsUser(name, result);
+      await _guard(() => FirestoreService.saveLogisticsUser(name, result));
     }
     await _loadPins();
   }
@@ -1067,12 +1109,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
     );
     if (confirmed != true) return;
-    await FirestoreService.deleteLogisticsUser(name);
+    await _guard(() => FirestoreService.deleteLogisticsUser(name));
     await _loadPins();
   }
 
+  /// Troca o PIN do administrador que está logado.
+  ///
+  /// Antes isto gravava um PIN só naquele aparelho, com um valor padrão
+  /// escrito no código do app. Agora altera o cadastro no servidor, valendo
+  /// para todos os aparelhos — é o mesmo PIN usado para entrar no app.
   Future<void> _changeAdminPin() async {
-    final currentPin = await getAdminPin();
+    final session = await SessionService.get();
+    final adminName = session?['name'] ?? '';
+    if (adminName.isEmpty || session?['role'] != 'admin') {
+      _snack('Entre como administrador para alterar o seu PIN.',
+          isError: true);
+      return;
+    }
+    final currentPin = await FirestoreService.getAdminUserPin(adminName);
+    if (currentPin == null) {
+      _snack('Cadastro de administrador não encontrado.', isError: true);
+      return;
+    }
+    if (!mounted) return;
     final currentCtrl = TextEditingController();
     final newCtrl = TextEditingController();
 
@@ -1124,9 +1183,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     isError: true);
                 return;
               }
-              await saveAdminPin(newCtrl.text);
+              final ok = await _guard(
+                  () => FirestoreService.saveAdminUser(adminName, newCtrl.text));
+              if (!ctx.mounted) return;
               Navigator.pop(ctx);
-              _snack('PIN de administrador alterado!');
+              if (ok) _snack('PIN de administrador alterado!');
+              await _loadPins();
             },
             style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF1E3A5F),
@@ -1994,7 +2056,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
                 title: const Text('PIN de Administrador',
                     style: TextStyle(fontWeight: FontWeight.w600)),
-                subtitle: const Text('Altere o PIN de acesso admin',
+                subtitle: const Text('Altere o seu PIN de acesso (vale em todos os aparelhos)',
                     style: TextStyle(fontSize: 12, color: Colors.grey)),
                 trailing: TextButton(
                   onPressed: _changeAdminPin,
