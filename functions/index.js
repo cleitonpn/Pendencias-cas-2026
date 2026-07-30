@@ -902,3 +902,28 @@ exports.meetingReminders = onSchedule(
       }
       if (enviados > 0) console.log(`lembretes de reunião: ${enviados}`);
     });
+
+// ─── Versão mínima do app ───────────────────────────────────────────────────
+//
+// O número é lido por todos e escrito só por aqui. Se a escrita fosse direta,
+// qualquer sessão autenticada — inclusive a anônima dos portais públicos —
+// poderia exigir uma versão que não existe e trancar a equipe inteira fora do
+// app no meio de uma montagem.
+exports.setMinBuild = onCall(async (request) => {
+  const {token, minBuild, message} = request.data || {};
+  const quem = await requireAdminSession(token);
+
+  const n = Number(minBuild);
+  if (!Number.isInteger(n) || n < 0) {
+    throw new HttpsError("invalid-argument", "build inválida");
+  }
+
+  await getFirestore().collection("app_config").doc("version").set({
+    minBuild: n,
+    message: String(message || ""),
+    updatedAt: new Date().toISOString(),
+    updatedBy: quem,
+  }, {merge: true});
+
+  return {ok: true};
+});

@@ -46,8 +46,21 @@ service cloud.firestore {
       ];
     }
 
+    // Lidas por todos, escritas só pelo Admin SDK dentro das funções.
+    //
+    // app_config guarda a versão mínima do app. Se o cliente pudesse
+    // escrever, qualquer sessão autenticada — inclusive a anônima dos portais
+    // públicos — poderia exigir uma versão que não existe e trancar a equipe
+    // inteira fora do app no meio de uma montagem.
+    function isServerOwned(col) {
+      return col in ['app_config'];
+    }
+
     match /{col}/{doc} {
-      allow read, write: if request.auth != null && !isProtected(col);
+      allow read: if request.auth != null && !isProtected(col);
+      allow write: if request.auth != null &&
+                      !isProtected(col) &&
+                      !isServerOwned(col);
     }
   }
 }

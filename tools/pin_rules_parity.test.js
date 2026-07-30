@@ -71,6 +71,25 @@ test('o contador de tentativas está fechado', () => {
   );
 });
 
+test('app_config é somente leitura para o cliente', () => {
+  const src = fs.readFileSync(path.join(root, 'firestore.rules'), 'utf8');
+  const start = src.indexOf('function isServerOwned(');
+  assert.ok(start >= 0, 'isServerOwned não encontrado em firestore.rules');
+  const end = src.indexOf('}', src.indexOf('return', start));
+  assert.ok(
+      src.slice(start, end).includes("'app_config'"),
+      'app_config precisa ser somente leitura: com escrita liberada, ' +
+      'qualquer sessão autenticada tranca a equipe fora do app definindo ' +
+      'uma versão mínima inexistente',
+  );
+  // A regra tem de separar leitura de escrita; um `allow read, write` junto
+  // devolveria a escrita ao cliente sem ninguém notar.
+  assert.ok(
+      /allow read:/.test(src) && /allow write:/.test(src),
+      'as permissões de leitura e escrita precisam estar separadas',
+  );
+});
+
 test('a regra geral não usa o curinga recursivo', () => {
   const src = fs.readFileSync(path.join(root, 'firestore.rules'), 'utf8');
   const rules = src.split('\n')

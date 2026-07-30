@@ -6,6 +6,7 @@ import '../services/database_service.dart';
 import '../services/firestore_service.dart';
 import '../services/session_service.dart';
 import '../services/admin_api.dart';
+import '../services/version_gate.dart';
 import '../utils/stand_link.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -28,6 +29,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   List<String> _organizers = [];
   Map<String, String?> _organizerPins = {};
   Map<String, List<int>> _organizerFairIds = {};
+
+  /// Versão mínima exigida hoje, e a instalada neste aparelho.
+  int _minBuild = 0;
+  int _thisBuild = 0;
   List<Map<String, dynamic>> _allFairs = [];
 
   // Team leaders
@@ -64,6 +69,97 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void initState() {
     super.initState();
     _loadPins();
+    _loadVersionGate();
+  }
+
+  Future<void> _loadVersionGate() async {
+    final min = await VersionGate.currentMinimum();
+    final local = await VersionGate.localBuild();
+    if (mounted) setState(() { _minBuild = min; _thisBuild = local; });
+  }
+
+  /// Define a versão mínima aceita.
+  ///
+  /// Serve para o dia em que uma mudança quebra compatibilidade — o
+  /// fechamento das regras do Firestore, por exemplo. Sem isso, quem está numa
+  /// versão anterior não recebe um "atualize": recebe permissão negada e
+  /// mensagens sem sentido, e liga achando que o app pifou.
+  Future<void> _changeMinBuild() async {
+    final ctrl = TextEditingController(
+        text: _minBuild == 0 ? '$_thisBuild' : '$_minBuild');
+    final msgCtrl = TextEditingController();
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        title: const Text('Versão mínima do app'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Esta instalação é a build $_thisBuild.',
+                style: const TextStyle(fontSize: 12, color: Colors.grey)),
+            const SizedBox(height: 12),
+            TextField(
+              controller: ctrl,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              decoration: const InputDecoration(
+                labelText: 'Build mínima (0 = sem exigência)',
+                prefixIcon: Icon(Icons.numbers),
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: msgCtrl,
+              maxLines: 2,
+              decoration: const InputDecoration(
+                labelText: 'Recado na tela de bloqueio (opcional)',
+                hintText: 'Ex: atualize pelo link do grupo',
+              ),
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              'Quem estiver abaixo disso não consegue usar o app até '
+              'atualizar. Defina só depois de distribuir a versão nova.',
+              style: TextStyle(fontSize: 11, color: Colors.orange),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancelar')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1E3A5F),
+                foregroundColor: Colors.white),
+            child: const Text('Salvar'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+
+    final novo = int.tryParse(ctrl.text) ?? 0;
+    if (novo > _thisBuild) {
+      _snack('Você se trancaria para fora: esta instalação é a '
+          '$_thisBuild.', isError: true);
+      return;
+    }
+    try {
+      await VersionGate.setMinimum(novo, message: msgCtrl.text.trim());
+      await _loadVersionGate();
+      if (mounted) {
+        _snack(novo == 0
+            ? 'Exigência de versão removida.'
+            : 'Versão mínima definida: build $novo.');
+      }
+    } catch (e) {
+      if (mounted) _snack('Não foi possível salvar: $e', isError: true);
+    }
   }
 
   /// Executa uma gravação de cadastro avisando quando ela falha.
@@ -2122,6 +2218,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 trailing: TextButton(
                   onPressed: _changeAdminPin,
                   child: const Text('Alterar',
+                      style: TextStyle(color: Color(0xFF1E3A5F))),
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 8),
+            Card(
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+              child: ListTile(
+                leading: const CircleAvatar(
+                  backgroundColor: Color(0xFF1E3A5F),
+                  child: Icon(Icons.system_update,
+                      color: Colors.white, size: 20),
+                ),
+                title: const Text('Versão mínima do app',
+                    style: TextStyle(fontWeight: FontWeight.w600)),
+                subtitle: Text(
+                    _minBuild == 0
+                        ? 'Sem exigência — qualquer versão entra'
+                        : 'Exigindo build $_minBuild ou maior',
+                    style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                trailing: TextButton(
+                  onPressed: _changeMinBuild,
+                  child: const Text('Definir',
                       style: TextStyle(color: Color(0xFF1E3A5F))),
                 ),
               ),

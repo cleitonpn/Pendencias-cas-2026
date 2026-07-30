@@ -17,6 +17,8 @@ import 'services/notification_router.dart';
 import 'services/update_service.dart';
 import 'widgets/update_dialog.dart';
 import 'widgets/cloud_write_banner.dart';
+import 'widgets/blocked_version_screen.dart';
+import 'services/version_gate.dart';
 import 'app_home.dart';
 
 /// Background/terminated FCM handler. Must be a top-level function.
@@ -86,12 +88,22 @@ class CasApp extends StatefulWidget {
 }
 
 class _CasAppState extends State<CasApp> {
+  /// Preenchido quando a versão instalada está abaixo da mínima exigida.
+  /// Enquanto isso o app não abre — ver BlockedVersionScreen.
+  VersionVerdict? _blocked;
+
   @override
   void initState() {
     super.initState();
     // After the first screen is up, check for an app update (Android only;
     // no-op on web/desktop) and offer to download + install it.
     WidgetsBinding.instance.addPostFrameCallback((_) => _checkForUpdate());
+    _checkVersionGate();
+  }
+
+  Future<void> _checkVersionGate() async {
+    final v = await VersionGate.check();
+    if (v.blocked && mounted) setState(() => _blocked = v);
   }
 
   Future<void> _checkForUpdate() async {
@@ -130,7 +142,9 @@ class _CasAppState extends State<CasApp> {
       // de qualquer uma delas, e o usuário precisa ver o aviso onde estiver.
       builder: (context, child) =>
           CloudWriteScope(child: child ?? const SizedBox.shrink()),
-      home: buildHome(),
+      home: _blocked != null
+          ? BlockedVersionScreen(verdict: _blocked!)
+          : buildHome(),
     );
   }
 }
