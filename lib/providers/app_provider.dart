@@ -292,6 +292,68 @@ class AppProvider extends ChangeNotifier {
     }
   }
 
+  /// Descobre em quais feiras esta pessoa trabalha, perguntando ao espelho.
+  ///
+  /// A tela inicial de produtor, consultor e líder monta a lista de feiras a
+  /// partir da tabela local de clientes. Num aparelho novo ela está vazia, e
+  /// aí não aparece feira nenhuma — mas para ter clientes locais era preciso
+  /// abrir uma feira, que é justamente o que não dá para fazer. O espelho
+  /// quebra esse ovo-e-galinha: pergunta direto pelo nome da pessoa.
+  ///
+  /// Devolve true quando trouxe algo novo, para a tela recarregar.
+  Future<bool> ensurePersonFairs({
+    required String role,
+    required String name,
+    String team = '',
+  }) async {
+    final coluna = switch (role) {
+      'producer' => 'produtor',
+      'consultant' => 'atendimento',
+      // Comunicação Visual e Vidraceiro não têm coluna por cliente: quem
+      // lidera essas equipes atende todas as feiras, e a lista já sai certa
+      // sem precisar do espelho.
+      'leader' => DatabaseService.teamColumn(team),
+      _ => null,
+    };
+    if (coluna == null || name.trim().isEmpty) return false;
+
+    try {
+      final docs = await FirestoreService.getClientsByPerson(
+        column: coluna,
+        name: name,
+      );
+      if (docs.isEmpty) return false;
+
+      // Os documentos guardam o id de feira de quem publicou. Aqui vale o id
+      // desta instalação, encontrado pelo nome da feira.
+      final porNome = <String, int>{
+        for (final f in _fairs)
+          if (f.id != null) fairKey(f.name): f.id!
+      };
+
+      final clientes = <Client>[];
+      for (final d in docs) {
+        final localId = porNome[fairKey((d['fairName'] as String?) ?? '')];
+        if (localId == null) continue; // feira não existe mais aqui
+        final data = Map<String, dynamic>.from(d);
+        final rowNum = (data['row_id'] as String? ?? '').split('_').last;
+        data['fair_id'] = localId;
+        data['row_id'] = '${localId}_$rowNum';
+        clientes.add(Client.fromMap(data));
+      }
+      if (clientes.isEmpty) return false;
+
+      await DatabaseService.upsertClients(clientes);
+      debugPrint('[espelho] $name: ${clientes.length} expositores em '
+          '${clientes.map((c) => c.fairId).toSet().length} feira(s)');
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint('[espelho] ensurePersonFairs($name): $e');
+      return false;
+    }
+  }
+
   /// Preenche o banco local a partir do espelho da nuvem.
   ///
   /// É o que faz um aparelho recém-instalado enxergar a feira sem precisar

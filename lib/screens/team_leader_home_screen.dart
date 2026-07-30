@@ -29,8 +29,22 @@ class _TeamLeaderHomeScreenState extends State<TeamLeaderHomeScreen> {
   }
 
   Future<void> _loadFairs() async {
-    final ids = await DatabaseService.getFairIdsWithLeader(
+    var ids = await DatabaseService.getFairIdsWithLeader(
         widget.leaderName, widget.team);
+    // Ver comentário em ConsultantHomeScreen. Equipes sem coluna por cliente
+    // (Comunicação Visual, Vidraceiro) já enxergam todas as feiras e não
+    // passam por aqui.
+    if (ids.isEmpty && mounted) {
+      final achou = await context.read<AppProvider>().ensurePersonFairs(
+            role: 'leader',
+            name: widget.leaderName,
+            team: widget.team,
+          );
+      if (achou) {
+        ids = await DatabaseService.getFairIdsWithLeader(
+            widget.leaderName, widget.team);
+      }
+    }
     if (mounted) setState(() => _fairIds = ids);
   }
 

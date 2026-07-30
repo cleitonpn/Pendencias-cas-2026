@@ -41,7 +41,21 @@ class _ConsultantHomeScreenState extends State<ConsultantHomeScreen> {
   void _onFairsChanged() => _loadFairIds();
 
   Future<void> _loadFairIds() async {
-    final ids = await DatabaseService.getFairIdsWithConsultant(widget.consultantName);
+    var ids =
+        await DatabaseService.getFairIdsWithConsultant(widget.consultantName);
+    // Aparelho novo: a tabela local está vazia, então nenhuma feira aparece —
+    // e sem abrir uma feira ela nunca se enche. O espelho da nuvem responde
+    // "quais feiras são suas" sem precisar da planilha.
+    if (ids.isEmpty && mounted) {
+      final achou = await context.read<AppProvider>().ensurePersonFairs(
+            role: 'consultant',
+            name: widget.consultantName,
+          );
+      if (achou) {
+        ids = await DatabaseService
+            .getFairIdsWithConsultant(widget.consultantName);
+      }
+    }
     if (mounted) setState(() => _fairIds = ids);
   }
 

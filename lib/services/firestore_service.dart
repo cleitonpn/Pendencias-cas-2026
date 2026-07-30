@@ -872,6 +872,27 @@ class FirestoreService {
     }).toList();
   }
 
+  /// Expositores ligados a uma pessoa, em TODAS as feiras.
+  ///
+  /// [column] é a coluna da planilha onde o nome dela aparece: `produtor`,
+  /// `atendimento`, ou a coluna da equipe do líder.
+  ///
+  /// Serve para responder "quais feiras são minhas" sem depender de o
+  /// aparelho já ter baixado as planilhas. Sem isso o app caía num
+  /// ovo-e-galinha: para saber as feiras da pessoa precisava dos clientes
+  /// locais, e para ter clientes locais precisava abrir a feira.
+  static Future<List<Map<String, dynamic>>> getClientsByPerson({
+    required String column,
+    required String name,
+  }) async {
+    if (name.trim().isEmpty) return [];
+    final snap =
+        await _clientsCol.where(column, isEqualTo: name.trim()).get();
+    return snap.docs
+        .map((d) => <String, dynamic>{...d.data(), 'firestore_id': d.id})
+        .toList();
+  }
+
   /// Assinaturas do que já está publicado, por firestoreId.
   ///
   /// Serve para publicar só o que mudou. Uma leitura por sincronização custa

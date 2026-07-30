@@ -608,6 +608,10 @@ class DatabaseService {
     return rows.map((r) => r['fair_id'] as int).toList();
   }
 
+  /// Coluna da planilha que guarda o líder desta equipe, ou null quando a
+  /// equipe não tem coluna por cliente.
+  static String? teamColumn(String team) => _teamColumn(team);
+
   static String? _teamColumn(String team) {
     switch (team.toLowerCase().trim()) {
       case 'elétrica':

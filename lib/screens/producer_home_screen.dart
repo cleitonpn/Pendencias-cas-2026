@@ -52,7 +52,19 @@ class _ProducerHomeScreenState extends State<ProducerHomeScreen> {
   }
 
   Future<void> _loadFairIds() async {
-    final ids = await DatabaseService.getFairIdsWithProducer(widget.producerName);
+    var ids =
+        await DatabaseService.getFairIdsWithProducer(widget.producerName);
+    // Ver comentário em ConsultantHomeScreen: sem isto, aparelho novo não
+    // mostra feira nenhuma e não há como sair do lugar.
+    if (ids.isEmpty && mounted) {
+      final achou = await context.read<AppProvider>().ensurePersonFairs(
+            role: 'producer',
+            name: widget.producerName,
+          );
+      if (achou) {
+        ids = await DatabaseService.getFairIdsWithProducer(widget.producerName);
+      }
+    }
     if (mounted) setState(() => _fairIds = ids);
   }
 
