@@ -4,6 +4,7 @@ import '../models/montage_update.dart';
 import '../models/freight_request.dart';
 import 'admin_api.dart';
 import '../utils/organizer_fairs.dart';
+import '../utils/fair_key.dart';
 
 class FirestoreService {
   static FirebaseFirestore get _db => FirebaseFirestore.instance;
@@ -497,11 +498,47 @@ class FirestoreService {
     );
   }
 
-  static Future<void> deleteFairFromCloud(int id) async {
-    try {
-      await _db.collection('fairs').doc(id.toString()).delete();
-    } catch (_) {}
+  /// Remove a feira da nuvem.
+  ///
+  /// Deixa o erro subir de propósito: engolir aqui fazia a feira "excluída"
+  /// voltar no próximo arranque, porque ela continuava na nuvem e ninguém
+  /// ficava sabendo da falha.
+  static Future<void> deleteFairFromCloud(int id) =>
+      _db.collection('fairs').doc(id.toString()).delete();
+
+  // ─── Feiras ignoradas ─────────────────────────────────────────────────────
+  //
+  // Excluir uma feira que vem da planilha mestra não adiantava: o sync lê a
+  // coluna FEIRA e recria tudo o que estiver lá. A lista abaixo é o que faz a
+  // exclusão durar, e fica na nuvem para valer em todos os aparelhos.
+
+  static Future<Set<String>> getIgnoredFairKeys() async {
+    final snap = await _db.collection('ignored_fairs').get();
+    return snap.docs.map((d) => d.id).toSet();
   }
+
+  static Future<List<Map<String, dynamic>>> getIgnoredFairs() async {
+    final snap = await _db.collection('ignored_fairs').get();
+    final list = snap.docs
+        .map((d) => {'key': d.id, ...d.data()})
+        .toList()
+      ..sort((a, b) =>
+          ((a['name'] as String?) ?? '').compareTo((b['name'] as String?) ?? ''));
+    return list;
+  }
+
+  static Future<void> ignoreFair(String name, {String by = ''}) async {
+    final key = fairKey(name);
+    if (key.isEmpty) return;
+    await _db.collection('ignored_fairs').doc(key).set({
+      'name': name,
+      'ignoredAt': DateTime.now().toIso8601String(),
+      if (by.isNotEmpty) 'ignoredBy': by,
+    });
+  }
+
+  static Future<void> unignoreFair(String key) =>
+      _db.collection('ignored_fairs').doc(key).delete();
 
   static Future<void> archiveFairInCloud(int id, bool archived) async {
     try {

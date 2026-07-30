@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../models/fair.dart';
 import '../providers/app_provider.dart';
 import '../services/database_service.dart';
+import '../services/firestore_service.dart';
 
 class ArchivedFairsScreen extends StatefulWidget {
   const ArchivedFairsScreen({super.key});
@@ -13,6 +14,10 @@ class ArchivedFairsScreen extends StatefulWidget {
 class _ArchivedFairsScreenState extends State<ArchivedFairsScreen> {
   static const _navy = Color(0xFF1E3A5F);
   List<Fair> _archived = [];
+  /// Nomes que o admin mandou não trazer mais da planilha mestra. Ficam aqui
+  /// porque este é o lugar onde já se desfaz o arquivamento — e sem um lugar
+  /// para desfazer, "não trazer de volta" seria uma porta sem volta.
+  List<Map<String, dynamic>> _ignored = [];
   bool _loading = true;
 
   @override
@@ -23,7 +28,31 @@ class _ArchivedFairsScreenState extends State<ArchivedFairsScreen> {
 
   Future<void> _load() async {
     final list = await DatabaseService.getArchivedFairs();
-    if (mounted) setState(() { _archived = list; _loading = false; });
+    List<Map<String, dynamic>> ignored = [];
+    try {
+      ignored = await FirestoreService.getIgnoredFairs();
+    } catch (_) {
+      // Sem rede a tela ainda serve para as arquivadas.
+    }
+    if (mounted) {
+      setState(() {
+        _archived = list;
+        _ignored = ignored;
+        _loading = false;
+      });
+    }
+  }
+
+  Future<void> _unignore(Map<String, dynamic> e) async {
+    await context.read<AppProvider>().unignoreFair(e['key'] as String);
+    await _load();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: Text('${e['name']} volta a ser trazida na próxima '
+                'sincronização.')),
+      );
+    }
   }
 
   Future<void> _restore(Fair fair) async {
@@ -53,8 +82,18 @@ class _ArchivedFairsScreenState extends State<ArchivedFairsScreen> {
       ),
     );
     if (ok != true) return;
-    await context.read<AppProvider>().deleteFair(fair.id!);
+    // Feira arquivada que veio da mestra volta no próximo sync se não for
+    // marcada como ignorada — que é justamente o que se quer evitar ao
+    // excluir definitivamente.
+    final problema = await context
+        .read<AppProvider>()
+        .deleteFair(fair.id!, alsoIgnore: true);
     await _load();
+    if (problema != null && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(problema), backgroundColor: Colors.red),
+      );
+    }
   }
 
   @override
@@ -69,7 +108,7 @@ class _ArchivedFairsScreenState extends State<ArchivedFairsScreen> {
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : _archived.isEmpty
+          : (_archived.isEmpty && _ignored.isEmpty)
               ? const Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -80,11 +119,16 @@ class _ArchivedFairsScreenState extends State<ArchivedFairsScreen> {
                     ],
                   ),
                 )
-              : ListView.builder(
+              : ListView(
                   padding: const EdgeInsets.all(16),
-                  itemCount: _archived.length,
-                  itemBuilder: (context, i) {
-                    final fair = _archived[i];
+                  children: [
+                    if (_archived.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 12),
+                        child: Text('Nenhuma feira arquivada.',
+                            style: TextStyle(color: Colors.grey)),
+                      ),
+                    ..._archived.map((fair) {
                     return Card(
                       margin: const EdgeInsets.only(bottom: 10),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -112,7 +156,50 @@ class _ArchivedFairsScreenState extends State<ArchivedFairsScreen> {
                         ),
                       ),
                     );
-                  },
+                    }),
+                    if (_ignored.isNotEmpty) ...[
+                      const SizedBox(height: 24),
+                      Row(
+                        children: [
+                          const Icon(Icons.block, size: 18, color: Colors.grey),
+                          const SizedBox(width: 8),
+                          Text('Não trazer da planilha (${_ignored.length})',
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold, color: _navy)),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      const Text(
+                        'Estas feiras existem na planilha mestra mas foram '
+                        'excluídas do app. Sem isto o sync as recriaria a '
+                        'cada sincronização.',
+                        style: TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
+                      const SizedBox(height: 10),
+                      ..._ignored.map((e) => Card(
+                            margin: const EdgeInsets.only(bottom: 10),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12)),
+                            child: ListTile(
+                              leading: const CircleAvatar(
+                                backgroundColor: Color(0xFFF3F4F6),
+                                child: Icon(Icons.block, color: Colors.grey),
+                              ),
+                              title: Text((e['name'] as String?) ?? '',
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.bold)),
+                              subtitle: const Text('Ignorada na sincronização',
+                                  style: TextStyle(
+                                      fontSize: 12, color: Colors.grey)),
+                              trailing: TextButton(
+                                onPressed: () => _unignore(e),
+                                child: const Text('Voltar a trazer',
+                                    style: TextStyle(color: _navy)),
+                              ),
+                            ),
+                          )),
+                    ],
+                  ],
                 ),
     );
   }

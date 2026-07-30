@@ -7,6 +7,7 @@ import '../services/sheets_service.dart';
 import '../services/database_service.dart';
 import '../services/firestore_service.dart';
 import '../services/notification_service.dart';
+import '../utils/fair_key.dart';
 
 class AppProvider extends ChangeNotifier {
   List<Fair> _fairs = [];
@@ -99,6 +100,7 @@ class AppProvider extends ChangeNotifier {
       _fairsLoadFailed = true;
     }
     _fairs = await DatabaseService.getFairs();
+    await _refreshIgnoredFairs();
     notifyListeners();
     _startFairsStream();
     _startCircularStream();
@@ -400,6 +402,50 @@ class AppProvider extends ChangeNotifier {
     _lastSync = DateTime.now();
   }
 
+  /// Nomes de feira que o admin mandou não trazer mais da planilha mestra.
+  Set<String> _ignoredFairKeys = {};
+  Set<String> get ignoredFairKeys => _ignoredFairKeys;
+
+  Future<void> _refreshIgnoredFairs() async {
+    try {
+      _ignoredFairKeys = await FirestoreService.getIgnoredFairKeys();
+    } catch (_) {
+      // Sem a lista, o certo é NÃO recriar às cegas o que pode estar
+      // excluído. Mantém a última lista conhecida.
+    }
+  }
+
+  /// Apaga a feira derivada com este nome, aqui e na nuvem.
+  Future<void> _removeLocalDerivedFair(String name) async {
+    final key = fairKey(name);
+    for (final f in await DatabaseService.getFairs()) {
+      if (f.sheetMode != 'mestra_child' || fairKey(f.name) != key) continue;
+      await DatabaseService.deleteFair(f.id!);
+      try {
+        await FirestoreService.deleteFairFromCloud(f.id!);
+      } catch (_) {
+        // A exclusão local já basta para ela sumir da tela; a da nuvem tenta
+        // de novo no próximo sync.
+      }
+    }
+  }
+
+  /// Deixa de trazer esta feira da planilha mestra, em todos os aparelhos.
+  Future<void> ignoreFair(String name) async {
+    await FirestoreService.ignoreFair(name);
+    await _refreshIgnoredFairs();
+    await _removeLocalDerivedFair(name);
+    _fairs = await DatabaseService.getFairs();
+    notifyListeners();
+  }
+
+  /// Volta a trazer uma feira ignorada. Ela reaparece no próximo sync.
+  Future<void> unignoreFair(String key) async {
+    await FirestoreService.unignoreFair(key);
+    await _refreshIgnoredFairs();
+    notifyListeners();
+  }
+
   /// Syncs a mestra (parent) sheet: groups clients by FEIRA column, auto-creates
   /// derived fairs, upserts clients, and refreshes the fair list.
   Future<void> _syncMasterSheet() async {
@@ -420,11 +466,22 @@ class AppProvider extends ChangeNotifier {
           n.contains(masterSheet);
     }
 
+    // Sem isto, excluir uma feira que vem da mestra não durava: o sync lê a
+    // coluna FEIRA e recria tudo o que estiver lá, então ela reaparecia na
+    // sincronização seguinte.
+    await _refreshIgnoredFairs();
+
     for (final entry in grouped.entries) {
       final feiraNome = entry.key;
       final tempClients = entry.value;
 
       if (_isMasterName(feiraNome)) continue;
+
+      if (_ignoredFairKeys.contains(fairKey(feiraNome))) {
+        // Pode ter sido ignorada em outro aparelho depois de já existir aqui.
+        await _removeLocalDerivedFair(feiraNome);
+        continue;
+      }
 
       final derivedId = await DatabaseService.findOrCreateDerivedFair(
         name: feiraNome,
@@ -909,11 +966,29 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> deleteFair(int id) async {
+  /// Exclui a feira. Com [alsoIgnore], ela também para de ser trazida da
+  /// planilha mestra — sem isso o sync a recria pelo nome.
+  ///
+  /// Devolve null quando deu tudo certo, ou o motivo da falha. Antes o erro da
+  /// nuvem era engolido: a feira sumia da tela, continuava lá, e voltava no
+  /// arranque seguinte sem que ninguém soubesse por quê.
+  Future<String?> deleteFair(int id, {bool alsoIgnore = false}) async {
+    final fair = _fairs.where((f) => f.id == id).toList();
+    final name = fair.isEmpty ? '' : fair.first.name;
+
+    String? problema;
     await DatabaseService.deleteFair(id);
     try {
       await FirestoreService.deleteFairFromCloud(id);
-    } catch (_) {}
+      if (alsoIgnore && name.isNotEmpty) {
+        await FirestoreService.ignoreFair(name);
+        await _refreshIgnoredFairs();
+      }
+    } catch (e) {
+      problema = 'A feira saiu deste aparelho, mas não foi possível removê-la '
+          'da nuvem. Ela pode voltar ao sincronizar. '
+          'Confira a conexão e tente de novo.';
+    }
     if (_currentFair?.id == id) {
       _currentFair = null;
       _clients = [];
@@ -921,6 +996,7 @@ class AppProvider extends ChangeNotifier {
     }
     _fairs = await DatabaseService.getFairs();
     notifyListeners();
+    return problema;
   }
 
   Future<void> archiveFair(Fair fair) async {

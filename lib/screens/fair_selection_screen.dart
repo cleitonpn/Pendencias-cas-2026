@@ -340,27 +340,63 @@ class _FairCard extends StatelessWidget {
     final ok = await requireAdminPin(context);
     if (!ok || !context.mounted) return;
 
+    // Excluir sozinho não segura uma feira que vem da planilha mestra: o sync
+    // lê a coluna FEIRA e recria tudo o que estiver lá.
+    bool naoTrazerDeVolta = true;
+
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Excluir feira?'),
-        content: Text(
-            'Todos os clientes e pendências de "${fair.name}" serão excluídos permanentemente.'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancelar')),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red, foregroundColor: Colors.white),
-            child: const Text('Excluir'),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('Excluir feira?'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Todos os clientes e pendências de "${fair.name}" serão '
+                  'excluídos permanentemente.'),
+              const SizedBox(height: 12),
+              CheckboxListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+                value: naoTrazerDeVolta,
+                onChanged: (v) =>
+                    setDialogState(() => naoTrazerDeVolta = v ?? false),
+                title: const Text('Não trazer de volta ao sincronizar',
+                    style: TextStyle(fontSize: 14)),
+                subtitle: const Text(
+                  'Se o nome dela estiver na planilha mestra, sem isto ela '
+                  'reaparece na próxima sincronização. Dá para desfazer em '
+                  'Feiras Arquivadas.',
+                  style: TextStyle(fontSize: 11, color: Colors.grey),
+                ),
+              ),
+            ],
           ),
-        ],
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancelar')),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red, foregroundColor: Colors.white),
+              child: const Text('Excluir'),
+            ),
+          ],
+        ),
       ),
     );
     if (confirmed == true && context.mounted) {
-      await context.read<AppProvider>().deleteFair(fair.id!);
+      final problema = await context
+          .read<AppProvider>()
+          .deleteFair(fair.id!, alsoIgnore: naoTrazerDeVolta);
+      if (problema != null && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(problema), backgroundColor: Colors.red),
+        );
+      }
     }
   }
 }
