@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import '../services/firestore_service.dart';
 import '../services/notification_service.dart';
 import 'producer_pending_screen.dart';
+import '../services/pin_service.dart';
 
 class ProducerLoginScreen extends StatefulWidget {
   const ProducerLoginScreen({super.key});
@@ -33,7 +34,8 @@ class _ProducerLoginScreenState extends State<ProducerLoginScreen> {
 
   Future<void> _loadProducers() async {
     try {
-      final producers = await FirestoreService.getProducersWithPins();
+      final r = await PinService.listNames('producer');
+      final producers = r.names;
       if (mounted) setState(() { _producers = producers; _loading = false; });
     } catch (_) {
       if (mounted) setState(() => _loading = false);
@@ -52,19 +54,28 @@ class _ProducerLoginScreenState extends State<ProducerLoginScreen> {
     setState(() { _verifying = true; _error = null; });
 
     try {
-      final savedPin = await FirestoreService.getProducerPin(_selected!);
+      // Verificação no servidor: o PIN cadastrado não desce para o cliente.
+      final res = await PinService.verify(
+          role: 'producer', name: _selected!, pin: _pinCtrl.text);
       if (!mounted) return;
 
-      if (savedPin == null) {
+      if (!res.ok) {
         setState(() {
           _verifying = false;
-          _error = 'PIN não configurado.\nPeça ao administrador para configurar em Configurações.';
+          switch (res.reason) {
+            case 'nao_cadastrado':
+              _error = 'PIN não configurado.\nPeça ao administrador para '
+                  'configurar em Configurações.';
+              break;
+            case 'pin_incorreto':
+              _error = 'PIN incorreto. Tente novamente.';
+              _pinCtrl.clear();
+              break;
+            default:
+              _error = 'Não foi possível verificar agora.\n'
+                  'Confira a conexão e tente de novo.';
+          }
         });
-        return;
-      }
-      if (savedPin != _pinCtrl.text) {
-        setState(() { _verifying = false; _error = 'PIN incorreto. Tente novamente.'; });
-        _pinCtrl.clear();
         return;
       }
 

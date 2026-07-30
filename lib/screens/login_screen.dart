@@ -11,6 +11,7 @@ import 'consultant_home_screen.dart';
 import 'analyst_home_screen.dart';
 import 'logistics_home_screen.dart';
 import '../services/auth_bootstrap.dart';
+import '../services/pin_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -86,6 +87,32 @@ class _LoginScreenState extends State<LoginScreen> {
 
   bool get _cannotRead => _loadFailed || !AuthBootstrap.signedIn;
 
+  /// Confere o PIN pelo servidor. Devolve null quando não deve prosseguir —
+  /// já tendo posto a mensagem certa na tela. Sem reserva para a leitura
+  /// direta de propósito: se a função falhar, precisamos saber agora, e não
+  /// depois de fechar as regras do Firestore.
+  Future<PinResult?> _checkPin(String role, String name) async {
+    final r = await PinService.verify(
+        role: role, name: name, pin: _pinCtrl.text);
+    if (!mounted) return null;
+    if (r.ok) return r;
+    setState(() {
+      switch (r.reason) {
+        case 'nao_cadastrado':
+          _error = 'PIN não configurado. Contate o administrador.';
+          break;
+        case 'pin_incorreto':
+          _error = 'PIN incorreto.';
+          _pinCtrl.clear();
+          break;
+        default:
+          _error = 'Não foi possível verificar agora. '
+              'Confira a conexão e tente de novo.';
+      }
+    });
+    return null;
+  }
+
   Future<void> _retryAll() async {
     setState(() => _loadFailed = false);
     await AuthBootstrap.ensureSignedIn();
@@ -98,8 +125,14 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _loadProducers() async {
     try {
-      final list = await FirestoreService.getProducersWithPins();
-      if (mounted) setState(() { _producers = list; _loadingProducers = false; });
+      final r = await PinService.listNames('producer');
+      if (mounted) {
+        setState(() {
+          _producers = r.names;
+          _loadingProducers = false;
+          if (r.failed) _loadFailed = true;
+        });
+      }
     } catch (_) {
       if (mounted) {
         setState(() {
@@ -112,8 +145,14 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _loadConsultants() async {
     try {
-      final list = await FirestoreService.getConsultantsWithPins();
-      if (mounted) setState(() { _consultants = list; _loadingConsultants = false; });
+      final r = await PinService.listNames('consultant');
+      if (mounted) {
+        setState(() {
+          _consultants = r.names;
+          _loadingConsultants = false;
+          if (r.failed) _loadFailed = true;
+        });
+      }
     } catch (_) {
       if (mounted) {
         setState(() {
@@ -126,8 +165,14 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _loadManagers() async {
     try {
-      final list = await FirestoreService.getManagersWithPins();
-      if (mounted) setState(() { _managers = list; _loadingManagers = false; });
+      final r = await PinService.listNames('manager');
+      if (mounted) {
+        setState(() {
+          _managers = r.names;
+          _loadingManagers = false;
+          if (r.failed) _loadFailed = true;
+        });
+      }
     } catch (_) {
       if (mounted) {
         setState(() {
@@ -140,8 +185,20 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _loadLeaders() async {
     try {
-      final list = await FirestoreService.getTeamLeadersWithPins();
-      if (mounted) setState(() { _leaders = list; _loadingLeaders = false; });
+      final r = await PinService.listUsers('leader');
+      if (mounted) {
+        setState(() {
+          _leaders = r.users
+              .map((u) => {
+                    'name': (u['name'] as String?) ?? '',
+                    'team': (u['team'] as String?) ?? '',
+                  })
+              .where((u) => (u['name'] ?? '').isNotEmpty)
+              .toList();
+          _loadingLeaders = false;
+          if (r.failed) _loadFailed = true;
+        });
+      }
     } catch (_) {
       if (mounted) {
         setState(() {
@@ -154,8 +211,14 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _loadAnalysts() async {
     try {
-      final list = await FirestoreService.getAnalystsWithPins();
-      if (mounted) setState(() { _analysts = list; _loadingAnalysts = false; });
+      final r = await PinService.listNames('analyst');
+      if (mounted) {
+        setState(() {
+          _analysts = r.names;
+          _loadingAnalysts = false;
+          if (r.failed) _loadFailed = true;
+        });
+      }
     } catch (_) {
       if (mounted) {
         setState(() {
@@ -168,8 +231,14 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _loadAdmins() async {
     try {
-      final list = await FirestoreService.getAdminUsers();
-      if (mounted) setState(() { _admins = list; _loadingAdmins = false; });
+      final r = await PinService.listNames('admin');
+      if (mounted) {
+        setState(() {
+          _admins = r.names;
+          _loadingAdmins = false;
+          if (r.failed) _loadFailed = true;
+        });
+      }
     } catch (_) {
       if (mounted) {
         setState(() {
@@ -182,8 +251,14 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _loadLogistics() async {
     try {
-      final list = await FirestoreService.getLogisticsUsers();
-      if (mounted) setState(() { _logistics = list; _loadingLogistics = false; });
+      final r = await PinService.listNames('logistica');
+      if (mounted) {
+        setState(() {
+          _logistics = r.names;
+          _loadingLogistics = false;
+          if (r.failed) _loadFailed = true;
+        });
+      }
     } catch (_) {
       if (mounted) {
         setState(() {
@@ -246,13 +321,20 @@ class _LoginScreenState extends State<LoginScreen> {
     String adminName = _selectedAdmin ?? 'Admin';
 
     if (_admins.isNotEmpty && _selectedAdmin != null) {
-      final savedPin = await FirestoreService.getAdminUserPin(_selectedAdmin!);
-      if (savedPin != null) {
-        pinValid = _pinCtrl.text == savedPin;
-      } else {
-        // Fallback to SharedPreferences PIN if no Firestore PIN found
+      final r = await PinService.verify(
+          role: 'admin', name: _selectedAdmin!, pin: _pinCtrl.text);
+      if (r.ok) {
+        pinValid = true;
+      } else if (r.reason == 'nao_cadastrado') {
+        // Sem cadastro no Firestore, vale o PIN local de instalação.
         final adminPin = await getAdminPin();
         pinValid = _pinCtrl.text == adminPin;
+      } else if (r.reason == 'erro') {
+        if (mounted) {
+          setState(() => _error = 'Não foi possível verificar agora. '
+              'Confira a conexão e tente de novo.');
+        }
+        return;
       }
     } else {
       // No admins in Firestore — use SharedPreferences PIN
@@ -288,17 +370,8 @@ class _LoginScreenState extends State<LoginScreen> {
       setState(() => _error = 'Digite seu PIN.');
       return;
     }
-    final savedPin = await FirestoreService.getProducerPin(_selectedProducer!);
-    if (!mounted) return;
-    if (savedPin == null) {
-      setState(() => _error = 'PIN não configurado. Contate o administrador.');
-      return;
-    }
-    if (_pinCtrl.text != savedPin) {
-      setState(() => _error = 'PIN incorreto.');
-      _pinCtrl.clear();
-      return;
-    }
+    final pinRes = await _checkPin('producer', _selectedProducer!);
+    if (pinRes == null) return;
     if (!mounted) return;
     await NotificationService.subscribeProducer(_selectedProducer!);
     await SessionService.save(role: 'producer', name: _selectedProducer!);
@@ -323,17 +396,8 @@ class _LoginScreenState extends State<LoginScreen> {
       setState(() => _error = 'Digite seu PIN.');
       return;
     }
-    final savedPin = await FirestoreService.getConsultantPin(_selectedConsultant!);
-    if (!mounted) return;
-    if (savedPin == null) {
-      setState(() => _error = 'PIN não configurado. Contate o administrador.');
-      return;
-    }
-    if (_pinCtrl.text != savedPin) {
-      setState(() => _error = 'PIN incorreto.');
-      _pinCtrl.clear();
-      return;
-    }
+    final pinRes = await _checkPin('consultant', _selectedConsultant!);
+    if (pinRes == null) return;
     if (!mounted) return;
     await NotificationService.subscribeConsultant(_selectedConsultant!);
     await SessionService.save(role: 'consultant', name: _selectedConsultant!);
@@ -359,17 +423,8 @@ class _LoginScreenState extends State<LoginScreen> {
       setState(() => _error = 'Digite seu PIN.');
       return;
     }
-    final savedPin = await FirestoreService.getManagerPin(_selectedManager!);
-    if (!mounted) return;
-    if (savedPin == null) {
-      setState(() => _error = 'PIN não configurado. Contate o administrador.');
-      return;
-    }
-    if (_pinCtrl.text != savedPin) {
-      setState(() => _error = 'PIN incorreto.');
-      _pinCtrl.clear();
-      return;
-    }
+    final pinRes = await _checkPin('manager', _selectedManager!);
+    if (pinRes == null) return;
     if (!mounted) return;
     await NotificationService.subscribeAdmin();
     await SessionService.save(role: 'manager', name: _selectedManager!);
@@ -394,17 +449,8 @@ class _LoginScreenState extends State<LoginScreen> {
       setState(() => _error = 'Digite seu PIN.');
       return;
     }
-    final savedPin = await FirestoreService.getAnalystPin(_selectedAnalyst!);
-    if (!mounted) return;
-    if (savedPin == null) {
-      setState(() => _error = 'PIN não configurado. Contate o administrador.');
-      return;
-    }
-    if (_pinCtrl.text != savedPin) {
-      setState(() => _error = 'PIN incorreto.');
-      _pinCtrl.clear();
-      return;
-    }
+    final pinRes = await _checkPin('analyst', _selectedAnalyst!);
+    if (pinRes == null) return;
     if (!mounted) return;
     await NotificationService.subscribeAnalyst(_selectedAnalyst!);
     await SessionService.save(role: 'analyst', name: _selectedAnalyst!);
@@ -429,18 +475,8 @@ class _LoginScreenState extends State<LoginScreen> {
       setState(() => _error = 'Digite seu PIN.');
       return;
     }
-    final savedPin =
-        await FirestoreService.getLogisticsUserPin(_selectedLogistics!);
-    if (!mounted) return;
-    if (savedPin == null) {
-      setState(() => _error = 'PIN não configurado. Contate o administrador.');
-      return;
-    }
-    if (_pinCtrl.text != savedPin) {
-      setState(() => _error = 'PIN incorreto.');
-      _pinCtrl.clear();
-      return;
-    }
+    final pinRes = await _checkPin('logistica', _selectedLogistics!);
+    if (pinRes == null) return;
     if (!mounted) return;
     await NotificationService.subscribeLogistics(_selectedLogistics!);
     await SessionService.save(role: 'logistica', name: _selectedLogistics!);
@@ -467,18 +503,11 @@ class _LoginScreenState extends State<LoginScreen> {
       setState(() => _error = 'Digite seu PIN.');
       return;
     }
-    final savedPin = await FirestoreService.getTeamLeaderPin(_selectedLeader!);
-    if (!mounted) return;
-    if (savedPin == null) {
-      setState(() => _error = 'PIN não configurado. Contate o administrador.');
-      return;
-    }
-    if (_pinCtrl.text != savedPin) {
-      setState(() => _error = 'PIN incorreto.');
-      _pinCtrl.clear();
-      return;
-    }
-    final team = await FirestoreService.getTeamLeaderTeam(_selectedLeader!);
+    final pinRes = await _checkPin('leader', _selectedLeader!);
+    if (pinRes == null) return;
+    // A equipe vem junto da verificação — evita reler a coleção de PIN, que
+    // é justamente o que queremos fechar.
+    final team = pinRes.team;
     if (!mounted) return;
     if ((team ?? '').isNotEmpty) {
       await NotificationService.subscribeLeader(_selectedLeader!, team!);

@@ -12,6 +12,7 @@ import '../services/sheets_service.dart';
 import '../services/stand_storage.dart';
 import '../utils/web_portal.dart';
 import '../widgets/pending_status.dart';
+import '../services/pin_service.dart';
 
 /// Public web portal for the event organizer (link, no app install).
 /// The organizer identifies herself (name + PIN), then can open requests for
@@ -92,7 +93,8 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
 
   Future<void> _bootstrap() async {
     try {
-      _organizers = await FirestoreService.getOrganizersWithPins();
+      final list = await PinService.listNames('organizer');
+      _organizers = list.names;
       if (_organizers.isEmpty) {
         _fail('Nenhuma organizadora cadastrada. Peça ao administrador para '
             'configurar o PIN da organizadora no app.');
@@ -259,20 +261,26 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
       return;
     }
     setState(() => _busy = true);
-    String? saved;
-    try {
-      saved = await FirestoreService.getOrganizerPin(_organizerName!);
-    } catch (_) {}
+    // Verificação no servidor: este portal é público, e era por ele que os
+    // PINs de todos os papéis ficavam ao alcance de qualquer visitante.
+    final res = await PinService.verify(
+        role: 'organizer', name: _organizerName!, pin: _pinCtrl.text.trim());
     if (!mounted) return;
     setState(() => _busy = false);
-    if (saved == null) {
-      _toast('PIN não configurado para você. Contate o administrador.',
-          error: true);
-      return;
-    }
-    if (_pinCtrl.text.trim() != saved) {
-      _toast('PIN incorreto. Tente novamente.', error: true);
-      _pinCtrl.clear();
+    if (!res.ok) {
+      switch (res.reason) {
+        case 'nao_cadastrado':
+          _toast('PIN não configurado para você. Contate o administrador.',
+              error: true);
+          break;
+        case 'pin_incorreto':
+          _toast('PIN incorreto. Tente novamente.', error: true);
+          _pinCtrl.clear();
+          break;
+        default:
+          _toast('Não foi possível verificar agora. Confira a conexão.',
+              error: true);
+      }
       return;
     }
     // Save session so page refresh doesn't require re-identification.
