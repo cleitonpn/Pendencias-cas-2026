@@ -10,6 +10,7 @@ import 'team_leader_home_screen.dart';
 import 'consultant_home_screen.dart';
 import 'analyst_home_screen.dart';
 import 'logistics_home_screen.dart';
+import '../services/auth_bootstrap.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -78,12 +79,34 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  /// Verdadeiro quando alguma lista falhou ao carregar (ou a sessão anônima
+  /// não subiu). Sem isso a tela dizia "nenhum cadastrado" para um problema
+  /// de conexão, mandando o usuário procurar o administrador à toa.
+  bool _loadFailed = false;
+
+  bool get _cannotRead => _loadFailed || !AuthBootstrap.signedIn;
+
+  Future<void> _retryAll() async {
+    setState(() => _loadFailed = false);
+    await AuthBootstrap.ensureSignedIn();
+    _loadProducers();
+    _loadConsultants();
+    _loadManagers();
+    _loadLeaders();
+    _loadAnalysts();
+  }
+
   Future<void> _loadProducers() async {
     try {
       final list = await FirestoreService.getProducersWithPins();
       if (mounted) setState(() { _producers = list; _loadingProducers = false; });
     } catch (_) {
-      if (mounted) setState(() => _loadingProducers = false);
+      if (mounted) {
+        setState(() {
+          _loadingProducers = false;
+          _loadFailed = true;
+        });
+      }
     }
   }
 
@@ -92,7 +115,12 @@ class _LoginScreenState extends State<LoginScreen> {
       final list = await FirestoreService.getConsultantsWithPins();
       if (mounted) setState(() { _consultants = list; _loadingConsultants = false; });
     } catch (_) {
-      if (mounted) setState(() => _loadingConsultants = false);
+      if (mounted) {
+        setState(() {
+          _loadingConsultants = false;
+          _loadFailed = true;
+        });
+      }
     }
   }
 
@@ -101,7 +129,12 @@ class _LoginScreenState extends State<LoginScreen> {
       final list = await FirestoreService.getManagersWithPins();
       if (mounted) setState(() { _managers = list; _loadingManagers = false; });
     } catch (_) {
-      if (mounted) setState(() => _loadingManagers = false);
+      if (mounted) {
+        setState(() {
+          _loadingManagers = false;
+          _loadFailed = true;
+        });
+      }
     }
   }
 
@@ -110,7 +143,12 @@ class _LoginScreenState extends State<LoginScreen> {
       final list = await FirestoreService.getTeamLeadersWithPins();
       if (mounted) setState(() { _leaders = list; _loadingLeaders = false; });
     } catch (_) {
-      if (mounted) setState(() => _loadingLeaders = false);
+      if (mounted) {
+        setState(() {
+          _loadingLeaders = false;
+          _loadFailed = true;
+        });
+      }
     }
   }
 
@@ -119,7 +157,12 @@ class _LoginScreenState extends State<LoginScreen> {
       final list = await FirestoreService.getAnalystsWithPins();
       if (mounted) setState(() { _analysts = list; _loadingAnalysts = false; });
     } catch (_) {
-      if (mounted) setState(() => _loadingAnalysts = false);
+      if (mounted) {
+        setState(() {
+          _loadingAnalysts = false;
+          _loadFailed = true;
+        });
+      }
     }
   }
 
@@ -128,7 +171,12 @@ class _LoginScreenState extends State<LoginScreen> {
       final list = await FirestoreService.getAdminUsers();
       if (mounted) setState(() { _admins = list; _loadingAdmins = false; });
     } catch (_) {
-      if (mounted) setState(() => _loadingAdmins = false);
+      if (mounted) {
+        setState(() {
+          _loadingAdmins = false;
+          _loadFailed = true;
+        });
+      }
     }
   }
 
@@ -137,7 +185,12 @@ class _LoginScreenState extends State<LoginScreen> {
       final list = await FirestoreService.getLogisticsUsers();
       if (mounted) setState(() { _logistics = list; _loadingLogistics = false; });
     } catch (_) {
-      if (mounted) setState(() => _loadingLogistics = false);
+      if (mounted) {
+        setState(() {
+          _loadingLogistics = false;
+          _loadFailed = true;
+        });
+      }
     }
   }
 
@@ -549,6 +602,40 @@ class _LoginScreenState extends State<LoginScreen> {
 
                   const SizedBox(height: 20),
 
+                  // Faixa única de nova tentativa: as listas vêm do Firestore,
+                  // e sem a sessão anônima nenhuma delas carrega. No Safari do
+                  // iPhone isso acontece com alguma frequência.
+                  if (_cannotRead) ...[
+                    Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.only(bottom: 14),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.red.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.red.shade200),
+                      ),
+                      child: Column(children: [
+                        const Text(
+                          'Não foi possível conectar ao servidor.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                              color: Colors.red, fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(height: 8),
+                        ElevatedButton.icon(
+                          onPressed: _retryAll,
+                          icon: const Icon(Icons.refresh, size: 18),
+                          label: const Text('Tentar de novo'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.red.shade700,
+                            foregroundColor: Colors.white,
+                          ),
+                        ),
+                      ]),
+                    ),
+                  ],
+
                   // Producer name pills
                   if (_role == 'producer') ...[
                     const Text('SEU NOME',
@@ -571,9 +658,13 @@ class _LoginScreenState extends State<LoginScreen> {
                                     color: Colors.orange.shade50,
                                     borderRadius: BorderRadius.circular(8),
                                     border: Border.all(color: Colors.orange.shade200)),
-                                child: const Text(
-                                    'Nenhum produtor cadastrado.\nContate o administrador.',
-                                    style: TextStyle(color: Colors.orange, fontSize: 13)),
+                                child: Text(
+                                    _cannotRead
+                                        ? 'Não foi possível carregar a lista.\n'
+                                            'Verifique sua conexão e toque em Tentar de novo.'
+                                        : 'Nenhum produtor cadastrado.\nContate o administrador.',
+                                    style: const TextStyle(
+                                        color: Colors.orange, fontSize: 13)),
                               )
                             : Wrap(
                                 spacing: 8,
@@ -632,9 +723,13 @@ class _LoginScreenState extends State<LoginScreen> {
                                     color: Colors.orange.shade50,
                                     borderRadius: BorderRadius.circular(8),
                                     border: Border.all(color: Colors.orange.shade200)),
-                                child: const Text(
-                                    'Nenhum consultor cadastrado.\nContate o administrador.',
-                                    style: TextStyle(color: Colors.orange, fontSize: 13)),
+                                child: Text(
+                                    _cannotRead
+                                        ? 'Não foi possível carregar a lista.\n'
+                                            'Verifique sua conexão e toque em Tentar de novo.'
+                                        : 'Nenhum consultor cadastrado.\nContate o administrador.',
+                                    style: const TextStyle(
+                                        color: Colors.orange, fontSize: 13)),
                               )
                             : Wrap(
                                 spacing: 8,
@@ -693,9 +788,13 @@ class _LoginScreenState extends State<LoginScreen> {
                                     color: Colors.orange.shade50,
                                     borderRadius: BorderRadius.circular(8),
                                     border: Border.all(color: Colors.orange.shade200)),
-                                child: const Text(
-                                    'Nenhum gerente cadastrado.\nContate o administrador.',
-                                    style: TextStyle(color: Colors.orange, fontSize: 13)),
+                                child: Text(
+                                    _cannotRead
+                                        ? 'Não foi possível carregar a lista.\n'
+                                            'Verifique sua conexão e toque em Tentar de novo.'
+                                        : 'Nenhum gerente cadastrado.\nContate o administrador.',
+                                    style: const TextStyle(
+                                        color: Colors.orange, fontSize: 13)),
                               )
                             : Wrap(
                                 spacing: 8,
@@ -754,9 +853,13 @@ class _LoginScreenState extends State<LoginScreen> {
                                     color: Colors.orange.shade50,
                                     borderRadius: BorderRadius.circular(8),
                                     border: Border.all(color: Colors.orange.shade200)),
-                                child: const Text(
-                                    'Nenhum líder cadastrado.\nContate o administrador.',
-                                    style: TextStyle(color: Colors.orange, fontSize: 13)),
+                                child: Text(
+                                    _cannotRead
+                                        ? 'Não foi possível carregar a lista.\n'
+                                            'Verifique sua conexão e toque em Tentar de novo.'
+                                        : 'Nenhum líder cadastrado.\nContate o administrador.',
+                                    style: const TextStyle(
+                                        color: Colors.orange, fontSize: 13)),
                               )
                             : DropdownButtonFormField<String>(
                                 value: _selectedLeader,
@@ -805,9 +908,13 @@ class _LoginScreenState extends State<LoginScreen> {
                                     color: Colors.orange.shade50,
                                     borderRadius: BorderRadius.circular(8),
                                     border: Border.all(color: Colors.orange.shade200)),
-                                child: const Text(
-                                    'Nenhum analista cadastrado.\nContate o administrador.',
-                                    style: TextStyle(color: Colors.orange, fontSize: 13)),
+                                child: Text(
+                                    _cannotRead
+                                        ? 'Não foi possível carregar a lista.\n'
+                                            'Verifique sua conexão e toque em Tentar de novo.'
+                                        : 'Nenhum analista cadastrado.\nContate o administrador.',
+                                    style: const TextStyle(
+                                        color: Colors.orange, fontSize: 13)),
                               )
                             : Wrap(
                                 spacing: 8,
@@ -920,8 +1027,11 @@ class _LoginScreenState extends State<LoginScreen> {
                                     borderRadius: BorderRadius.circular(8),
                                     border: Border.all(
                                         color: Colors.orange.shade200)),
-                                child: const Text(
-                                    'Nenhum usuário de logística cadastrado.\nContate o administrador.',
+                                child: Text(
+                                    _cannotRead
+                                        ? 'Não foi possível carregar a lista.\n'
+                                            'Verifique sua conexão e toque em Tentar de novo.'
+                                        : 'Nenhum usuário de logística cadastrado.\nContate o administrador.',
                                     style: TextStyle(
                                         color: Colors.orange, fontSize: 13)),
                               )

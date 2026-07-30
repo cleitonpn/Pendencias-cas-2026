@@ -3,13 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tzlib;
 import 'firebase_options.dart';
 import 'providers/app_provider.dart';
 import 'utils/desktop_db.dart';
+import 'services/auth_bootstrap.dart';
 import 'services/notification_service.dart';
 import 'services/notification_router.dart';
 import 'services/update_service.dart';
@@ -42,17 +42,11 @@ void main() async {
 
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
-  // Sign in anonymously so every client has a Firebase identity.
-  // This is invisible to the user — no login screen, no UI change.
-  // Required for Firestore rules that check request.auth != null.
-  try {
-    if (FirebaseAuth.instance.currentUser == null) {
-      await FirebaseAuth.instance.signInAnonymously();
-    }
-  } catch (_) {
-    // Anonymous auth not yet enabled in Firebase Console or unavailable.
-    // App continues to work — rules enforcement will be added in a second step.
-  }
+  // Identidade anônima no Firebase: sem ela as regras do Firestore negam toda
+  // leitura. O erro deixa de ser engolido — fica registrado em
+  // AuthBootstrap.lastError para as telas poderem dizer o que houve, em vez
+  // de mostrarem "nenhum usuário cadastrado".
+  await AuthBootstrap.ensureSignedIn();
 
   // Push notifications (Android/iOS only — no-op on desktop/web).
   if (isMobile) {
