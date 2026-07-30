@@ -33,11 +33,14 @@ class _StickerGeneratorScreenState extends State<StickerGeneratorScreen> {
 
   Future<void> _load() async {
     try {
-      final clients = await SheetsService.fetchClients(
+      // Feira derivada de planilha mestra: sem isto o gerador imprimiria
+      // etiquetas dos expositores de todas as feiras da planilha.
+      final clients = await SheetsService.fetchFairClients(
         spreadsheetId: widget.fair.spreadsheetId,
         sheetName: widget.fair.sheetName,
         fairId: widget.fair.id!,
         fairName: widget.fair.name,
+        isMestraChild: widget.fair.isMestraChild,
       );
       setState(() {
         _all = clients;

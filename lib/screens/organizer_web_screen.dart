@@ -137,7 +137,10 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
           .where((f) =>
               f.id == id &&
               f.spreadsheetId.isNotEmpty &&
-              f.sheetName.isNotEmpty)
+              f.sheetName.isNotEmpty &&
+              // A mestra é o guarda-chuva das feiras derivadas, não uma feira:
+              // entrar nela mostraria os expositores de todas de uma vez.
+              !f.isMestra)
           .toList();
       if (all.isEmpty) {
         await _loadFairs();
@@ -217,7 +220,8 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
           .toList();
 
       if (widget.fairId != null) {
-        final match = all.where((f) => f.id == widget.fairId).toList();
+        final match =
+            all.where((f) => f.id == widget.fairId && !f.isMestra).toList();
         if (match.isEmpty) {
           _fail('Feira não encontrada. Verifique o link ou contate a organização.');
           return;
@@ -232,13 +236,12 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
       final name = _organizerName!.toLowerCase().trim();
       final mine = <Fair>[];
       await Future.wait(all.map((f) async {
+        // A mestra em si não é uma feira: ela é o guarda-chuva das derivadas.
+        // Varrê-la casaria com qualquer organizadora da planilha e daria
+        // acesso a todos os expositores de todas as feiras dela.
+        if (f.isMestra) return;
         try {
-          final clients = await SheetsService.fetchClients(
-            spreadsheetId: f.spreadsheetId,
-            sheetName: f.sheetName,
-            fairId: f.id!,
-            fairName: f.name,
-          );
+          final clients = await _fetchFairClients(f);
           if (clients
               .any((c) => c.organizadora.toLowerCase().trim() == name)) {
             _clientCache[f.id!] = clients;
@@ -278,7 +281,20 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
         createdAt: DateTime.tryParse(m['createdAt'] as String? ?? '') ??
             DateTime.now(),
         mode: (m['mode'] as String?) ?? 'producao',
+        // Sem o sheetMode o portal não distinguia feira de planilha própria
+        // de feira derivada de planilha mestra, e buscava as duas do mesmo
+        // jeito — trazendo, na mestra, os expositores de todas as feiras.
+        sheetMode: (m['sheetMode'] as String?) ?? 'individual',
         autoApprove: m['autoApprove'] == true,
+      );
+
+  Future<List<Client>> _fetchFairClients(Fair f) =>
+      SheetsService.fetchFairClients(
+        spreadsheetId: f.spreadsheetId,
+        sheetName: f.sheetName,
+        fairId: f.id!,
+        fairName: f.name,
+        isMestraChild: f.isMestraChild,
       );
 
   Future<void> _selectFair(Fair f) async {
@@ -364,12 +380,7 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
     }
     setState(() => _step = _Step.loading);
     try {
-      _clients = await SheetsService.fetchClients(
-        spreadsheetId: _fair!.spreadsheetId,
-        sheetName: _fair!.sheetName,
-        fairId: _fair!.id!,
-        fairName: _fair!.name,
-      );
+      _clients = await _fetchFairClients(_fair!);
       _clientCache[_fair!.id!] = _clients;
       _setStep(_Step.pickStand);
     } catch (e) {

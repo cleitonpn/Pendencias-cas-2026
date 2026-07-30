@@ -97,7 +97,9 @@ class _StandRequestScreenState extends State<StandRequestScreen> {
           .where((f) =>
               f.isMaintenance &&
               f.spreadsheetId.isNotEmpty &&
-              f.sheetName.isNotEmpty)
+              f.sheetName.isNotEmpty &&
+              // A mestra é o guarda-chuva das feiras derivadas, não uma feira.
+              !f.isMestra)
           .toList();
       if (_maintenanceFairs.isEmpty) {
         _setStep(_Step.closed);
@@ -117,6 +119,9 @@ class _StandRequestScreenState extends State<StandRequestScreen> {
         createdAt: DateTime.tryParse(m['createdAt'] as String? ?? '') ??
             DateTime.now(),
         mode: (m['mode'] as String?) ?? 'producao',
+        // Sem o sheetMode este portal não sabia distinguir feira derivada de
+        // planilha mestra, e listava os expositores de todas as feiras dela.
+        sheetMode: (m['sheetMode'] as String?) ?? 'individual',
       );
 
   Future<void> _selectFair(Fair fair) async {
@@ -129,11 +134,12 @@ class _StandRequestScreenState extends State<StandRequestScreen> {
 
   Future<void> _loadClients() async {
     try {
-      final clients = await SheetsService.fetchClients(
+      final clients = await SheetsService.fetchFairClients(
         spreadsheetId: _fair!.spreadsheetId,
         sheetName: _fair!.sheetName,
         fairId: _fair!.id!,
         fairName: _fair!.name,
+        isMestraChild: _fair!.isMestraChild,
       );
       _clients = clients;
       // Pre-select the stand if it came in the URL.

@@ -132,6 +132,42 @@ class SheetsService {
 
   /// Reads a wide range (A:BZ) and auto-detects column positions from the header
   /// row, so it works for CAS 2026, Forum, PetVet and any future fair layout.
+  /// Expositores de UMA feira, respeitando a origem da planilha.
+  ///
+  /// Numa feira derivada de planilha mestra, a aba contém todas as feiras
+  /// juntas: [fetchClients] devolveria a planilha inteira. Os portais públicos
+  /// caíam nisso — ao abrir uma feira vinda da mestra, apareciam os
+  /// expositores de todas as outras.
+  ///
+  /// A reidentificação repete o que o app faz no sync da mestra. Sem ela, o
+  /// pedido criado no portal apontaria para um cliente que o app não
+  /// reconhece.
+  static Future<List<Client>> fetchFairClients({
+    required String spreadsheetId,
+    required String sheetName,
+    required int fairId,
+    required String fairName,
+    required bool isMestraChild,
+  }) async {
+    if (!isMestraChild) {
+      return fetchClients(
+        spreadsheetId: spreadsheetId,
+        sheetName: sheetName,
+        fairId: fairId,
+        fairName: fairName,
+      );
+    }
+    final grouped = await fetchClientsGroupedByFair(
+      spreadsheetId: spreadsheetId,
+      sheetName: sheetName,
+    );
+    final mine = grouped[fairName] ?? const <Client>[];
+    return mine.map((c) {
+      final rowNum = c.rowId.split('_').last;
+      return c.reidentify(fairId, '${fairId}_$rowNum');
+    }).toList();
+  }
+
   static Future<List<Client>> fetchClients({
     required String spreadsheetId,
     required String sheetName,

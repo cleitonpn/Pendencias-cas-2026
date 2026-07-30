@@ -356,7 +356,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final fairs = _allFairs
         .where((f) =>
             f['id'] != null &&
-            (f['spreadsheetId'] as String? ?? '').isNotEmpty)
+            (f['spreadsheetId'] as String? ?? '').isNotEmpty &&
+            // A mestra não é uma feira, é o guarda-chuva das derivadas.
+            // Vincular a organizadora a ela abriria os expositores de todas
+            // as feiras da planilha de uma vez.
+            f['sheetMode'] != 'mestra')
         .toList()
       ..sort((a, b) => (a['name'] as String).compareTo(b['name'] as String));
 
