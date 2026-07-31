@@ -867,6 +867,50 @@ class FirestoreService {
             .toList());
   }
 
+  // ─── Titularidade do stand ────────────────────────────────────────────────
+  //
+  // A planilha diz quem PODE ser dono; quem É dono agora fica aqui, porque
+  // muda durante a feira e a planilha não acompanha esse ritmo.
+
+  /// Transferências gravadas para uma feira: clientId → produtor dono.
+  static Future<Map<String, String>> getClientOwners(String fairName) async {
+    final snap = await _db
+        .collection('client_owner')
+        .where('fairName', isEqualTo: fairName)
+        .get();
+    return {
+      for (final d in snap.docs)
+        d.id: ((d.data()['producer'] as String?) ?? '').trim(),
+    };
+  }
+
+  /// Passa a titularidade de vários stands de uma vez.
+  ///
+  /// Em lote porque transferir dez stands um a um seria dez idas à rede no
+  /// meio do pavilhão — e uma falha no meio deixaria metade transferida.
+  static Future<void> transferClients({
+    required List<String> clientFirestoreIds,
+    required String toProducer,
+    required String fairName,
+    required String by,
+  }) async {
+    final agora = DateTime.now().toIso8601String();
+    final ids = clientFirestoreIds.where((id) => id.isNotEmpty).toList();
+    for (var i = 0; i < ids.length; i += 400) {
+      final fim = (i + 400 < ids.length) ? i + 400 : ids.length;
+      final batch = _db.batch();
+      for (final id in ids.sublist(i, fim)) {
+        batch.set(_db.collection('client_owner').doc(id), {
+          'producer': toProducer,
+          'fairName': fairName,
+          'since': agora,
+          'by': by,
+        });
+      }
+      await batch.commit();
+    }
+  }
+
   // ─── Espelho dos expositores ──────────────────────────────────────────────
   //
   // A planilha continua sendo a fonte da verdade: o financeiro consulta, o
@@ -989,6 +1033,9 @@ class FirestoreService {
               ..remove('is_completed')
               ..remove('completed_at')
               ..['fairName'] = fairName
+              // Array de verdade, não texto: é o que permite perguntar
+              // "quais stands esta pessoa pode assumir" numa consulta só.
+              ..['produtoresList'] = e.key.produtores
               ..['fingerprint'] = e.value
               ..['updatedAt'] = agora;
             b.set(_clientsCol.doc(e.key.firestoreId), data);

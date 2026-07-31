@@ -1,3 +1,4 @@
+import '../utils/producer_pool.dart';
 class Client {
   final int fairId;          // which fair this client belongs to
   final String rowId;
@@ -11,7 +12,14 @@ class Client {
   final String totalArea;
   final String mezanino;
 
+  /// Dono ATUAL do stand. Continua sendo um nome só, de propósito: todas as
+  /// consultas do app filtram por ele, e a transferência troca este valor em
+  /// vez de mudar a forma como se pergunta.
   final String produtor;
+
+  /// Todos os produtores habilitados neste stand, na ordem da planilha. O
+  /// primeiro é o dono padrão quando não há transferência registrada.
+  final List<String> produtores;
   final String atendimento;  // consultor responsável pelo cliente
   final String organizadora; // organizadora do evento (faz o link com o cliente)
   final String pin;          // PIN de acesso do stand (adesivo), lido da planilha
@@ -50,6 +58,7 @@ class Client {
     required this.totalArea,
     required this.mezanino,
     required this.produtor,
+    this.produtores = const [],
     this.atendimento = '',
     this.organizadora = '',
     this.pin = '',
@@ -73,9 +82,17 @@ class Client {
     this.completedAt,
   });
 
+  /// Mesma ficha, outro dono. Usado pela transferência de titularidade.
+  Client copyWithOwner(String novoProdutor) => reidentify(
+        fairId,
+        rowId,
+        newProdutor: novoProdutor,
+      );
+
   /// Returns a new Client with updated fairId, rowId and firestoreId (used when
   /// assigning derived fair IDs after reading from a master sheet).
-  Client reidentify(int newFairId, String newRowId, {String newFirestoreId = ''}) => Client(
+  Client reidentify(int newFairId, String newRowId,
+          {String newFirestoreId = '', String? newProdutor}) => Client(
         fairId: newFairId,
         rowId: newRowId,
         firestoreId: newFirestoreId.isNotEmpty ? newFirestoreId : firestoreId,
@@ -87,7 +104,8 @@ class Client {
         deck: deck,
         totalArea: totalArea,
         mezanino: mezanino,
-        produtor: produtor,
+        produtor: newProdutor ?? produtor,
+        produtores: produtores,
         atendimento: atendimento,
         organizadora: organizadora,
         pin: pin,
@@ -124,6 +142,7 @@ class Client {
         'total_area': totalArea,
         'mezanino': mezanino,
         'produtor': produtor,
+        'produtores': produtores.join(', '),
         'atendimento': atendimento,
         'organizadora': organizadora,
         'pin': pin,
@@ -162,6 +181,7 @@ class Client {
         totalArea: map['total_area'] ?? '',
         mezanino: map['mezanino'] ?? '',
         produtor: map['produtor'] ?? '',
+        produtores: produtoresFrom((map['produtores'] as String?) ?? ''),
         atendimento: map['atendimento'] ?? '',
         organizadora: map['organizadora'] ?? '',
         pin: map['pin'] ?? '',

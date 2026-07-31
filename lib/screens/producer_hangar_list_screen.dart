@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../providers/app_provider.dart';
+import 'transfer_clients_screen.dart';
 import '../models/client.dart';
 import '../services/database_service.dart';
 import '../widgets/fair_info_header.dart';
@@ -86,6 +87,20 @@ class _ProducerHangarListScreenState
                 fontWeight: FontWeight.bold,
                 fontSize: 20)),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.swap_horiz, color: Colors.white),
+            tooltip: 'Transferir stands',
+            onPressed: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => TransferClientsScreen(
+                      producerName: widget.producerName),
+                ),
+              );
+              if (context.mounted) setState(() {});
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.checklist, color: Colors.white),
             tooltip: 'Minhas pendências',

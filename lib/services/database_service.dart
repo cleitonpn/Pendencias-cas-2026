@@ -40,6 +40,9 @@ class DatabaseService {
       'in_progress': 'INTEGER DEFAULT 0',
       'in_progress_by': "TEXT DEFAULT ''",
     },
+    'clients': {
+      'produtores': "TEXT DEFAULT ''",
+    },
     'fairs': {
       'auto_approve': 'INTEGER DEFAULT 0',
       'auto_validate': 'INTEGER DEFAULT 0',
@@ -93,7 +96,7 @@ class DatabaseService {
         firestore_id TEXT DEFAULT '',
         nome TEXT, montagem TEXT, local TEXT, hangar TEXT,
         area TEXT, deck TEXT, total_area TEXT, mezanino TEXT,
-        produtor TEXT, atendimento TEXT DEFAULT '', organizadora TEXT DEFAULT '', pin TEXT DEFAULT '', marceneiro TEXT, tapeceiro TEXT,
+        produtor TEXT, produtores TEXT DEFAULT '', atendimento TEXT DEFAULT '', organizadora TEXT DEFAULT '', pin TEXT DEFAULT '', marceneiro TEXT, tapeceiro TEXT,
         eletricista TEXT, faxineira TEXT, teto50 TEXT,
         project_link TEXT DEFAULT '',
         link_cv TEXT DEFAULT '',
@@ -334,10 +337,13 @@ class DatabaseService {
       } catch (_) {}
     }
     if (oldV < 24) {
+      // produtores: lista de quem PODE ser dono do stand. A coluna produtor
+      // continua guardando o dono atual, para as consultas não mudarem.
       // executed_by separa QUEM FEZ o serviço de quem validou. Antes o campo
       // resolved_by recebia o texto fixo "Administrador" na validação, então
       // o ranking creditava tudo ao admin e nada a quem trabalhou.
       for (final sql in [
+        "ALTER TABLE clients ADD COLUMN produtores TEXT DEFAULT ''",
         "ALTER TABLE pending_items ADD COLUMN executed_by TEXT DEFAULT ''",
         'ALTER TABLE pending_items ADD COLUMN executed_at TEXT',
         'ALTER TABLE fairs ADD COLUMN auto_validate INTEGER DEFAULT 0',
@@ -1311,20 +1317,43 @@ class DatabaseService {
       {required int fairId}) async {
     final database = await db;
     final rows = await database.rawQuery('''
-      SELECT c.produtor as producer,
-        COUNT(*) as total,
-        SUM(CASE WHEN p.is_resolved = 0 THEN 1 ELSE 0 END) as open,
-        SUM(CASE WHEN p.is_resolved = 1
-                  AND COALESCE(p.approval_status, 'none') != 'recusada'
-                 THEN 1 ELSE 0 END) as resolved,
-        SUM(CASE WHEN COALESCE(p.approval_status, 'none') = 'recusada'
-                 THEN 1 ELSE 0 END) as rejected
-      FROM pending_items p
-      JOIN clients c ON c.row_id = p.client_id
-      WHERE c.produtor != '' AND p.fair_id = ?
-      GROUP BY c.produtor
+      SELECT nome as producer,
+        SUM(aberta) as open,
+        SUM(concluida) as resolved,
+        SUM(recusada) as rejected,
+        SUM(aberta) + SUM(concluida) + SUM(recusada) as total
+      FROM (
+        -- Aberta conta para o DONO ATUAL do stand: é quem tem o serviço na
+        -- mão agora. Transferir o stand transfere junto a fila de trabalho.
+        SELECT c.produtor AS nome, 1 AS aberta, 0 AS concluida, 0 AS recusada
+        FROM pending_items p
+        JOIN clients c ON c.row_id = p.client_id
+        WHERE p.fair_id = ? AND p.is_resolved = 0 AND c.produtor != ''
+
+        UNION ALL
+
+        -- Encerrada conta para QUEM EXECUTOU. A pendência pode ter sido
+        -- aberta para um e concluída por outro depois da transferência —
+        -- o crédito é de quem entregou.
+        --
+        -- Sem executed_by (pendência anterior a esta versão) cai no dono do
+        -- stand, que é o palpite mais próximo do que aconteceu.
+        SELECT
+          CASE WHEN COALESCE(p.executed_by, '') != ''
+               THEN p.executed_by ELSE c.produtor END AS nome,
+          0 AS aberta,
+          CASE WHEN COALESCE(p.approval_status, 'none') != 'recusada'
+               THEN 1 ELSE 0 END AS concluida,
+          CASE WHEN COALESCE(p.approval_status, 'none') = 'recusada'
+               THEN 1 ELSE 0 END AS recusada
+        FROM pending_items p
+        JOIN clients c ON c.row_id = p.client_id
+        WHERE p.fair_id = ? AND p.is_resolved = 1
+      )
+      WHERE nome != ''
+      GROUP BY nome
       ORDER BY total DESC
-    ''', [fairId]);
+    ''', [fairId, fairId]);
     return rows.map((r) => Map<String, dynamic>.from(r)).toList();
   }
 }

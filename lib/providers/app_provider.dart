@@ -8,6 +8,7 @@ import '../services/database_service.dart';
 import '../services/firestore_service.dart';
 import '../services/notification_service.dart';
 import '../utils/fair_key.dart';
+import '../utils/producer_pool.dart';
 import '../services/cloud_writes.dart';
 import '../services/actor.dart';
 
@@ -500,6 +501,35 @@ class AppProvider extends ChangeNotifier {
     }
   }
 
+  /// Aplica as transferências de titularidade gravadas no app.
+  ///
+  /// A planilha traz a lista de quem pode ser dono; quem É dono agora vem
+  /// daqui. Sem isto, toda sincronização devolveria o stand ao primeiro nome
+  /// da planilha e desfaria as transferências feitas em campo.
+  Future<List<Client>> _applyOwners(
+      String fairName, List<Client> clients) async {
+    Map<String, String> donos;
+    try {
+      donos = await FirestoreService.getClientOwners(fairName);
+    } catch (e) {
+      // Sem a lista, o certo é NÃO reescrever a titularidade: manter o que já
+      // está no banco local erra menos do que devolver tudo ao primeiro nome.
+      debugPrint('[titularidade] $fairName: não foi possível ler ($e)');
+      final locais = {
+        for (final c in await DatabaseService.getClients(fairId: clients.isEmpty
+            ? -1
+            : clients.first.fairId))
+          c.firestoreId: c.produtor
+      };
+      donos = locais;
+    }
+
+    return clients.map((c) {
+      final dono = ownerFrom(c.produtores, donos[c.firestoreId]);
+      return dono == c.produtor ? c : c.copyWithOwner(dono);
+    }).toList();
+  }
+
   /// Publica o resultado da leitura da planilha no espelho da nuvem e devolve
   /// quem é expositor novo DE VERDADE.
   ///
@@ -541,7 +571,7 @@ class AppProvider extends ChangeNotifier {
         await DatabaseService.getClients(fairId: _currentFair!.id!);
     final existingMap = {for (final c in existingClients) c.rowId: c};
 
-    final sheetClients = await SheetsService.fetchClients(
+    var sheetClients = await SheetsService.fetchClients(
       spreadsheetId: _currentFair!.spreadsheetId,
       sheetName: _currentFair!.sheetName,
       fairId: _currentFair!.id!,
@@ -549,6 +579,7 @@ class AppProvider extends ChangeNotifier {
     );
 
     _preserveCompletion(sheetClients, existingClients);
+    sheetClients = await _applyOwners(_currentFair!.name, sheetClients);
 
     final novos = await _publishClients(_currentFair!.name, sheetClients);
     _notifyAssignments(
@@ -652,7 +683,7 @@ class AppProvider extends ChangeNotifier {
       );
 
       // Assign real fairId / rowId, keeping the already-computed firestoreId
-      final finalClients = tempClients.map((c) {
+      var finalClients = tempClients.map((c) {
         final rowNum = c.rowId.split('_').last;
         return c.reidentify(derivedId, '${derivedId}_$rowNum');
       }).toList();
@@ -662,6 +693,7 @@ class AppProvider extends ChangeNotifier {
       final existingMap = {for (final c in localClients) c.rowId: c};
 
       _preserveCompletion(finalClients, localClients);
+      finalClients = await _applyOwners(feiraNome, finalClients);
 
       final novos = await _publishClients(feiraNome, finalClients);
       _notifyAssignments(finalClients, existingMap, feiraNome, novos);
@@ -715,7 +747,7 @@ class AppProvider extends ChangeNotifier {
     }
 
     final fairId = _currentFair!.id!;
-    final finalClients = tempClients.map((c) {
+    var finalClients = tempClients.map((c) {
       final rowNum = c.rowId.split('_').last;
       return c.reidentify(fairId, '${fairId}_$rowNum');
     }).toList(); // firestoreId is already set on each client from fetchClientsGroupedByFair
@@ -724,6 +756,7 @@ class AppProvider extends ChangeNotifier {
     final existingMap = {for (final c in existingClients) c.rowId: c};
 
     _preserveCompletion(finalClients, existingClients);
+    finalClients = await _applyOwners(_currentFair!.name, finalClients);
 
     final novos = await _publishClients(_currentFair!.name, finalClients);
     _notifyAssignments(

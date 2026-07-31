@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/client.dart';
+import '../utils/producer_pool.dart';
 
 class SheetsService {
   // headers=1: the Google Sheets gviz API designates the first row as the
@@ -276,7 +277,10 @@ class SheetsService {
         deck: '',
         totalArea: '',
         mezanino: '',
-        produtor: n(produtorIdx),
+        // A coluna aceita mais de um nome separado por vírgula. O primeiro
+        // é o dono padrão; a transferência dentro do app troca esse valor.
+        produtor: ownerFrom(produtoresFrom(n(produtorIdx)), null),
+        produtores: produtoresFrom(n(produtorIdx)),
         atendimento: n(atendIdx),
         organizadora: n(organizadoraIdx),
         pin: s(pinIdx),
@@ -422,7 +426,10 @@ class SheetsService {
         deck: '',
         totalArea: '',
         mezanino: '',
-        produtor: n(produtorIdx),
+        // A coluna aceita mais de um nome separado por vírgula. O primeiro
+        // é o dono padrão; a transferência dentro do app troca esse valor.
+        produtor: ownerFrom(produtoresFrom(n(produtorIdx)), null),
+        produtores: produtoresFrom(n(produtorIdx)),
         atendimento: n(atendIdx),
         organizadora: n(organizadoraIdx),
         pin: s(pinIdx),
