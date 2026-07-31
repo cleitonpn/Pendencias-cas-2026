@@ -9,6 +9,7 @@ import '../services/firestore_service.dart';
 import '../services/notification_service.dart';
 import '../utils/fair_key.dart';
 import '../services/cloud_writes.dart';
+import '../services/actor.dart';
 
 class AppProvider extends ChangeNotifier {
   List<Fair> _fairs = [];
@@ -79,12 +80,15 @@ class AppProvider extends ChangeNotifier {
           mode: mode,
           sheetMode: sheetMode,
           autoApprove: m['autoApprove'] == true,
+          autoValidate: m['autoValidate'] == true,
         );
         await DatabaseService.upsertFairById(fair);
         if (id != null) {
           await DatabaseService.updateFairMode(id, mode);
           await DatabaseService.updateFairAutoApprove(
               id, m['autoApprove'] == true);
+          await DatabaseService.updateFairAutoValidate(
+              id, m['autoValidate'] == true);
           // Sync archived state so all devices see the same list
           if (remoteArchived) {
             await DatabaseService.archiveFair(id);
@@ -125,6 +129,7 @@ class AppProvider extends ChangeNotifier {
           mode: (m['mode'] as String?) ?? 'producao',
           sheetMode: (m['sheetMode'] as String?) ?? 'individual',
           autoApprove: m['autoApprove'] == true,
+          autoValidate: m['autoValidate'] == true,
         ));
       }
       _fairs = await DatabaseService.getFairs();
@@ -1001,16 +1006,21 @@ class AppProvider extends ChangeNotifier {
       {String? firestoreId,
       String? by,
       String? note,
-      List<String>? photoUrls}) async {
+      List<String>? photoUrls,
+      bool markExecution = false}) async {
     await DatabaseService.resolvePendingItem(sqliteId,
         resolvedBy: by, resolutionNote: note, resolutionPhotoUrls: photoUrls);
+    if (markExecution && Actor.name.isNotEmpty) {
+      await DatabaseService.markExecuted(sqliteId, Actor.name);
+    }
     if (firestoreId != null) {
       CloudWrites.fireAndForget(
         'conclusão da pendência',
         () => FirestoreService.resolveItem(firestoreId,
             resolvedBy: by,
             resolutionNote: note,
-            resolutionPhotoUrls: photoUrls),
+            resolutionPhotoUrls: photoUrls,
+            markExecution: markExecution),
       );
     }
     notifyListeners();
@@ -1047,13 +1057,41 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> markItemAwaitingValidation(int sqliteId, {String? firestoreId}) async {
-    await DatabaseService.markItemAwaitingValidation(sqliteId);
+  /// Produtor marca a pendência como feita.
+  ///
+  /// Com a validação automática ligada na feira, conclui direto em vez de
+  /// entrar na fila do admin — é para os momentos em que não há admin
+  /// disponível e a fila viraria gargalo em campo.
+  ///
+  /// Nos dois caminhos fica registrado QUEM executou, que é o que a métrica
+  /// conta. A validação, quando existe, é do admin e não muda esse registro.
+  Future<void> markItemAwaitingValidation(int sqliteId,
+      {String? firestoreId}) async {
+    if (_currentFair?.autoValidate == true) {
+      await resolveItem(sqliteId,
+          firestoreId: firestoreId, by: Actor.name, markExecution: true);
+      return;
+    }
+    await DatabaseService.markItemAwaitingValidation(sqliteId,
+        executedBy: Actor.name);
     if (firestoreId != null) {
       CloudWrites.fireAndForget(
         'envio para validação',
         () => FirestoreService.markAwaitingValidation(firestoreId),
       );
+    }
+    notifyListeners();
+  }
+
+  /// Liga/desliga a conclusão automática de uma feira (nuvem + local).
+  Future<void> setFairAutoValidate(int fairId, bool value) async {
+    await DatabaseService.updateFairAutoValidate(fairId, value);
+    try {
+      await FirestoreService.setFairAutoValidate(fairId, value);
+    } catch (_) {}
+    _fairs = await DatabaseService.getFairs();
+    if (_currentFair?.id == fairId) {
+      _currentFair = _currentFair!.copyWith(autoValidate: value);
     }
     notifyListeners();
   }

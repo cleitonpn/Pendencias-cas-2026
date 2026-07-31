@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../providers/app_provider.dart';
+import '../services/actor.dart';
 import '../models/client.dart';
 import '../models/pending_item.dart';
 import '../services/database_service.dart';
@@ -126,7 +127,7 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
     if (r == null || !mounted) return;
     await context.read<AppProvider>().resolveItem(item.id!,
         firestoreId: item.firestoreId,
-        by: 'Administrador',
+        by: Actor.name.isEmpty ? 'Administrador' : Actor.name,
         note: r.note,
         photoUrls: r.photoUrls);
     await _load();
@@ -141,7 +142,7 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
         confirmLabel: 'Validar');
     if (r == null || !mounted) return;
     await context.read<AppProvider>().validateItemByFirestoreId(firestoreId,
-        by: 'Administrador', note: r.note, photoUrls: r.photoUrls);
+        by: Actor.name.isEmpty ? 'Administrador' : Actor.name, note: r.note, photoUrls: r.photoUrls);
     await _load();
   }
 

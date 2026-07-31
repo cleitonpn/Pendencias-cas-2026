@@ -481,6 +481,43 @@ class _ModeToggle extends StatelessWidget {
                     .setFairAutoApprove(fair.id!, v),
           ),
         ]),
+        const SizedBox(height: 4),
+        // Conclusão automática: o que o produtor marcar como feito encerra na
+        // hora, sem esperar validação. Para os momentos em que não há admin
+        // disponível e a fila viraria gargalo em campo.
+        Row(children: [
+          Icon(
+            fair.autoValidate ? Icons.task_alt : Icons.fact_check_outlined,
+            size: 16,
+            color: fair.autoValidate ? Colors.green.shade700 : Colors.grey,
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Conclusão automática',
+                    style: TextStyle(
+                        fontSize: 12.5, fontWeight: FontWeight.w600)),
+                Text(
+                  fair.autoValidate
+                      ? 'O que o produtor concluir encerra na hora'
+                      : 'Conclusões do produtor aguardam validação',
+                  style: const TextStyle(fontSize: 10.5, color: Colors.grey),
+                ),
+              ],
+            ),
+          ),
+          Switch(
+            value: fair.autoValidate,
+            activeColor: Colors.green.shade700,
+            onChanged: fair.id == null
+                ? null
+                : (v) => context
+                    .read<AppProvider>()
+                    .setFairAutoValidate(fair.id!, v),
+          ),
+        ]),
       ],
     );
   }

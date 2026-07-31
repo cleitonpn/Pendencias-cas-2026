@@ -16,7 +16,7 @@ class DatabaseService {
   static Future<Database> _initDb() async {
     final path = join(await getDatabasesPath(), 'cas2026.db');
     final database = await openDatabase(path,
-        version: 23, onCreate: _onCreate, onUpgrade: _onUpgrade);
+        version: 24, onCreate: _onCreate, onUpgrade: _onUpgrade);
     await _ensureSchema(database);
     return database;
   }
@@ -29,6 +29,8 @@ class DatabaseService {
   static const _requiredColumns = <String, Map<String, String>>{
     'pending_items': {
       'consultant_name': "TEXT DEFAULT ''",
+      'executed_by': "TEXT DEFAULT ''",
+      'executed_at': 'TEXT',
       'approval_note': "TEXT DEFAULT ''",
       'resolution_note': "TEXT DEFAULT ''",
       'resolution_photos': "TEXT DEFAULT ''",
@@ -40,6 +42,7 @@ class DatabaseService {
     },
     'fairs': {
       'auto_approve': 'INTEGER DEFAULT 0',
+      'auto_validate': 'INTEGER DEFAULT 0',
       'archived': 'INTEGER DEFAULT 0',
     },
   };
@@ -75,7 +78,8 @@ class DatabaseService {
         mode TEXT DEFAULT 'producao',
         sheet_mode TEXT DEFAULT 'individual',
         archived INTEGER DEFAULT 0,
-        auto_approve INTEGER DEFAULT 0
+        auto_approve INTEGER DEFAULT 0,
+        auto_validate INTEGER DEFAULT 0
       )
     ''');
     await db.execute('''
@@ -127,6 +131,8 @@ class DatabaseService {
         awaiting_validation INTEGER DEFAULT 0,
         in_progress INTEGER DEFAULT 0,
         in_progress_by TEXT DEFAULT '',
+        executed_by TEXT DEFAULT '',
+        executed_at TEXT,
         created_at TEXT, resolved_at TEXT,
         FOREIGN KEY (client_id) REFERENCES clients(row_id)
       )
@@ -327,6 +333,20 @@ class DatabaseService {
             "ALTER TABLE pending_items ADD COLUMN consultant_name TEXT DEFAULT ''");
       } catch (_) {}
     }
+    if (oldV < 24) {
+      // executed_by separa QUEM FEZ o serviço de quem validou. Antes o campo
+      // resolved_by recebia o texto fixo "Administrador" na validação, então
+      // o ranking creditava tudo ao admin e nada a quem trabalhou.
+      for (final sql in [
+        "ALTER TABLE pending_items ADD COLUMN executed_by TEXT DEFAULT ''",
+        'ALTER TABLE pending_items ADD COLUMN executed_at TEXT',
+        'ALTER TABLE fairs ADD COLUMN auto_validate INTEGER DEFAULT 0',
+      ]) {
+        try {
+          await db.execute(sql);
+        } catch (_) {}
+      }
+    }
     if (oldV < 22) {
       // Aprovação automática por feira.
       try {
@@ -433,6 +453,12 @@ class DatabaseService {
   static Future<void> updateFairAutoApprove(int id, bool value) async {
     final database = await db;
     await database.update('fairs', {'auto_approve': value ? 1 : 0},
+        where: 'id = ?', whereArgs: [id]);
+  }
+
+  static Future<void> updateFairAutoValidate(int id, bool value) async {
+    final database = await db;
+    await database.update('fairs', {'auto_validate': value ? 1 : 0},
         where: 'id = ?', whereArgs: [id]);
   }
 
@@ -1046,11 +1072,34 @@ class DatabaseService {
     );
   }
 
-  static Future<void> markItemAwaitingValidation(int id) async {
+  static Future<void> markItemAwaitingValidation(int id,
+      {String executedBy = ''}) async {
     final database = await db;
     await database.update(
       'pending_items',
-      {'awaiting_validation': 1},
+      {
+        'awaiting_validation': 1,
+        // Quem fez o serviço. Sem nome não grava: o ranking ganharia uma
+        // linha vazia somando trabalho de ninguém.
+        if (executedBy.isNotEmpty) 'executed_by': executedBy,
+        if (executedBy.isNotEmpty)
+          'executed_at': DateTime.now().toIso8601String(),
+      },
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  /// Registra quem executou o serviço, sem mexer no resto.
+  static Future<void> markExecuted(int id, String executedBy) async {
+    if (executedBy.isEmpty) return;
+    final database = await db;
+    await database.update(
+      'pending_items',
+      {
+        'executed_by': executedBy,
+        'executed_at': DateTime.now().toIso8601String(),
+      },
       where: 'id = ?',
       whereArgs: [id],
     );

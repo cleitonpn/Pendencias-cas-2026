@@ -27,6 +27,15 @@ class PendingItem {
   List<String> resolutionPhotoUrls; // fotos da manutenção feita
   bool isResolved;
   bool awaitingValidation;     // producer marked as done, admin needs to validate
+
+  /// Quem EXECUTOU o serviço, e quando.
+  ///
+  /// Diferente de resolvedBy, que registra quem validou. No fluxo normal o
+  /// produtor marca como feito e o admin valida — e era o admin que ficava
+  /// gravado, então o ranking creditava "Administrador" por todo o trabalho
+  /// de campo.
+  String executedBy;
+  DateTime? executedAt;
   bool inProgress;
   String inProgressBy;
   final DateTime createdAt;
@@ -56,6 +65,8 @@ class PendingItem {
     this.resolutionPhotoUrls = const [],
     this.isResolved = false,
     this.awaitingValidation = false,
+    this.executedBy = '',
+    this.executedAt,
     this.inProgress = false,
     this.inProgressBy = '',
     required this.createdAt,
@@ -85,6 +96,8 @@ class PendingItem {
         'resolution_photos': jsonEncode(resolutionPhotoUrls),
         'is_resolved': isResolved ? 1 : 0,
         'awaiting_validation': awaitingValidation ? 1 : 0,
+        'executed_by': executedBy,
+        'executed_at': executedAt?.toIso8601String(),
         'in_progress': inProgress ? 1 : 0,
         'in_progress_by': inProgressBy,
         'created_at': createdAt.toIso8601String(),
@@ -127,6 +140,8 @@ class PendingItem {
         resolutionPhotoUrls: _parsePhotos(map['resolution_photos']),
         isResolved: (map['is_resolved'] as int? ?? 0) == 1,
         awaitingValidation: (map['awaiting_validation'] as int? ?? 0) == 1,
+        executedBy: (map['executed_by'] as String?) ?? '',
+        executedAt: DateTime.tryParse((map['executed_at'] as String?) ?? ''),
         inProgress: (map['in_progress'] as int? ?? 0) == 1,
         inProgressBy: (map['in_progress_by'] as String?) ?? '',
         createdAt: DateTime.parse(map['created_at'] as String),
@@ -160,6 +175,8 @@ class PendingItem {
         resolutionPhotoUrls: _parsePhotos(data['resolutionPhotoUrls']),
         isResolved: data['isResolved'] as bool? ?? false,
         awaitingValidation: data['awaitingValidation'] as bool? ?? false,
+        executedBy: (data['executedBy'] as String?) ?? '',
+        executedAt: DateTime.tryParse((data['executedAt'] as String?) ?? ''),
         inProgress: data['inProgress'] as bool? ?? false,
         inProgressBy: (data['inProgressBy'] as String?) ?? '',
         createdAt: DateTime.tryParse(data['createdAt'] as String? ?? '') ??

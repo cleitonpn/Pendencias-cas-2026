@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/pending_item.dart';
 import '../providers/app_provider.dart';
+import '../services/actor.dart';
 import '../services/database_service.dart';
 import '../services/pdf_service.dart';
 import '../widgets/pending_status.dart';
@@ -351,7 +352,9 @@ class _ItemCard extends StatelessWidget {
                   await context.read<AppProvider>().resolveItem(
                         item.id!,
                         firestoreId: item.firestoreId,
-                        by: 'Administrador',
+                        by: Actor.name.isEmpty
+                            ? 'Administrador'
+                            : Actor.name,
                       );
                   onReload!();
                 },

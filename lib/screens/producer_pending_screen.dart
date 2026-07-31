@@ -6,6 +6,7 @@ import '../models/pending_item.dart';
 import '../providers/app_provider.dart';
 import '../services/database_service.dart';
 import '../services/firestore_service.dart';
+import '../services/actor.dart';
 
 class ProducerPendingScreen extends StatefulWidget {
   final String? lockedProducer;
@@ -110,7 +111,11 @@ class _ProducerPendingScreenState extends State<ProducerPendingScreen> {
   }
 
   Future<void> _resolveItem(PendingItem item) async {
-    final by = _isProducerMode ? (_selected ?? 'Produtor') : 'Administrador';
+    // Nome real de quem está concluindo. O texto fixo "Administrador"
+    // creditava todo o trabalho a um usuário que não existe.
+    final by = _isProducerMode
+        ? (_selected ?? 'Produtor')
+        : (Actor.name.isEmpty ? 'Administrador' : Actor.name);
     if (_isProducerMode) {
       // Producer mode: resolve in Firestore only
       if (item.firestoreId == null) return;

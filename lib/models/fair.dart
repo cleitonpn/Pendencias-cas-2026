@@ -15,6 +15,11 @@ class Fair {
   /// organizadora entram já aprovados, sem passar por consultor/admin.
   final bool autoApprove;
 
+  /// Conclui sozinho o que o produtor marcar como feito, sem passar pela
+  /// validação do admin. Serve para os momentos em que não há admin
+  /// disponível e a fila de validação viraria gargalo em campo.
+  final bool autoValidate;
+
   const Fair({
     this.id,
     required this.name,
@@ -25,6 +30,7 @@ class Fair {
     this.sheetMode = 'individual',
     this.archived = false,
     this.autoApprove = false,
+    this.autoValidate = false,
   });
 
   bool get isMaintenance => mode == 'manutencao';
@@ -35,7 +41,8 @@ class Fair {
   bool get isMestraChild => sheetMode == 'mestra_child';
 
   Fair copyWith({String? mode, String? sheetMode, bool? archived,
-          bool? autoApprove}) =>
+          bool? autoApprove,
+          bool? autoValidate}) =>
       Fair(
         id: id,
         name: name,
@@ -46,6 +53,7 @@ class Fair {
         sheetMode: sheetMode ?? this.sheetMode,
         archived: archived ?? this.archived,
         autoApprove: autoApprove ?? this.autoApprove,
+        autoValidate: autoValidate ?? this.autoValidate,
       );
 
   Map<String, dynamic> toMap() => {
@@ -58,6 +66,7 @@ class Fair {
     'sheet_mode': sheetMode,
     'archived': archived ? 1 : 0,
     'auto_approve': autoApprove ? 1 : 0,
+    'auto_validate': autoValidate ? 1 : 0,
   };
 
   factory Fair.fromMap(Map<String, dynamic> map) => Fair(
@@ -72,5 +81,6 @@ class Fair {
         : 'individual',
     archived: (map['archived'] as int? ?? 0) == 1,
     autoApprove: (map['auto_approve'] as int? ?? 0) == 1,
+    autoValidate: (map['auto_validate'] as int? ?? 0) == 1,
   );
 }

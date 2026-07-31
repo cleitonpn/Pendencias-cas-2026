@@ -224,7 +224,8 @@ class FirestoreService {
   static Future<void> resolveItem(String firestoreId,
       {String? resolvedBy,
       String? resolutionNote,
-      List<String>? resolutionPhotoUrls}) async {
+      List<String>? resolutionPhotoUrls,
+      bool markExecution = false}) async {
     if (firestoreId.isEmpty) return;
     await _db.collection('pending_items').doc(firestoreId).update({
       'isResolved': true,
@@ -236,6 +237,10 @@ class FirestoreService {
         'resolutionNote': resolutionNote,
       if (resolutionPhotoUrls != null && resolutionPhotoUrls.isNotEmpty)
         'resolutionPhotoUrls': resolutionPhotoUrls,
+      // Conclusão direta: quem concluiu também executou. Numa validação o
+      // campo já veio preenchido pelo produtor e o merge não o sobrescreve,
+      // porque markAwaitingValidation gravou antes.
+      if (markExecution) ...executionStamp(),
       ...Actor.stamp,
     });
   }
@@ -281,12 +286,27 @@ class FirestoreService {
     });
   }
 
+  /// Marca como feita, aguardando validação, registrando QUEM executou.
+  ///
+  /// É este o momento em que o trabalho de campo acontece — e é ele que a
+  /// métrica precisa contar. A validação que vem depois é do admin.
   static Future<void> markAwaitingValidation(String firestoreId) async {
     if (firestoreId.isEmpty) return;
     await _db.collection('pending_items').doc(firestoreId).update({
       'awaitingValidation': true,
+      ...executionStamp(),
       ...Actor.stamp,
     });
+  }
+
+  /// Carimbo de execução. Só grava quando há alguém identificado: sem isso
+  /// o ranking ganharia uma linha vazia somando trabalho de ninguém.
+  static Map<String, dynamic> executionStamp() {
+    if (Actor.name.isEmpty) return const {};
+    return {
+      'executedBy': Actor.name,
+      'executedAt': DateTime.now().toIso8601String(),
+    };
   }
 
   static Future<void> markInProgress(String firestoreId, String by) async {
@@ -514,6 +534,13 @@ class FirestoreService {
   static Future<void> setFairAutoApprove(int id, bool value) async {
     await _db.collection('fairs').doc(id.toString()).set(
       {'autoApprove': value},
+      SetOptions(merge: true),
+    );
+  }
+
+  static Future<void> setFairAutoValidate(int id, bool value) async {
+    await _db.collection('fairs').doc(id.toString()).set(
+      {'autoValidate': value},
       SetOptions(merge: true),
     );
   }
