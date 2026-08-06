@@ -4,6 +4,7 @@ import '../models/montage_update.dart';
 import '../models/freight_request.dart';
 import '../models/meeting.dart';
 import '../models/client.dart';
+import '../models/art_status.dart';
 import '../utils/client_fingerprint.dart';
 import 'actor.dart';
 import 'admin_api.dart';
@@ -1338,6 +1339,33 @@ class ClientCompletionRecord {
 }
 
 /// Shared (cloud) completion status of a single stand.
+// ─── Status da arte, vindo da ferramenta de aprovação ───────────────────────
+//
+// `cv_status` é publicada pela ferramenta de aprovação de arte através de uma
+// ação agendada, e só de lá. O app apenas lê: escrever aqui faria o app
+// discordar da ferramenta sobre o estado de uma arte, e a ferramenta é quem
+// tem a informação — ela é o lugar onde o cliente envia e o analista aprova.
+//
+// A chave do documento é o mesmo `firestoreId` do expositor, que é o que liga
+// as duas bases sem depender de casar nomes de empresa.
+
+class ArtStatusService {
+  static CollectionReference<Map<String, dynamic>> get _col =>
+      FirebaseFirestore.instance.collection('cv_status');
+
+  /// O status da arte de todos os stands de uma feira, por firestoreId.
+  ///
+  /// Consulta pelo NOME da feira, e não pelo id local: o id muda de aparelho
+  /// para aparelho, o nome não. É a mesma escolha de `getFairClients`.
+  static Future<Map<String, ArtStatus>> porFeira(String fairName) async {
+    if (fairName.trim().isEmpty) return const {};
+    final snap = await _col.where('fairName', isEqualTo: fairName.trim()).get();
+    return {
+      for (final d in snap.docs) d.id: ArtStatus.fromMap(d.data()),
+    };
+  }
+}
+
 class ClientStatus {
   final bool completed;
   final DateTime? completedAt;

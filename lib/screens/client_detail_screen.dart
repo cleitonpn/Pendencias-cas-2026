@@ -18,6 +18,7 @@ import '../widgets/analyst_notes_widget.dart';
 import '../services/session_service.dart';
 import 'add_pending_screen.dart';
 import 'edit_pending_screen.dart';
+import '../widgets/art_status_tile.dart';
 
 class ClientDetailScreen extends StatefulWidget {
   final Client client;
@@ -336,11 +337,13 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
                 ),
               ),
 
-            if (c.linkCv.isNotEmpty)
+            ArtStatusTile(client: c),
+
+            if (c.linkCvEfetivo.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                 child: InkWell(
-                  onTap: () => _launchUrl(c.linkCv),
+                  onTap: () => _launchUrl(c.linkCvEfetivo),
                   borderRadius: BorderRadius.circular(10),
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),

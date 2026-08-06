@@ -1259,10 +1259,10 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
             ),
           ),
         ],
-        if (c.linkCv.isNotEmpty) ...[
+        if (c.linkCvEfetivo.isNotEmpty) ...[
           const SizedBox(height: 8),
           InkWell(
-            onTap: () => _launchLink(c.linkCv),
+            onTap: () => _launchLink(c.linkCvEfetivo),
             borderRadius: BorderRadius.circular(10),
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),

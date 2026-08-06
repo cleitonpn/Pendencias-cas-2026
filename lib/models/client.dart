@@ -1,4 +1,6 @@
 import '../utils/producer_pool.dart';
+import 'art_status.dart';
+
 class Client {
   final int fairId;          // which fair this client belongs to
   final String rowId;
@@ -44,6 +46,14 @@ class Client {
 
   bool isCompleted;
   DateTime? completedAt;
+
+  /// Status da arte, vindo da ferramenta de aprovação.
+  ///
+  /// Não persiste no SQLite de propósito: muda o tempo todo — a cada arte que
+  /// o cliente manda e a cada prova que o analista aprova — e é lido da nuvem
+  /// quando a feira abre. Guardado no banco local, mostraria o estado de
+  /// ontem com cara de estado de agora, que é pior do que não mostrar.
+  ArtStatus? arte;
 
   Client({
     this.fairId = 1,
@@ -127,7 +137,7 @@ class Client {
         linkDrive: linkDrive,
         isCompleted: isCompleted,
         completedAt: completedAt,
-      );
+      )..arte = arte;
 
   Map<String, dynamic> toMap() => {
         'fair_id': fairId,
@@ -206,6 +216,25 @@ class Client {
             ? DateTime.tryParse(map['completed_at'] as String)
             : null,
       );
+
+  /// O print da comunicação visual que vale.
+  ///
+  /// A ferramenta de aprovação tem prioridade sobre a planilha, e a razão é
+  /// que são o mesmo documento com idades diferentes: o link da planilha é
+  /// colado à mão e envelhece na primeira arte corrigida, enquanto o da
+  /// ferramenta é sempre a prova mais recente daquele stand.
+  ///
+  /// A planilha continua valendo como reserva — para o stand que ainda não foi
+  /// importado para a ferramenta, e para o período de transição em que uma
+  /// feira está nos dois lugares. Trocar um pelo outro, e não somar, evita a
+  /// pergunta "qual desses dois eu abro?" no meio da montagem.
+  String get linkCvEfetivo {
+    final daFerramenta = arte?.linkProva ?? '';
+    return daFerramenta.isNotEmpty ? daFerramenta : linkCv;
+  }
+
+  /// A prova veio da ferramenta (e não da planilha)?
+  bool get provaDaFerramenta => (arte?.linkProva ?? '').isNotEmpty;
 
   String get displayName => nome.isNotEmpty ? nome : 'Stand $local';
 

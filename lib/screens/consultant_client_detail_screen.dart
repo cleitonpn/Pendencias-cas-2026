@@ -11,6 +11,7 @@ import '../widgets/photo_gallery.dart';
 import '../widgets/pending_status.dart';
 import '../widgets/analyst_notes_widget.dart';
 import 'add_pending_screen.dart';
+import '../widgets/art_status_tile.dart';
 
 /// Read-only client detail for the Consultant role.
 /// The consultant can browse everything and CREATE pending items, but cannot
@@ -381,12 +382,14 @@ class _ConsultantClientDetailScreenState
                 ),
               ),
 
-            if (c.linkCv.isNotEmpty)
+            ArtStatusTile(client: c),
+
+            if (c.linkCvEfetivo.isNotEmpty)
               Padding(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                 child: InkWell(
-                  onTap: () => _launchUrl(c.linkCv),
+                  onTap: () => _launchUrl(c.linkCvEfetivo),
                   borderRadius: BorderRadius.circular(10),
                   child: Container(
                     padding: const EdgeInsets.symmetric(

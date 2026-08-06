@@ -11,6 +11,7 @@ import '../widgets/montage_section.dart';
 import '../widgets/pending_status.dart';
 import '../widgets/client_specs_card.dart';
 import '../widgets/analyst_notes_widget.dart';
+import '../widgets/art_status_tile.dart';
 
 class AnalystClientDetailScreen extends StatefulWidget {
   final Client client;
@@ -180,9 +181,11 @@ class _AnalystClientDetailScreenState
             if (c.projectLink.isNotEmpty)
               _linkTile(
                   Icons.link, 'Ver projeto no Drive', c.projectLink, Colors.blue),
-            if (c.linkCv.isNotEmpty)
+            ArtStatusTile(client: c),
+
+            if (c.linkCvEfetivo.isNotEmpty)
               _linkTile(Icons.image_outlined, 'Ver print Comunicação Visual',
-                  c.linkCv, Colors.pink),
+                  c.linkCvEfetivo, Colors.pink),
             if (c.linkMemorial.isNotEmpty)
               _linkTile(Icons.description_outlined, 'Ver Memorial Descritivo',
                   c.linkMemorial, Colors.teal),

@@ -53,7 +53,7 @@ service cloud.firestore {
     // públicos — poderia exigir uma versão que não existe e trancar a equipe
     // inteira fora do app no meio de uma montagem.
     function isServerOwned(col) {
-      return col in ['app_config'];
+      return col in ['app_config', 'cv_status'];
     }
 
     match /{col}/{doc} {

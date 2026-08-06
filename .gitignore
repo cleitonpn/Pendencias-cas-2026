@@ -12,6 +12,8 @@ android/.gradle/
 android/app/debug/
 android/app/profile/
 android/app/release/
+# Gerado pelo `flutter pub get`, não versionado.
+android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java
 *.apk
 *.aab
 
