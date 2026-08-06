@@ -339,12 +339,12 @@ class _ProducerClientDetailScreenState
                     ),
                   ],
 
-                  if (c.linkCv.isNotEmpty)
+                  if (c.linkCvEfetivo.isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                       child: InkWell(
                         onTap: () async {
-                          String target = c.linkCv.trim();
+                          String target = c.linkCvEfetivo.trim();
                           if (!target.startsWith('http://') && !target.startsWith('https://')) {
                             target = 'https://$target';
                           }

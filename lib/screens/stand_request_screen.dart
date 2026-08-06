@@ -401,10 +401,10 @@ class _StandRequestScreenState extends State<StandRequestScreen> {
         ),
       ));
     }
-    if (c.linkCv.isNotEmpty) {
+    if (c.linkCvEfetivo.isNotEmpty) {
       if (cards.isNotEmpty) cards.add(const SizedBox(height: 8));
       cards.add(InkWell(
-        onTap: () => _launchLink(c.linkCv),
+        onTap: () => _launchLink(c.linkCvEfetivo),
         borderRadius: BorderRadius.circular(10),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -659,7 +659,7 @@ class _StandRequestScreenState extends State<StandRequestScreen> {
                 '${c.hangar.isNotEmpty ? "Hangar ${c.hangar}  •  " : ""}Stand ${c.local}'),
           ),
         ),
-        if (c.projectLink.isNotEmpty || c.linkCv.isNotEmpty) ...[
+        if (c.projectLink.isNotEmpty || c.linkCvEfetivo.isNotEmpty) ...[
           const SizedBox(height: 12),
           ..._linkCards(c),
         ],

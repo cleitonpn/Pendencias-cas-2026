@@ -850,7 +850,33 @@ class AppProvider extends ChangeNotifier {
     _hangars = await DatabaseService.getHangars(fairId: _currentFair!.id!);
     _pendingCounts =
         await DatabaseService.getAllPendingCounts(_currentFair!.id!);
+    await _carregarStatusDaArte();
     notifyListeners();
+  }
+
+  /// Junta aos expositores o status da arte publicado pela ferramenta.
+  ///
+  /// É um ponto só porque `_loadLocal` é o único lugar onde `_clients` é
+  /// preenchido — enriquecer aqui alcança todas as telas de uma vez, sem cada
+  /// uma ter que lembrar de buscar.
+  ///
+  /// Falha em silêncio de propósito. O status da arte é informação a mais numa
+  /// tela que já funcionava sem ela; derrubar a abertura da feira porque a
+  /// outra base não respondeu seria trocar um problema pequeno por um grande,
+  /// e sem rede o app precisa continuar servindo o que está no aparelho.
+  Future<void> _carregarStatusDaArte() async {
+    final fairName = _currentFair?.name ?? '';
+    if (fairName.isEmpty) return;
+    try {
+      final mapa = await ArtStatusService.porFeira(fairName);
+      if (mapa.isEmpty) return;
+      for (final c in _clients) {
+        if (c.firestoreId.isEmpty) continue;
+        c.arte = mapa[c.firestoreId];
+      }
+    } catch (_) {
+      // offline, ou a feira ainda não está na ferramenta de aprovação
+    }
   }
 
   void _setLoading(bool v) {
