@@ -1,0 +1,13 @@
+[
+  {
+    "origin": [
+      "https://montagem-uset.web.app",
+      "https://montagem-uset.firebaseapp.com",
+      "http://localhost:5000",
+      "http://localhost:8080"
+    ],
+    "method": ["GET", "HEAD"],
+    "responseHeader": ["Content-Type", "Content-Length", "Content-Range"],
+    "maxAgeSeconds": 3600
+  }
+]

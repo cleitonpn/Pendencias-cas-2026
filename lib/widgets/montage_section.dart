@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:image_picker/image_picker.dart';
 import '../models/montage_update.dart';
 import '../services/firestore_service.dart';
@@ -104,7 +105,35 @@ class _MontageSectionState extends State<MontageSection> {
         child: Stack(
           children: [
             InteractiveViewer(
-              child: Center(child: Image.network(url)),
+              child: Center(
+                child: Image.network(
+                  url,
+                  errorBuilder: (c, e, s) => Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.image_not_supported_outlined,
+                            color: Colors.white54, size: 48),
+                        const SizedBox(height: 12),
+                        const Text(
+                          'Não foi possível exibir a foto aqui.',
+                          style: TextStyle(color: Colors.white70),
+                        ),
+                        const SizedBox(height: 16),
+                        ElevatedButton.icon(
+                          onPressed: () => launchUrl(
+                            Uri.parse(url),
+                            mode: LaunchMode.externalApplication,
+                          ),
+                          icon: const Icon(Icons.open_in_new),
+                          label: const Text('Abrir no navegador'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
             ),
             Positioned(
               top: 4,
@@ -211,11 +240,38 @@ class _MontageSectionState extends State<MontageSection> {
                                     color: Colors.grey.shade100,
                                     child: const Center(
                                         child: CircularProgressIndicator())),
-                            errorBuilder: (c, e, s) => Container(
+                            // Quando a imagem não carrega, o ícone quebrado
+                            // sozinho não diz nada e não deixa saída. Abrir no
+                            // navegador funciona mesmo quando a exibição
+                            // dentro da página é bloqueada, então serve de
+                            // saída para o usuário e de pista para nós.
+                            errorBuilder: (c, e, s) => InkWell(
+                              onTap: () => launchUrl(
+                                Uri.parse(u.photoUrl),
+                                mode: LaunchMode.externalApplication,
+                              ),
+                              child: Container(
                                 height: 180,
                                 color: Colors.grey.shade100,
-                                child: const Icon(Icons.broken_image,
-                                    color: Colors.grey)),
+                                child: const Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.image_not_supported_outlined,
+                                        color: Colors.grey, size: 32),
+                                    SizedBox(height: 8),
+                                    Text('Não foi possível exibir a foto aqui',
+                                        style: TextStyle(
+                                            fontSize: 12, color: Colors.grey)),
+                                    SizedBox(height: 2),
+                                    Text('Toque para abrir no navegador',
+                                        style: TextStyle(
+                                            fontSize: 11,
+                                            color: Color(0xFF1E3A5F),
+                                            fontWeight: FontWeight.w600)),
+                                  ],
+                                ),
+                              ),
+                            ),
                           ),
                         ),
                       ),

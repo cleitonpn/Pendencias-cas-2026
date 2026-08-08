@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 /// Horizontal strip of photo thumbnails (from network URLs). Tapping a photo
 /// opens a fullscreen, zoomable viewer.
@@ -40,11 +41,15 @@ class PhotoStrip extends StatelessWidget {
                               height: 18,
                               child: CircularProgressIndicator(strokeWidth: 2))),
                     ),
+              // No navegador a exibição pode ser bloqueada mesmo com a foto
+              // existindo. O visualizador em tela cheia oferece a saída de
+              // abrir fora do app.
               errorBuilder: (c, e, s) => Container(
                 width: 72,
                 height: 72,
                 color: Colors.grey.shade200,
-                child: const Icon(Icons.broken_image, color: Colors.grey),
+                child: const Icon(Icons.image_not_supported_outlined,
+                    color: Colors.grey),
               ),
             ),
           ),
@@ -79,8 +84,29 @@ class _PhotoViewer extends StatelessWidget {
             child: Image.network(
               urls[i],
               fit: BoxFit.contain,
-              errorBuilder: (c, e, s) => const Icon(Icons.broken_image,
-                  color: Colors.white54, size: 64),
+              errorBuilder: (c, e, s) => Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.image_not_supported_outlined,
+                        color: Colors.white54, size: 56),
+                    const SizedBox(height: 12),
+                    const Text('Não foi possível exibir a foto aqui.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Colors.white70)),
+                    const SizedBox(height: 16),
+                    ElevatedButton.icon(
+                      onPressed: () => launchUrl(
+                        Uri.parse(urls[i]),
+                        mode: LaunchMode.externalApplication,
+                      ),
+                      icon: const Icon(Icons.open_in_new),
+                      label: const Text('Abrir no navegador'),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
         ),

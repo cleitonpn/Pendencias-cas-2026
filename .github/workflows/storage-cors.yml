@@ -1,0 +1,47 @@
+name: CORS do Storage
+
+# As fotos vêm do Firebase Storage e são exibidas dentro do app web. O
+# navegador só deixa a página ler uma imagem de outro domínio se aquele
+# domínio disser que pode — e um bucket novo não diz nada, então a foto
+# simplesmente não abre. No Android não há essa regra, por isso o mesmo
+# código funciona lá e falha aqui.
+#
+# Manual: a configuração muda pouco e mexer nela sem querer derrubaria as
+# fotos em todo lugar.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  cors:
+    name: Aplicar CORS no bucket
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Gravar credencial de serviço
+        run: printf '%s' "$FIREBASE_SA" > "$RUNNER_TEMP/sa.json"
+        env:
+          FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+
+      - name: Autenticar no Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+
+      - name: Instalar gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Aplicar CORS
+        run: |
+          gcloud storage buckets update \
+            gs://montagem-uset.firebasestorage.app \
+            --cors-file=storage-cors.json
+
+      - name: Conferir o que ficou gravado
+        run: |
+          gcloud storage buckets describe \
+            gs://montagem-uset.firebasestorage.app \
+            --format="default(cors_config)"
