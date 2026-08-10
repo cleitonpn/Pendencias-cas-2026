@@ -36,6 +36,12 @@ class Client {
   final String mobilario;
   final String extras;       // coluna "extras" da planilha
 
+  /// Balcão padrão, balcão personalizado e cores — colunas da planilha que a
+  /// equipe usa para montar o stand.
+  final String balcaoPadrao;
+  final String balcaoPersonalizado;
+  final String cores;
+
   // Event-level info columns (same for all clients in a fair)
   final String pavilhao;
   final String dataMontagem;
@@ -82,6 +88,9 @@ class Client {
     this.linkMemorial = '',
     this.mobilario = '',
     this.extras = '',
+    this.balcaoPadrao = '',
+    this.balcaoPersonalizado = '',
+    this.cores = '',
     this.pavilhao = '',
     this.dataMontagem = '',
     this.dataEvento = '',
@@ -129,6 +138,9 @@ class Client {
         linkMemorial: linkMemorial,
         mobilario: mobilario,
         extras: extras,
+        balcaoPadrao: balcaoPadrao,
+        balcaoPersonalizado: balcaoPersonalizado,
+        cores: cores,
         pavilhao: pavilhao,
         dataMontagem: dataMontagem,
         dataEvento: dataEvento,
@@ -166,6 +178,9 @@ class Client {
         'link_memorial': linkMemorial,
         'mobilario': mobilario,
         'extras': extras,
+        'balcao_padrao': balcaoPadrao,
+        'balcao_personalizado': balcaoPersonalizado,
+        'cores': cores,
         'pavilhao': pavilhao,
         'data_montagem': dataMontagem,
         'data_evento': dataEvento,
@@ -205,6 +220,9 @@ class Client {
         linkMemorial: map['link_memorial'] ?? '',
         mobilario: map['mobilario'] ?? '',
         extras: map['extras'] ?? '',
+        balcaoPadrao: map['balcao_padrao'] ?? '',
+        balcaoPersonalizado: map['balcao_personalizado'] ?? '',
+        cores: map['cores'] ?? '',
         pavilhao: map['pavilhao'] ?? '',
         dataMontagem: map['data_montagem'] ?? '',
         dataEvento: map['data_evento'] ?? '',

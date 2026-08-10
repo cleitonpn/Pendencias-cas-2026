@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../providers/app_provider.dart';
 import '../services/actor.dart';
 import '../models/client.dart';
+import '../widgets/spec_block.dart';
 import '../models/pending_item.dart';
 import '../services/database_service.dart';
 import '../services/firestore_service.dart';
@@ -455,6 +456,9 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
                 ),
               ),
             ],
+
+            // Balcões e cores, vindos da planilha.
+            ClientSpecExtras(client: c),
 
             // Stand specifications (filled by consultant, read-only here)
             ClientSpecsCard(clientId: c.firestoreId, legacyClientId: c.rowId),

@@ -214,6 +214,14 @@ class SheetsService {
         'mobiliário', 'mobiliario']);
     final extrasIdx      = findCol(['extras', 'extra', 'itens extras',
         'itens adicionais']);
+    // Balcões e cores: a planilha escreve de vários jeitos, com e sem acento.
+    final balcaoPadraoIdx  = findCol(['balcão padrão', 'balcao padrao',
+        'balcão padrao', 'balcao padrão', 'balcao', 'balcão']);
+    final balcaoPersIdx    = findCol(['balcão personalizado',
+        'balcao personalizado', 'balcão personalizado ',
+        'balcao personalizado ', 'balcão customizado', 'balcao customizado']);
+    final coresIdx         = findCol(['cores', 'cor', 'cores do stand',
+        'cor do stand']);
 
     // Event-level date columns.  'montagem'/'evento'/'desmontagem' alone are
     // accepted as fallbacks for sheets that don't use the "data " prefix.
@@ -294,6 +302,9 @@ class SheetsService {
         linkMemorial: s(linkMemorialIdx),
         mobilario: s(mobilarioIdx),
         extras: s(extrasIdx),
+        balcaoPadrao: s(balcaoPadraoIdx),
+        balcaoPersonalizado: s(balcaoPersIdx),
+        cores: s(coresIdx),
         pavilhao: s(pavilhaoIdx),
         dataMontagem: s(dataMontagemIdx),
         dataEvento: s(dataEventoIdx),
@@ -368,6 +379,14 @@ class SheetsService {
         'mobiliário', 'mobiliario']);
     final extrasIdx        = findCol(['extras', 'extra', 'itens extras',
         'itens adicionais']);
+    // Balcões e cores: a planilha escreve de vários jeitos, com e sem acento.
+    final balcaoPadraoIdx  = findCol(['balcão padrão', 'balcao padrao',
+        'balcão padrao', 'balcao padrão', 'balcao', 'balcão']);
+    final balcaoPersIdx    = findCol(['balcão personalizado',
+        'balcao personalizado', 'balcão personalizado ',
+        'balcao personalizado ', 'balcão customizado', 'balcao customizado']);
+    final coresIdx         = findCol(['cores', 'cor', 'cores do stand',
+        'cor do stand']);
     final linkPlantaIdx    = findCol(['link planta', 'link da planta',
         'planta baixa', 'planta', 'mapa']);
     final linkDriveIdx     = findCol(['link drive', 'drive',
@@ -443,6 +462,9 @@ class SheetsService {
         linkMemorial: s(linkMemorialIdx),
         mobilario: s(mobilarioIdx),
         extras: s(extrasIdx),
+        balcaoPadrao: s(balcaoPadraoIdx),
+        balcaoPersonalizado: s(balcaoPersIdx),
+        cores: s(coresIdx),
         pavilhao: s(pavilhaoIdx),
         dataMontagem: s(dataMontagemIdx),
         dataEvento: s(dataEventoIdx),

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../providers/app_provider.dart';
 import '../models/client.dart';
+import '../widgets/spec_block.dart';
 import '../models/pending_item.dart';
 import '../services/database_service.dart';
 import '../services/firestore_service.dart';
@@ -242,6 +243,9 @@ class _AnalystClientDetailScreenState
                 ),
               ),
             ],
+
+            // Balcões e cores, vindos da planilha.
+            ClientSpecExtras(client: c),
 
             // Specs (read-only)
             ClientSpecsCard(clientId: c.firestoreId, legacyClientId: c.rowId),

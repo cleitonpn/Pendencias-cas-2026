@@ -16,7 +16,7 @@ class DatabaseService {
   static Future<Database> _initDb() async {
     final path = join(await getDatabasesPath(), 'cas2026.db');
     final database = await openDatabase(path,
-        version: 24, onCreate: _onCreate, onUpgrade: _onUpgrade);
+        version: 25, onCreate: _onCreate, onUpgrade: _onUpgrade);
     await _ensureSchema(database);
     return database;
   }
@@ -42,6 +42,9 @@ class DatabaseService {
     },
     'clients': {
       'produtores': "TEXT DEFAULT ''",
+      'balcao_padrao': "TEXT DEFAULT ''",
+      'balcao_personalizado': "TEXT DEFAULT ''",
+      'cores': "TEXT DEFAULT ''",
     },
     'fairs': {
       'auto_approve': 'INTEGER DEFAULT 0',
@@ -103,6 +106,9 @@ class DatabaseService {
         link_memorial TEXT DEFAULT '',
         mobilario TEXT DEFAULT '',
         extras TEXT DEFAULT '',
+        balcao_padrao TEXT DEFAULT '',
+        balcao_personalizado TEXT DEFAULT '',
+        cores TEXT DEFAULT '',
         pavilhao TEXT DEFAULT '',
         data_montagem TEXT DEFAULT '',
         data_evento TEXT DEFAULT '',
@@ -335,6 +341,20 @@ class DatabaseService {
         await db.execute(
             "ALTER TABLE pending_items ADD COLUMN consultant_name TEXT DEFAULT ''");
       } catch (_) {}
+    }
+    if (oldV < 25) {
+      // Balcão padrão, balcão personalizado e cores — colunas da planilha que
+      // faltavam no app.
+      for (final col in const [
+        'balcao_padrao',
+        'balcao_personalizado',
+        'cores',
+      ]) {
+        try {
+          await db.execute(
+              "ALTER TABLE clients ADD COLUMN $col TEXT DEFAULT ''");
+        } catch (_) {}
+      }
     }
     if (oldV < 24) {
       // produtores: lista de quem PODE ser dono do stand. A coluna produtor
