@@ -35,7 +35,24 @@ class _StandRequestScreenState extends State<StandRequestScreen> {
     _TeamInfo('Tapeçaria',          Icons.chair,             Color(0xFF7B1FA2)),
     _TeamInfo('Vidraceiro',         Icons.window,            Color(0xFF0288D1)),
     _TeamInfo('Comunicação Visual', Icons.brush,             Color(0xFFD81B60)),
+    // Mobiliário locado. Só entra quando o stand tem mobiliário na
+    // planilha — oferecer a opção num stand sem mobiliário geraria
+    // chamado que ninguém sabe atender.
+    _TeamInfo('Mobiliário',         Icons.chair_alt,         Color(0xFF00796B)),
   ];
+
+  /// Equipes que podem receber chamado neste stand.
+  ///
+  /// Mobiliário só aparece quando há mobiliário locado na planilha: oferecer
+  /// a opção num stand sem mobiliário geraria chamado que ninguém sabe
+  /// atender.
+  List<_TeamInfo> get _equipes {
+    final temMobiliario =
+        (_client?.mobilario ?? '').trim().isNotEmpty;
+    return _teams
+        .where((t) => t.name != 'Mobiliário' || temMobiliario)
+        .toList();
+  }
 
   _Step _step = _Step.loading;
   String _errorMsg = '';
@@ -228,6 +245,7 @@ class _StandRequestScreenState extends State<StandRequestScreen> {
         clientId: _client!.rowId,
         clientName: _client!.displayName,
         producerName: _client!.produtor,
+        producerNames: _client!.produtores,
         consultantName: _client!.atendimento,
         fairName: _fair!.name,
         local: _client!.local,
@@ -671,7 +689,7 @@ class _StandRequestScreenState extends State<StandRequestScreen> {
                 color: Colors.grey,
                 letterSpacing: 1)),
         const SizedBox(height: 10),
-        ..._teams.map((t) {
+        ..._equipes.map((t) {
           final sel = _selectedTeam == t.name;
           return GestureDetector(
             onTap: () => setState(() => _selectedTeam = t.name),

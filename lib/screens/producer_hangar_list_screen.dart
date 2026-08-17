@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../providers/app_provider.dart';
-import 'transfer_clients_screen.dart';
 import '../models/client.dart';
 import '../services/database_service.dart';
 import '../widgets/fair_info_header.dart';
@@ -39,7 +38,8 @@ class _ProducerHangarListScreenState
   List<Client> get _producerClients {
     final all = context.read<AppProvider>().clients;
     return all
-        .where((c) => c.produtor == widget.producerName)
+        // Todo o grupo de produtores do stand enxerga, não só o primeiro.
+        .where((c) => c.temProdutor(widget.producerName))
         .toList()
       ..sort((a, b) {
         final h = a.hangar.compareTo(b.hangar);
@@ -87,20 +87,6 @@ class _ProducerHangarListScreenState
                 fontWeight: FontWeight.bold,
                 fontSize: 20)),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.swap_horiz, color: Colors.white),
-            tooltip: 'Transferir stands',
-            onPressed: () async {
-              await Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => TransferClientsScreen(
-                      producerName: widget.producerName),
-                ),
-              );
-              if (context.mounted) setState(() {});
-            },
-          ),
           IconButton(
             icon: const Icon(Icons.checklist, color: Colors.white),
             tooltip: 'Minhas pendências',

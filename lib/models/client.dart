@@ -42,6 +42,10 @@ class Client {
   final String balcaoPersonalizado;
   final String cores;
 
+  /// Coluna "tipo" da planilha — o tipo de montagem do stand. Nas feiras
+  /// grandes é a informação que diz de cara o que aquele stand é.
+  final String tipo;
+
   // Event-level info columns (same for all clients in a fair)
   final String pavilhao;
   final String dataMontagem;
@@ -91,6 +95,7 @@ class Client {
     this.balcaoPadrao = '',
     this.balcaoPersonalizado = '',
     this.cores = '',
+    this.tipo = '',
     this.pavilhao = '',
     this.dataMontagem = '',
     this.dataEvento = '',
@@ -100,6 +105,19 @@ class Client {
     this.isCompleted = false,
     this.completedAt,
   });
+
+  /// Verdadeiro se esta pessoa é responsável por este stand.
+  ///
+  /// Todos os produtores da coluna respondem pelo stand ao mesmo tempo — não
+  /// há um titular. Foi assim que a gente resolveu o caso do produtor
+  /// principal ficar sem bateria: antes ninguém mais enxergava as pendências
+  /// dele, e não havia como corrigir sem mexer na planilha.
+  bool temProdutor(String nome) {
+    final alvo = nome.toLowerCase().trim();
+    if (alvo.isEmpty) return false;
+    if (produtor.toLowerCase().trim() == alvo) return true;
+    return produtores.any((n) => n.toLowerCase().trim() == alvo);
+  }
 
   /// Mesma ficha, outro dono. Usado pela transferência de titularidade.
   Client copyWithOwner(String novoProdutor) => reidentify(
@@ -141,6 +159,7 @@ class Client {
         balcaoPadrao: balcaoPadrao,
         balcaoPersonalizado: balcaoPersonalizado,
         cores: cores,
+        tipo: tipo,
         pavilhao: pavilhao,
         dataMontagem: dataMontagem,
         dataEvento: dataEvento,
@@ -181,6 +200,8 @@ class Client {
         'balcao_padrao': balcaoPadrao,
         'balcao_personalizado': balcaoPersonalizado,
         'cores': cores,
+        'tipo': tipo,
+        'produtores_key': produtoresKeyFrom(produtores),
         'pavilhao': pavilhao,
         'data_montagem': dataMontagem,
         'data_evento': dataEvento,
@@ -223,6 +244,7 @@ class Client {
         balcaoPadrao: map['balcao_padrao'] ?? '',
         balcaoPersonalizado: map['balcao_personalizado'] ?? '',
         cores: map['cores'] ?? '',
+        tipo: map['tipo'] ?? '',
         pavilhao: map['pavilhao'] ?? '',
         dataMontagem: map['data_montagem'] ?? '',
         dataEvento: map['data_evento'] ?? '',

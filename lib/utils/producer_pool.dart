@@ -21,6 +21,19 @@ List<String> produtoresFrom(String raw) {
   return out;
 }
 
+/// Chave de busca do pool, para o banco encontrar a pessoa dentro da lista.
+///
+/// Fica entre vírgulas — ",ana,cleiton," — para a comparação ser exata. Sem
+/// os delimitadores, procurar por "Ana" acharia "Anaí" e o stand de outra
+/// pessoa apareceria na lista dela.
+String produtoresKeyFrom(List<String> pool) {
+  if (pool.isEmpty) return '';
+  return ',${pool.map((n) => n.toLowerCase().trim()).join(',')},';
+}
+
+/// O trecho a procurar dentro de [produtoresKeyFrom] para um nome.
+String produtorLookup(String nome) => ',${nome.toLowerCase().trim()},';
+
 /// Quem é o dono do stand agora.
 ///
 /// [override] é a transferência gravada no app. Ela só vale se a pessoa

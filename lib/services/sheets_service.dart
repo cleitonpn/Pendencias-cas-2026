@@ -189,6 +189,10 @@ class SheetsService {
 
     final nomeIdx        = findCol(['nome']);
     final montagemIdx    = findCol(['montagem']);
+    // Nas feiras grandes a coluna "tipo" diz o que o stand é — informação que
+    // a equipe procura antes de qualquer outra.
+    final tipoIdx        = findCol(['tipo', 'type', 'tipo do stand',
+        'tipo stand', 'tipo montagem', 'tipo de montagem']);
     final localIdx       = findCol(['local', 'localização', 'localizacao',
         'local stand', 'local do stand', 'localização stand']);
     final hangarIdx      = findCol(['hangar']);
@@ -279,6 +283,7 @@ class SheetsService {
         firestoreId: '${_normalize(fairName)}_${i + 1}',
         nome: nome,
         montagem: s(montagemIdx),
+        tipo: s(tipoIdx),
         local: s(localIdx),
         hangar: hangar,
         area: s(areaIdx),
@@ -438,7 +443,10 @@ class SheetsService {
         rowId: '0_${i + 1}', // placeholder row id
         firestoreId: '${_normalize(feiraNome)}_$rowNumInFair',
         nome: nome,
-        montagem: s(tipoIdx), // master sheet "TIPO" = stand assembly type
+        // A mestra já mostrava o TIPO no lugar da montagem; mantido para não
+        // mudar o que essas feiras exibem hoje.
+        montagem: s(tipoIdx),
+        tipo: s(tipoIdx),
         local: s(localIdx),
         hangar: hangar,
         area: s(areaIdx),

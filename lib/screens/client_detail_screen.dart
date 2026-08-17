@@ -249,6 +249,10 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
                     if (c.area.isNotEmpty) _chip(Icons.square_foot, '${c.area} m²'),
                     if (c.montagem.isNotEmpty)
                       _chip(Icons.business, c.montagem),
+                      // A mestra já mostra o tipo no lugar da montagem; repetir
+                      // a mesma informação duas vezes só ocuparia espaço.
+                      if (c.tipo.isNotEmpty && c.tipo != c.montagem)
+                        _chip(Icons.category_outlined, c.tipo),
                   ]),
                   if (c.isCompleted && c.completedAt != null) ...[
                     const SizedBox(height: 10),

@@ -137,6 +137,7 @@ class FirestoreService {
       'clientId': item.clientId,
       'clientName': item.clientName,
       'producerName': item.producerName,
+      'producerNames': item.producerNames,
       'consultantName': item.consultantName,
       'local': item.local,
       'hangar': item.hangar,
@@ -965,10 +966,15 @@ class FirestoreService {
   static Future<List<Map<String, dynamic>>> getClientsByPerson({
     required String column,
     required String name,
+    bool inList = false,
   }) async {
     if (name.trim().isEmpty) return [];
-    final snap =
-        await _clientsCol.where(column, isEqualTo: name.trim()).get();
+    // Produtor procura dentro da LISTA: o stand pode ter mais de um, e todos
+    // respondem por ele. Os outros papéis têm um nome só por coluna.
+    final query = inList
+        ? _clientsCol.where(column, arrayContains: name.trim())
+        : _clientsCol.where(column, isEqualTo: name.trim());
+    final snap = await query.get();
     return snap.docs
         .map((d) => <String, dynamic>{...d.data(), 'firestore_id': d.id})
         .toList();

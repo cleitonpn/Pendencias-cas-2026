@@ -401,6 +401,7 @@ class _ClientSearchDelegate extends SearchDelegate<Client?> {
       return c.nome.toLowerCase().contains(q) ||
           c.local.toLowerCase().contains(q) ||
           c.montagem.toLowerCase().contains(q) ||
+          c.tipo.toLowerCase().contains(q) ||
           c.produtor.toLowerCase().contains(q);
     }).toList();
   }
@@ -438,6 +439,7 @@ class _ClientSearchDelegate extends SearchDelegate<Client?> {
             [
               if (c.hangar.isNotEmpty) 'Hangar ${c.hangar}',
               if (c.montagem.isNotEmpty) c.montagem,
+              if (c.tipo.isNotEmpty && c.tipo != c.montagem) c.tipo,
             ].join(' · '),
             style: const TextStyle(fontSize: 12, color: Colors.grey),
           ),

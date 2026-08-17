@@ -69,6 +69,22 @@ function sendToTopics(topics, title, body, data) {
   return Promise.allSettled(sends);
 }
 
+/** Tópicos de todos os produtores do stand.
+ *
+ * Um stand pode ter mais de um produtor, e todos respondem por ele ao mesmo
+ * tempo. Avisar só o primeiro foi o que deixou a equipe sem enxergar as
+ * pendências quando ele ficou sem bateria.
+ *
+ * @param {object} data documento da pendência
+ * @return {string[]} tópicos
+ */
+function producerTopics(data) {
+  const nomes = Array.isArray(data.producerNames) && data.producerNames.length
+      ? data.producerNames
+      : (data.producerName ? [data.producerName] : []);
+  return nomes.filter(Boolean).map((n) => sanitize("producer", n));
+}
+
 // New pending item → notify the assigned team and the producer.
 exports.onPendingCreated = onDocumentCreated(
     "pending_items/{id}", async (event) => {
@@ -115,7 +131,7 @@ exports.onPendingCreated = onDocumentCreated(
       }
 
       const topics = ["admins", "group_analistas"];
-      if (producer) topics.push(sanitize("producer", producer));
+      topics.push(...producerTopics(data));
       if (consultant) topics.push(sanitize("consultant", consultant));
       // Líder: pelo nome do responsável daquele cliente/equipe. Sem
       // responsável definido, cai no tópico da equipe para ninguém ficar sem
@@ -263,7 +279,7 @@ exports.onPendingUpdated = onDocumentUpdated(
        */
       function involved() {
         const t = ["admins", "group_analistas"];
-        if (producer) t.push(sanitize("producer", producer));
+        t.push(...producerTopics(after));
         if (consultant) t.push(sanitize("consultant", consultant));
         if (responsible) t.push(sanitize("leader", responsible));
         else if (after.team) t.push(sanitize("team", after.team));
@@ -1090,7 +1106,7 @@ exports.stalePendingReminder = onSchedule(
         await doc.ref.set({staleNotified: true}, {merge: true});
 
         const topics = ["admins", "group_analistas"];
-        if (d.producerName) topics.push(sanitize("producer", d.producerName));
+        topics.push(...producerTopics(d));
         if (d.consultantName) {
           topics.push(sanitize("consultant", d.consultantName));
         }

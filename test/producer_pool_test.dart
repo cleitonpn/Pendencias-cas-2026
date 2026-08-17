@@ -32,6 +32,33 @@ void main() {
     });
   });
 
+  group('produtoresKeyFrom', () {
+    test('envolve cada nome em vírgulas, em minúsculas', () {
+      expect(produtoresKeyFrom(['Cleiton', 'Ana Paula']),
+          ',cleiton,ana paula,');
+    });
+
+    test('a busca de um nome não pega outro que comece igual', () {
+      // Sem os delimitadores, procurar "Ana" acharia "Anaí" e o stand de
+      // outra pessoa apareceria na lista dela.
+      final chave = produtoresKeyFrom(['Anaí', 'Cleiton']);
+      expect(chave.contains(produtorLookup('Ana')), isFalse);
+      expect(chave.contains(produtorLookup('Anaí')), isTrue);
+    });
+
+    test('acha qualquer um do grupo, não só o primeiro', () {
+      // É o que faz o segundo produtor enxergar o stand mesmo sem ninguém
+      // transferir nada — o caso do celular sem bateria.
+      final chave = produtoresKeyFrom(['Cleiton', 'Ana Paula']);
+      expect(chave.contains(produtorLookup('Cleiton')), isTrue);
+      expect(chave.contains(produtorLookup('  ANA PAULA ')), isTrue);
+    });
+
+    test('stand sem produtor não gera chave', () {
+      expect(produtoresKeyFrom(const []), '');
+    });
+  });
+
   group('ownerFrom', () {
     const pool = ['Cleiton', 'Ana Paula'];
 

@@ -739,7 +739,8 @@ class _RankingDetailScreenState extends State<RankingDetailScreen> {
         return item.responsible == widget.name;
       case RankingKind.producer:
         final client = context.read<AppProvider>().clientById(item.clientId);
-        return client?.produtor == widget.name;
+        // Todo o grupo do stand responde por ele.
+        return client?.temProdutor(widget.name) ?? false;
     }
   }
 

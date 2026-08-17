@@ -26,7 +26,24 @@ class _AddPendingScreenState extends State<AddPendingScreen> {
     _TeamInfo('Tapeçaria',             Icons.chair,             Color(0xFF7B1FA2)),
     _TeamInfo('Vidraceiro',            Icons.window,            Color(0xFF0288D1)),
     _TeamInfo('Comunicação Visual',    Icons.brush,             Color(0xFFD81B60)),
+    // Mobiliário locado. Só entra quando o stand tem mobiliário na
+    // planilha — oferecer a opção num stand sem mobiliário geraria
+    // chamado que ninguém sabe atender.
+    _TeamInfo('Mobiliário',         Icons.chair_alt,         Color(0xFF00796B)),
   ];
+
+  /// Equipes que podem receber chamado neste stand.
+  ///
+  /// Mobiliário só aparece quando há mobiliário locado na planilha: oferecer
+  /// a opção num stand sem mobiliário geraria chamado que ninguém sabe
+  /// atender.
+  List<_TeamInfo> get _equipes {
+    final temMobiliario =
+        widget.client.mobilario.trim().isNotEmpty;
+    return _teams
+        .where((t) => t.name != 'Mobiliário' || temMobiliario)
+        .toList();
+  }
 
   String? _selectedTeam;
   final _descCtrl = TextEditingController();
@@ -105,6 +122,7 @@ class _AddPendingScreenState extends State<AddPendingScreen> {
       clientId: widget.client.rowId,
       clientName: widget.client.displayName,
       producerName: widget.client.produtor,
+      producerNames: widget.client.produtores,
       consultantName: widget.client.atendimento,
       local: widget.client.local,
       hangar: widget.client.hangar,
@@ -224,7 +242,7 @@ class _AddPendingScreenState extends State<AddPendingScreen> {
             const SizedBox(height: 10),
 
             // Seleção de equipe
-            ...(_teams.map((t) {
+            ...(_equipes.map((t) {
               final sel = _selectedTeam == t.name;
               final resp = _getResponsible(t.name);
               return GestureDetector(

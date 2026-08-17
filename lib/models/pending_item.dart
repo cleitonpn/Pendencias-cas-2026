@@ -1,3 +1,4 @@
+import '../utils/producer_pool.dart';
 import 'dart:convert';
 
 class PendingItem {
@@ -6,6 +7,12 @@ class PendingItem {
   final String clientId;
   final String clientName;
   final String producerName;   // producer of this client (for Firestore queries)
+
+  /// Todos os produtores do stand. Com mais de um, os dois respondem pelo
+  /// chamado e os dois precisam ser avisados — só o primeiro receber foi o
+  /// que deixou a equipe sem enxergar as pendências quando o principal ficou
+  /// sem bateria.
+  final List<String> producerNames;
   final String consultantName; // atendimento do cliente — usado para notificar
                                // apenas quem está atrelado a ele
   final String fairName;       // fair name (Firestore items); empty for SQLite
@@ -47,6 +54,7 @@ class PendingItem {
     required this.clientId,
     required this.clientName,
     this.producerName = '',
+    this.producerNames = const [],
     this.consultantName = '',
     this.fairName = '',
     required this.local,
@@ -79,6 +87,7 @@ class PendingItem {
         'client_id': clientId,
         'client_name': clientName,
         'producer_name': producerName,
+        'producer_names': producerNames.join(', '),
         'consultant_name': consultantName,
         'local': local,
         'hangar': hangar,
@@ -122,6 +131,7 @@ class PendingItem {
         clientId: map['client_id'] as String,
         clientName: map['client_name'] ?? '',
         producerName: map['producer_name'] ?? '',
+        producerNames: produtoresFrom((map['producer_names'] as String?) ?? ''),
         consultantName: map['consultant_name'] ?? '',
         fairName: '',
         local: map['local'] ?? map['stand'] ?? '',
@@ -157,6 +167,10 @@ class PendingItem {
         clientId: data['clientId'] ?? '',
         clientName: data['clientName'] ?? '',
         producerName: data['producerName'] ?? '',
+        producerNames: ((data['producerNames'] as List?) ?? const [])
+            .map((e) => e.toString())
+            .where((e) => e.isNotEmpty)
+            .toList(),
         consultantName: data['consultantName'] ?? '',
         fairName: data['fairName'] ?? '',
         local: data['local'] ?? '',

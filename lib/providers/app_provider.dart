@@ -312,8 +312,11 @@ class AppProvider extends ChangeNotifier {
     required String name,
     String team = '',
   }) async {
+    // Produtor casa contra a lista publicada no espelho; os demais, contra a
+    // coluna de um nome só.
+    final naLista = role == 'producer';
     final coluna = switch (role) {
-      'producer' => 'produtor',
+      'producer' => 'produtoresList',
       'consultant' => 'atendimento',
       // Comunicação Visual e Vidraceiro não têm coluna por cliente: quem
       // lidera essas equipes atende todas as feiras, e a lista já sai certa
@@ -327,6 +330,7 @@ class AppProvider extends ChangeNotifier {
       final docs = await FirestoreService.getClientsByPerson(
         column: coluna,
         name: name,
+        inList: naLista,
       );
       if (docs.isEmpty) return false;
 

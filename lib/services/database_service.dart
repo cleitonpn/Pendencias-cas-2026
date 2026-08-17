@@ -4,6 +4,7 @@ import 'package:path/path.dart';
 import '../models/client.dart';
 import '../models/fair.dart';
 import '../models/pending_item.dart';
+import '../utils/producer_pool.dart';
 
 class DatabaseService {
   static Database? _db;
@@ -16,7 +17,7 @@ class DatabaseService {
   static Future<Database> _initDb() async {
     final path = join(await getDatabasesPath(), 'cas2026.db');
     final database = await openDatabase(path,
-        version: 25, onCreate: _onCreate, onUpgrade: _onUpgrade);
+        version: 26, onCreate: _onCreate, onUpgrade: _onUpgrade);
     await _ensureSchema(database);
     return database;
   }
@@ -30,6 +31,7 @@ class DatabaseService {
     'pending_items': {
       'consultant_name': "TEXT DEFAULT ''",
       'executed_by': "TEXT DEFAULT ''",
+      'producer_names': "TEXT DEFAULT ''",
       'executed_at': 'TEXT',
       'approval_note': "TEXT DEFAULT ''",
       'resolution_note': "TEXT DEFAULT ''",
@@ -45,6 +47,8 @@ class DatabaseService {
       'balcao_padrao': "TEXT DEFAULT ''",
       'balcao_personalizado': "TEXT DEFAULT ''",
       'cores': "TEXT DEFAULT ''",
+      'tipo': "TEXT DEFAULT ''",
+      'produtores_key': "TEXT DEFAULT ''",
     },
     'fairs': {
       'auto_approve': 'INTEGER DEFAULT 0',
@@ -109,6 +113,8 @@ class DatabaseService {
         balcao_padrao TEXT DEFAULT '',
         balcao_personalizado TEXT DEFAULT '',
         cores TEXT DEFAULT '',
+        tipo TEXT DEFAULT '',
+        produtores_key TEXT DEFAULT '',
         pavilhao TEXT DEFAULT '',
         data_montagem TEXT DEFAULT '',
         data_evento TEXT DEFAULT '',
@@ -124,6 +130,7 @@ class DatabaseService {
         fair_id INTEGER DEFAULT 1,
         firestore_id TEXT,
         producer_name TEXT DEFAULT '',
+        producer_names TEXT DEFAULT '',
         consultant_name TEXT DEFAULT '',
         client_id TEXT, client_name TEXT, local TEXT, hangar TEXT,
         team TEXT, responsible TEXT, description TEXT,
@@ -340,6 +347,23 @@ class DatabaseService {
       try {
         await db.execute(
             "ALTER TABLE pending_items ADD COLUMN consultant_name TEXT DEFAULT ''");
+      } catch (_) {}
+    }
+    if (oldV < 26) {
+      // tipo: coluna da planilha que faltava.
+      // produtores_key: a lista de produtores em formato de busca, para o
+      // banco achar a pessoa DENTRO do grupo. Antes só o primeiro nome via o
+      // stand, e quando ele ficava sem bateria ninguém mais enxergava as
+      // pendências dele.
+      for (final col in const ['tipo', 'produtores_key']) {
+        try {
+          await db.execute(
+              "ALTER TABLE clients ADD COLUMN $col TEXT DEFAULT ''");
+        } catch (_) {}
+      }
+      try {
+        await db.execute(
+            "ALTER TABLE pending_items ADD COLUMN producer_names TEXT DEFAULT ''");
       } catch (_) {}
     }
     if (oldV < 25) {
@@ -634,8 +658,13 @@ class DatabaseService {
   static Future<List<int>> getFairIdsWithProducer(String producerName) async {
     final database = await db;
     final rows = await database.rawQuery(
-      "SELECT DISTINCT fair_id FROM clients WHERE produtor = ? AND produtor != ''",
-      [producerName],
+      // Casa com QUALQUER produtor do grupo, não só o primeiro da coluna.
+      // produtores_key vem entre vírgulas, então a comparação é exata:
+      // procurar "Ana" não acha "Anaí".
+      "SELECT DISTINCT fair_id FROM clients "
+      "WHERE (LOWER(TRIM(produtor)) = ? OR produtores_key LIKE ?) "
+      "AND (produtor != '' OR produtores_key != '')",
+      [producerName.toLowerCase().trim(), '%${produtorLookup(producerName)}%'],
     );
     return rows.map((r) => r['fair_id'] as int).toList();
   }
@@ -941,8 +970,14 @@ class DatabaseService {
     final database = await db;
     final clients = await database.query('clients',
         columns: ['row_id'],
-        where: 'produtor = ? AND fair_id = ?',
-        whereArgs: [produtor, fairId]);
+        // Ver getFairIdsWithProducer: todo o grupo responde pelo stand.
+        where: '(LOWER(TRIM(produtor)) = ? OR produtores_key LIKE ?) '
+            'AND fair_id = ?',
+        whereArgs: [
+          produtor.toLowerCase().trim(),
+          '%${produtorLookup(produtor)}%',
+          fairId,
+        ]);
     if (clients.isEmpty) return [];
     final ids = clients.map((c) => "'${c['row_id']}'").join(',');
     final maps = await database.rawQuery(
@@ -1343,8 +1378,11 @@ class DatabaseService {
         SUM(recusada) as rejected,
         SUM(aberta) + SUM(concluida) + SUM(recusada) as total
       FROM (
-        -- Aberta conta para o DONO ATUAL do stand: é quem tem o serviço na
-        -- mão agora. Transferir o stand transfere junto a fila de trabalho.
+        -- Aberta conta para o produtor do stand. Quando há mais de um, os
+        -- dois respondem pelo serviço ao mesmo tempo, então ela aparece na
+        -- conta dos dois — e a soma das abertas fica maior que o total da
+        -- feira. É o preço de a responsabilidade ser compartilhada de
+        -- verdade; a tela avisa disso.
         SELECT c.produtor AS nome, 1 AS aberta, 0 AS concluida, 0 AS recusada
         FROM pending_items p
         JOIN clients c ON c.row_id = p.client_id
@@ -1352,9 +1390,9 @@ class DatabaseService {
 
         UNION ALL
 
-        -- Encerrada conta para QUEM EXECUTOU. A pendência pode ter sido
-        -- aberta para um e concluída por outro depois da transferência —
-        -- o crédito é de quem entregou.
+        -- Encerrada conta para QUEM CONCLUIU, e só para ele. Com o stand
+        -- compartilhado é o único critério que não divide crédito por
+        -- suposição: entregou, contou.
         --
         -- Sem executed_by (pendência anterior a esta versão) cai no dono do
         -- stand, que é o palpite mais próximo do que aconteceu.
