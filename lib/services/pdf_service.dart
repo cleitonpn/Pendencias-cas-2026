@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../models/client.dart';
 import '../models/montage_update.dart';
 import '../models/pending_item.dart';
+import '../utils/furniture_items.dart';
 
 /// Qual relatório de pendências gerar. Substitui o booleano antigo, que não
 /// conseguia distinguir recusadas de resolvidas.
@@ -526,6 +527,248 @@ class PdfService {
       ]);
 
   /// Mostra snackbar de feedback enquanto gera o PDF
+
+  // ─── Ordem de Serviço de Mobiliário ─────────────────────────────────────
+  //
+  // Duas por stand: uma do que sai do estoque (interno) e outra do que é
+  // sublocado (externo). Quem recebe cada uma precisa saber PARA QUAL cliente
+  // vai cada item, então nem a consolidada abre mão do agrupamento por
+  // cliente.
+
+  /// Um stand com os itens já separados por destino.
+  static pw.Widget _osCliente(
+    Client c,
+    List<FurnitureItem> itens, {
+    required bool comCabecalhoDoCliente,
+  }) =>
+      pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          if (comCabecalhoDoCliente) ...[
+            pw.SizedBox(height: 10),
+            pw.Text(c.nome,
+                style: pw.TextStyle(
+                    fontSize: 12, fontWeight: pw.FontWeight.bold)),
+          ],
+          pw.Text(
+            [
+              if (c.local.isNotEmpty) 'Stand ${c.local}',
+              if (c.hangar.isNotEmpty) 'Hangar ${c.hangar}',
+              if (c.tipo.isNotEmpty) c.tipo,
+            ].join('  ·  '),
+            style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700),
+          ),
+          pw.SizedBox(height: 6),
+          pw.Table(
+            border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
+            columnWidths: const {
+              0: pw.FlexColumnWidth(1),
+              1: pw.FlexColumnWidth(9),
+            },
+            children: [
+              pw.TableRow(
+                decoration:
+                    const pw.BoxDecoration(color: PdfColors.grey200),
+                children: [
+                  _osCell('#', bold: true),
+                  _osCell('ITEM', bold: true),
+                ],
+              ),
+              // O texto vai como está na planilha: a quantidade já está nele,
+              // e recompor a partir de um número separado perderia "10m
+              // linear" no caminho.
+              for (var i = 0; i < itens.length; i++)
+                pw.TableRow(children: [
+                  _osCell('${i + 1}'),
+                  _osCell(itens[i].raw),
+                ]),
+            ],
+          ),
+        ],
+      );
+
+  static pw.Widget _osCell(String t, {bool bold = false}) => pw.Padding(
+        padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+        child: pw.Text(t,
+            style: pw.TextStyle(
+                fontSize: 9,
+                fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal)),
+      );
+
+  static pw.Widget _osDatas(Client c, DateTime entrega) {
+    final linhas = <String>[
+      if (c.dataMontagem.isNotEmpty)
+        'Montagem: ${c.dataMontagem}'
+      else if (c.montagem.isNotEmpty)
+        'Montagem: ${c.montagem}',
+      if (c.dataEvento.isNotEmpty) 'Evento: ${c.dataEvento}',
+      if (c.dataDesmontagem.isNotEmpty)
+        'Desmontagem: ${c.dataDesmontagem}',
+    ];
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        for (final l in linhas)
+          pw.Text(l, style: const pw.TextStyle(fontSize: 9)),
+        pw.SizedBox(height: 2),
+        pw.Text('ENTREGA: ${_dateFmt.format(entrega)}',
+            style: pw.TextStyle(
+                fontSize: 11,
+                fontWeight: pw.FontWeight.bold,
+                color: PdfColors.indigo900)),
+      ],
+    );
+  }
+
+  static pw.Widget _osHeader(
+      String titulo, String fairName, FurnitureKind kind, DateTime geradoEm) {
+    final cor =
+        kind == FurnitureKind.interno ? PdfColors.teal700 : PdfColors.orange800;
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Row(
+          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+              pw.Text(titulo,
+                  style: pw.TextStyle(
+                      fontSize: 14,
+                      fontWeight: pw.FontWeight.bold,
+                      color: PdfColors.indigo900)),
+              pw.Text(fairName,
+                  style: const pw.TextStyle(fontSize: 10)),
+            ]),
+            pw.Container(
+              padding: const pw.EdgeInsets.symmetric(
+                  horizontal: 12, vertical: 6),
+              decoration: pw.BoxDecoration(
+                border: pw.Border.all(color: cor, width: 1),
+                borderRadius:
+                    const pw.BorderRadius.all(pw.Radius.circular(6)),
+              ),
+              child: pw.Text(kind.label.toUpperCase(),
+                  style: pw.TextStyle(
+                      fontSize: 11,
+                      fontWeight: pw.FontWeight.bold,
+                      color: cor)),
+            ),
+          ],
+        ),
+        // Carimbo de emissão: se a planilha mudar depois, o papel na mão do
+        // fornecedor está desatualizado e ninguém saberia sem isto.
+        pw.Text('Emitida em ${_dtFmt.format(geradoEm)}',
+            style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600)),
+        pw.Divider(color: PdfColors.grey400),
+      ],
+    );
+  }
+
+  /// OS de um stand.
+  static Future<void> generateFurnitureOrder({
+    required String fairName,
+    required Client client,
+    required List<FurnitureItem> itens,
+    required FurnitureKind kind,
+    required DateTime entrega,
+  }) async {
+    final pdf = pw.Document();
+    final agora = DateTime.now();
+
+    pdf.addPage(pw.MultiPage(
+      pageFormat: PdfPageFormat.a4,
+      margin: const pw.EdgeInsets.all(36),
+      header: (_) => _osHeader(
+          'ORDEM DE SERVIÇO — MOBILIÁRIO', fairName, kind, agora),
+      footer: (ctx) => pw.Align(
+        alignment: pw.Alignment.centerRight,
+        child: pw.Text('${ctx.pageNumber}/${ctx.pagesCount}',
+            style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600)),
+      ),
+      build: (_) => [
+        pw.SizedBox(height: 6),
+        pw.Text(client.nome,
+            style:
+                pw.TextStyle(fontSize: 15, fontWeight: pw.FontWeight.bold)),
+        pw.SizedBox(height: 4),
+        _osDatas(client, entrega),
+        pw.SizedBox(height: 10),
+        _osCliente(client, itens, comCabecalhoDoCliente: false),
+        pw.SizedBox(height: 24),
+        _osAssinaturas(),
+      ],
+    ));
+
+    await _saveAndShare(
+        pdf,
+        'OS_${kind.code}_${_slug(fairName)}_${_slug(client.nome)}.pdf');
+  }
+
+  /// OS da feira inteira, agrupada por cliente.
+  ///
+  /// O fornecedor recebe um documento só, mas precisa saber para qual cliente
+  /// vai cada item — por isso o agrupamento não some na consolidada.
+  static Future<void> generateFurnitureOrderConsolidated({
+    required String fairName,
+    required List<({Client client, List<FurnitureItem> itens})> stands,
+    required FurnitureKind kind,
+    required DateTime entrega,
+  }) async {
+    final pdf = pw.Document();
+    final agora = DateTime.now();
+    final totalItens =
+        stands.fold<int>(0, (soma, s) => soma + s.itens.length);
+
+    pdf.addPage(pw.MultiPage(
+      pageFormat: PdfPageFormat.a4,
+      margin: const pw.EdgeInsets.all(36),
+      header: (_) => _osHeader(
+          'ORDEM DE SERVIÇO — MOBILIÁRIO (FEIRA)', fairName, kind, agora),
+      footer: (ctx) => pw.Align(
+        alignment: pw.Alignment.centerRight,
+        child: pw.Text('${ctx.pageNumber}/${ctx.pagesCount}',
+            style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600)),
+      ),
+      build: (_) => [
+        pw.SizedBox(height: 6),
+        pw.Text(
+            '${stands.length} stand(s)  ·  $totalItens item(ns)  ·  '
+            'ENTREGA: ${_dateFmt.format(entrega)}',
+            style: pw.TextStyle(
+                fontSize: 11, fontWeight: pw.FontWeight.bold)),
+        for (final s in stands) ...[
+          pw.SizedBox(height: 6),
+          _osCliente(s.client, s.itens, comCabecalhoDoCliente: true),
+        ],
+        pw.SizedBox(height: 24),
+        _osAssinaturas(),
+      ],
+    ));
+
+    await _saveAndShare(
+        pdf, 'OS_${kind.code}_${_slug(fairName)}_consolidada.pdf');
+  }
+
+  static pw.Widget _osAssinaturas() => pw.Row(
+        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+        children: [
+          for (final rotulo in ['Entregue por', 'Recebido por'])
+            pw.Column(children: [
+              pw.Container(width: 200, height: 0.8, color: PdfColors.grey600),
+              pw.SizedBox(height: 3),
+              pw.Text(rotulo,
+                  style:
+                      const pw.TextStyle(fontSize: 8, color: PdfColors.grey700)),
+            ]),
+        ],
+      );
+
+  static String _slug(String s) => s
+      .toLowerCase()
+      .replaceAll(RegExp(r'[^a-z0-9]+'), '_')
+      .replaceAll(RegExp(r'^_+|_+$'), '');
+
   static Future<void> generateAndShow(
     BuildContext context,
     Future<void> Function() generator,

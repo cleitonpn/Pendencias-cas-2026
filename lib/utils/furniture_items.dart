@@ -91,15 +91,33 @@ int? _qtdDe(String raw) {
 }
 
 /// Onde cada item é atendido.
-enum FurnitureKind { interno, externo }
+///
+/// [naoMobiliario] existe porque a coluna às vezes recebe uma observação que
+/// não é item nenhum. Sem essa saída, aquela linha ficaria para sempre na
+/// fila de classificação e a feira nunca apareceria como concluída.
+enum FurnitureKind { interno, externo, naoMobiliario }
 
 extension FurnitureKindLabel on FurnitureKind {
-  String get label => this == FurnitureKind.interno ? 'Interno' : 'Externo';
-  String get code => name;
+  String get label => switch (this) {
+        FurnitureKind.interno => 'Interno',
+        FurnitureKind.externo => 'Externo',
+        FurnitureKind.naoMobiliario => 'Não é mobiliário',
+      };
+
+  String get code => switch (this) {
+        FurnitureKind.interno => 'interno',
+        FurnitureKind.externo => 'externo',
+        FurnitureKind.naoMobiliario => 'nao_mobiliario',
+      };
+
+  /// Entra em OS e em pendência de mobiliário. O descartado fica de fora dos
+  /// dois: não é item para ninguém atender.
+  bool get atendivel => this != FurnitureKind.naoMobiliario;
 }
 
 FurnitureKind? furnitureKindFrom(Object? v) => switch (v) {
       'interno' => FurnitureKind.interno,
       'externo' => FurnitureKind.externo,
+      'nao_mobiliario' => FurnitureKind.naoMobiliario,
       _ => null,
     };

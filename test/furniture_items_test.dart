@@ -92,6 +92,26 @@ void main() {
       expect(furnitureKindFrom('externo'), FurnitureKind.externo);
     });
 
+    test('reconhece o item descartado', () {
+      expect(furnitureKindFrom('nao_mobiliario'), FurnitureKind.naoMobiliario);
+    });
+
+    test('só interno e externo entram em OS e em pendência', () {
+      // O descartado é uma observação na coluna, não um item para alguém
+      // atender: se entrasse na OS, viraria papel pedindo o que não existe.
+      expect(FurnitureKind.interno.atendivel, isTrue);
+      expect(FurnitureKind.externo.atendivel, isTrue);
+      expect(FurnitureKind.naoMobiliario.atendivel, isFalse);
+    });
+
+    test('o código gravado é estável', () {
+      // É ele que está no Firestore; mudar renomearia a classificação de
+      // todos os stands já feitos.
+      expect(FurnitureKind.interno.code, 'interno');
+      expect(FurnitureKind.externo.code, 'externo');
+      expect(FurnitureKind.naoMobiliario.code, 'nao_mobiliario');
+    });
+
     test('item ainda não classificado devolve null, não um padrão', () {
       // Assumir "interno" por omissão mandaria para o estoque um item que
       // ninguém conferiu.

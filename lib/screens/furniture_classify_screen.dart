@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/client.dart';
 import '../services/actor.dart';
 import '../services/firestore_service.dart';
+import '../services/pdf_service.dart';
 import '../utils/furniture_items.dart';
 
 /// Divide o mobiliário de um stand entre interno e externo.
@@ -32,6 +33,7 @@ class _FurnitureClassifyScreenState extends State<FurnitureClassifyScreen> {
   static const _navy = Color(0xFF1E3A5F);
   static const _interno = Color(0xFF00796B);
   static const _externo = Color(0xFFE65100);
+  static const _descartado = Color(0xFF757575);
 
   late final List<FurnitureItem> _itens =
       furnitureItemsFrom(widget.client.mobilario);
@@ -161,6 +163,7 @@ class _FurnitureClassifyScreenState extends State<FurnitureClassifyScreen> {
                         itemBuilder: (context, i) => _linha(_itens[i]),
                       ),
                     ),
+                    _botoesOS(),
                     _rodape(),
                   ],
                 ),
@@ -247,6 +250,14 @@ class _FurnitureClassifyScreenState extends State<FurnitureClassifyScreen> {
                     Icons.local_shipping_outlined),
               ),
             ]),
+            const SizedBox(height: 6),
+            // Saída para o que a coluna recebeu mas não é item: observação,
+            // texto solto, linha que sobrou. Sai da fila sem virar OS.
+            SizedBox(
+              width: double.infinity,
+              child: _botao(item, FurnitureKind.naoMobiliario, atual,
+                  _descartado, Icons.block),
+            ),
           ],
         ),
       ),
@@ -265,6 +276,45 @@ class _FurnitureClassifyScreenState extends State<FurnitureClassifyScreen> {
         backgroundColor: sel ? cor : null,
         side: BorderSide(color: cor),
         padding: const EdgeInsets.symmetric(vertical: 8),
+      ),
+    );
+  }
+
+  /// Pergunta a data de entrega antes de gerar. É preenchida por quem emite a
+  /// OS, não vem da planilha — depende do combinado com o fornecedor.
+  Future<DateTime?> _pedirDataEntrega() async {
+    final hoje = DateTime.now();
+    return showDatePicker(
+      context: context,
+      initialDate: hoje,
+      firstDate: hoje.subtract(const Duration(days: 30)),
+      lastDate: hoje.add(const Duration(days: 365)),
+      helpText: 'Data de entrega',
+    );
+  }
+
+  Future<void> _gerarOS(FurnitureKind kind) async {
+    final doTipo = _itens
+        .where((i) => furnitureKindFrom(_classificacao[i.key]) == kind)
+        .toList();
+    if (doTipo.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Nenhum item ${kind.label.toLowerCase()} '
+            'classificado neste stand.')),
+      );
+      return;
+    }
+    final entrega = await _pedirDataEntrega();
+    if (entrega == null || !mounted) return;
+
+    await PdfService.generateAndShow(
+      context,
+      () => PdfService.generateFurnitureOrder(
+        fairName: widget.fairName,
+        client: widget.client,
+        itens: doTipo,
+        kind: kind,
+        entrega: entrega,
       ),
     );
   }
@@ -309,6 +359,38 @@ class _FurnitureClassifyScreenState extends State<FurnitureClassifyScreen> {
           ),
         ),
       );
+
+  /// Só aparece depois que há o que imprimir. Um botão de OS num stand sem
+  /// classificação geraria papel em branco.
+  Widget _botoesOS() {
+    final temInterno = _classificacao.containsValue('interno');
+    final temExterno = _classificacao.containsValue('externo');
+    if (!temInterno && !temExterno) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
+      child: Row(children: [
+        if (temInterno)
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: () => _gerarOS(FurnitureKind.interno),
+              icon: const Icon(Icons.print_outlined, size: 16),
+              label: const Text('OS interna', style: TextStyle(fontSize: 12)),
+              style: OutlinedButton.styleFrom(foregroundColor: _interno),
+            ),
+          ),
+        if (temInterno && temExterno) const SizedBox(width: 8),
+        if (temExterno)
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: () => _gerarOS(FurnitureKind.externo),
+              icon: const Icon(Icons.print_outlined, size: 16),
+              label: const Text('OS externa', style: TextStyle(fontSize: 12)),
+              style: OutlinedButton.styleFrom(foregroundColor: _externo),
+            ),
+          ),
+      ]),
+    );
+  }
 }
 
 class _Vazio extends StatelessWidget {
