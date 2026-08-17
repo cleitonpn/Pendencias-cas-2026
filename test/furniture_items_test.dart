@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:montagem_uset/utils/furniture_items.dart';
 
@@ -117,6 +118,55 @@ void main() {
       // ninguém conferiu.
       expect(furnitureKindFrom(null), isNull);
       expect(furnitureKindFrom('qualquer coisa'), isNull);
+    });
+  });
+
+  group('item marcado na pendência', () {
+    test('vai e volta pelo Firestore sem perder nada', () {
+      const p = FurniturePick(
+          key: 'balcao_vitrine', raw: '1 balcão vitrine',
+          kind: FurnitureKind.externo);
+      final volta = furniturePicksFrom([p.toMap()]).single;
+      expect(volta.key, p.key);
+      expect(volta.raw, p.raw);
+      expect(volta.kind, FurnitureKind.externo);
+    });
+
+    test('vai e volta pelo SQLite, que guarda JSON', () {
+      const p = FurniturePick(
+          key: 'mesa', raw: '1 mesa dkr', kind: FurnitureKind.interno);
+      final json = jsonEncode([p.toMap()]);
+      expect(furniturePicksFrom(json).single.kind, FurnitureKind.interno);
+    });
+
+    test('item marcado antes de ser classificado não vira interno', () {
+      // O chamado pode ser aberto pelo expositor antes de a equipe classificar
+      // o stand. Inventar um lado aqui contaria o problema no time errado.
+      const p = FurniturePick(key: 'geladeira', raw: '1 geladeira');
+      final volta = furniturePicksFrom([p.toMap()]).single;
+      expect(volta.kind, isNull);
+      expect(volta.kindLabel, 'Sem classificação');
+    });
+
+    test('a classificação gravada não muda quando o item é reclassificado', () {
+      // O relatório responde "onde deu problema", e isso é o que valia na
+      // hora. Se o item virar externo depois, o chamado antigo continua
+      // contando como interno.
+      const noChamado = FurniturePick(
+          key: 'balcao', raw: '1 balcão', kind: FurnitureKind.interno);
+      final agora = {'balcao': 'externo'};
+      final volta = furniturePicksFrom([noChamado.toMap()]).single;
+      expect(volta.kind, FurnitureKind.interno);
+      expect(furnitureKindFrom(agora['balcao']), FurnitureKind.externo);
+    });
+
+    test('lista quebrada não derruba o chamado', () {
+      // Melhor um chamado sem os itens do que um chamado que não abre.
+      expect(furniturePicksFrom('isso não é json'), isEmpty);
+      expect(furniturePicksFrom(null), isEmpty);
+      expect(furniturePicksFrom(''), isEmpty);
+      expect(furniturePicksFrom(42), isEmpty);
+      expect(furniturePicksFrom([{'key': 'x'}]), isEmpty); // sem texto
     });
   });
 }

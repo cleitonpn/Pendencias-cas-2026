@@ -5,6 +5,7 @@ import '../providers/app_provider.dart';
 import '../services/firestore_service.dart';
 import '../widgets/resolution_dialog.dart';
 import '../widgets/photo_gallery.dart';
+import '../widgets/furniture_pick_chips.dart';
 
 /// Consultant / admin queue of all organizer requests awaiting approval.
 /// Uses a Firestore stream so no fair needs to be "selected" first.
@@ -265,6 +266,7 @@ class _ApprovalCard extends StatelessWidget {
                       const TextStyle(color: Colors.grey, fontSize: 12)),
             const SizedBox(height: 8),
             Text(item.description, style: const TextStyle(fontSize: 14)),
+            FurniturePickChips(items: item.furnitureItems),
             if (item.photoUrls.isNotEmpty) ...[
               const SizedBox(height: 8),
               PhotoStrip(urls: item.photoUrls),

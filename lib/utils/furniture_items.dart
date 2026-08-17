@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 /// Um item de mobiliário, do jeito que ele aparece na planilha.
 class FurnitureItem {
   /// O texto como está na coluna: "4 cadeiras dkr", "10m linear jardim".
@@ -121,3 +123,67 @@ FurnitureKind? furnitureKindFrom(Object? v) => switch (v) {
       'nao_mobiliario' => FurnitureKind.naoMobiliario,
       _ => null,
     };
+
+/// Um item marcado numa pendência de mobiliário.
+///
+/// Guarda o texto do item E a classificação que ele tinha NA HORA do chamado.
+/// Ler a classificação atual na hora do relatório daria um número errado: se
+/// um item passar de interno para externo depois, todo problema antigo dele
+/// mudaria de lado no histórico. A pergunta que o relatório responde é "onde
+/// deu problema", e isso é o que valia quando o problema aconteceu.
+class FurniturePick {
+  /// Identidade do item dentro do stand (mesma chave de [FurnitureItem]).
+  final String key;
+
+  /// O texto do item como estava na planilha quando o chamado foi aberto.
+  ///
+  /// Fica gravado junto porque a linha pode ser corrigida ou apagada depois, e
+  /// sem o texto a pendência antiga viraria uma chave sem significado.
+  final String raw;
+
+  /// Classificação no momento do chamado. Null quando o item ainda não tinha
+  /// sido classificado pela equipe de mobiliário — não é "interno por padrão".
+  final FurnitureKind? kind;
+
+  const FurniturePick({required this.key, required this.raw, this.kind});
+
+  Map<String, dynamic> toMap() => {
+        'key': key,
+        'raw': raw,
+        if (kind != null) 'kind': kind!.code,
+      };
+
+  factory FurniturePick.fromMap(Map<dynamic, dynamic> m) => FurniturePick(
+        key: (m['key'] ?? '').toString(),
+        raw: (m['raw'] ?? '').toString(),
+        kind: furnitureKindFrom(m['kind']),
+      );
+
+  /// Rótulo curto para a tela: "Interno", "Externo" ou "Sem classificação".
+  String get kindLabel => kind?.label ?? 'Sem classificação';
+}
+
+/// Lê a lista gravada, venha ela do Firestore (List) ou do SQLite (JSON).
+///
+/// Tolerante de propósito: um chamado com a lista corrompida ainda precisa
+/// abrir, mostrando a descrição — perder o chamado inteiro por causa dos itens
+/// seria pior do que perder os itens.
+List<FurniturePick> furniturePicksFrom(Object? raw) {
+  if (raw == null) return const [];
+  Object? valor = raw;
+  if (valor is String) {
+    final s = valor.trim();
+    if (s.isEmpty) return const [];
+    try {
+      valor = jsonDecode(s);
+    } catch (_) {
+      return const [];
+    }
+  }
+  if (valor is! List) return const [];
+  return valor
+      .whereType<Map>()
+      .map(FurniturePick.fromMap)
+      .where((p) => p.raw.isNotEmpty)
+      .toList();
+}

@@ -145,6 +145,7 @@ class FirestoreService {
       'responsible': item.responsible,
       'description': item.description,
       'photoUrls': item.photoUrls,
+      'furnitureItems': item.furnitureItems.map((f) => f.toMap()).toList(),
       'origem': item.origem,
       'createdBy': item.createdBy,
       'resolvedBy': '',

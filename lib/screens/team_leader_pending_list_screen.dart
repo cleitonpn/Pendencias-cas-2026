@@ -7,6 +7,7 @@ import '../providers/app_provider.dart';
 import '../services/database_service.dart';
 import '../services/firestore_service.dart';
 import '../widgets/pending_status.dart';
+import '../widgets/furniture_pick_chips.dart';
 
 class TeamLeaderPendingListScreen extends StatefulWidget {
   final String leaderName;
@@ -416,6 +417,7 @@ class _ItemRow extends StatelessWidget {
             ),
           Text(item.description,
               style: const TextStyle(fontSize: 13)),
+          FurniturePickChips(items: item.furnitureItems, dense: true),
           PendingNotes(item: item, compact: true, showHistory: true),
           const SizedBox(height: 6),
           Row(children: [

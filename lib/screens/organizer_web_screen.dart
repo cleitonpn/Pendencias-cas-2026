@@ -11,7 +11,9 @@ import '../services/firestore_service.dart';
 import '../services/sheets_service.dart';
 import '../services/stand_storage.dart';
 import '../utils/web_portal.dart';
+import '../utils/furniture_items.dart';
 import '../widgets/pending_status.dart';
+import '../widgets/furniture_picker.dart';
 import '../services/pin_service.dart';
 import '../utils/organizer_fairs.dart';
 
@@ -82,6 +84,12 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
   final _picker = ImagePicker();
   final List<XFile> _photos = [];
   bool _busy = false;
+
+  /// Itens de mobiliário marcados. Só vale na equipe Mobiliário.
+  Set<String> _itensMarcados = {};
+  bool _itemForaDaLista = false;
+
+  bool get _ehMobiliario => _selectedTeam == 'Mobiliário';
 
   List<PendingItem> _myRequests = [];
 
@@ -411,6 +419,8 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
       _selectedTeam = null;
       _descCtrl.clear();
       _photos.clear();
+      _itensMarcados = {};
+      _itemForaDaLista = false;
       _step = _Step.form;
     });
   }
@@ -447,6 +457,13 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
       _toast('Descreva o que você precisa.', error: true);
       return;
     }
+    // Marcar o móvel evita o pedido genérico ("o mobiliário está errado") que
+    // obriga alguém a ir até o stand só para descobrir do que se trata.
+    if (_ehMobiliario && _itensMarcados.isEmpty && !_itemForaDaLista) {
+      _toast('Marque qual móvel está com problema '
+          '(ou "não está na lista").', error: true);
+      return;
+    }
     // Antes de gastar upload de foto, avisa se já existe chamado aberto para
     // este stand e esta mesma equipe.
     final duplicates = await _openItemsForSelection();
@@ -462,6 +479,10 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
 
     setState(() => _busy = true);
     try {
+      final List<FurniturePick> itens = _ehMobiliario
+          ? await furniturePicksFor(
+              client: _client!, selected: _itensMarcados)
+          : const [];
       final urls = <String>[];
       for (var i = 0; i < _photos.length; i++) {
         final bytes = await _photos[i].readAsBytes();
@@ -484,6 +505,7 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
         responsible: _responsibleFor(_selectedTeam!),
         description: _descCtrl.text.trim(),
         photoUrls: urls,
+        furnitureItems: itens,
         origem: 'organizadora',
         createdBy: _createdBy,
         // Com aprovação automática ligada na feira, o pedido já entra liberado
@@ -528,6 +550,8 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
       _descCtrl.clear();
       _selectedTeam = null;
       _photos.clear();
+      _itensMarcados = {};
+      _itemForaDaLista = false;
     });
     _toast('Pedido cancelado e campos limpos.');
   }
@@ -1374,6 +1398,17 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
             ),
           );
         }),
+        if (_ehMobiliario) ...[
+          const SizedBox(height: 16),
+          FurniturePicker(
+            key: ValueKey(_client!.firestoreId),
+            client: _client!,
+            selected: _itensMarcados,
+            outro: _itemForaDaLista,
+            onChanged: (s) => setState(() => _itensMarcados = s),
+            onOutroChanged: (v) => setState(() => _itemForaDaLista = v),
+          ),
+        ],
         const SizedBox(height: 16),
         const Text('O QUE VOCÊ PRECISA?',
             style: TextStyle(

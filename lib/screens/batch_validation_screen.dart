@@ -4,6 +4,7 @@ import '../models/pending_item.dart';
 import '../providers/app_provider.dart';
 import '../services/database_service.dart';
 import '../widgets/resolution_dialog.dart';
+import '../widgets/furniture_pick_chips.dart';
 
 /// Allows the admin to select one or more pending items that are awaiting
 /// validation and conclude (resolve) them all at once.
@@ -343,6 +344,7 @@ class _ItemCard extends StatelessWidget {
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
+                    FurniturePickChips(items: item.furnitureItems, dense: true),
                   ],
                 ),
               ),

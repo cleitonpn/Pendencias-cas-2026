@@ -7,7 +7,9 @@ import '../models/pending_item.dart';
 import '../services/firestore_service.dart';
 import '../services/sheets_service.dart';
 import '../services/stand_storage.dart';
+import '../utils/furniture_items.dart';
 import '../widgets/pending_status.dart';
+import '../widgets/furniture_picker.dart';
 
 /// Public page opened by exhibitors via the QR code printed on their stand.
 /// Self-contained: uses Firestore + Google Sheets only (no local SQLite),
@@ -69,6 +71,12 @@ class _StandRequestScreenState extends State<StandRequestScreen> {
   final List<XFile> _photos = [];
   List<PendingItem> _myRequests = [];
   bool _busy = false;
+
+  /// Itens de mobiliário marcados pelo expositor. Só vale na equipe Mobiliário.
+  Set<String> _itensMarcados = {};
+  bool _itemForaDaLista = false;
+
+  bool get _ehMobiliario => _selectedTeam == 'Mobiliário';
 
   @override
   void initState() {
@@ -230,8 +238,20 @@ class _StandRequestScreenState extends State<StandRequestScreen> {
       _toast('Descreva o que você precisa.', error: true);
       return;
     }
+    // O expositor é quem sabe qual móvel está com defeito. Pedir a marcação
+    // aqui é o que faz a equipe chegar no stand já sabendo o que levar — mas a
+    // saída "não está na lista" existe para nenhum pedido ficar preso.
+    if (_ehMobiliario && _itensMarcados.isEmpty && !_itemForaDaLista) {
+      _toast('Marque qual móvel está com problema '
+          '(ou "não está na lista").', error: true);
+      return;
+    }
     setState(() => _busy = true);
     try {
+      final List<FurniturePick> itens = _ehMobiliario
+          ? await furniturePicksFor(
+              client: _client!, selected: _itensMarcados)
+          : const [];
       final urls = <String>[];
       for (var i = 0; i < _photos.length; i++) {
         final bytes = await _photos[i].readAsBytes();
@@ -254,6 +274,7 @@ class _StandRequestScreenState extends State<StandRequestScreen> {
         responsible: _responsibleFor(_selectedTeam!),
         description: _descCtrl.text.trim(),
         photoUrls: urls,
+        furnitureItems: itens,
         origem: 'cliente',
         createdBy: 'Expositor',
         createdAt: DateTime.now(),
@@ -277,6 +298,8 @@ class _StandRequestScreenState extends State<StandRequestScreen> {
       _descCtrl.clear();
       _selectedTeam = null;
       _photos.clear();
+      _itensMarcados = {};
+      _itemForaDaLista = false;
       _step = _Step.form;
     });
   }
@@ -720,6 +743,17 @@ class _StandRequestScreenState extends State<StandRequestScreen> {
             ),
           );
         }),
+        if (_ehMobiliario) ...[
+          const SizedBox(height: 16),
+          FurniturePicker(
+            key: ValueKey(c.firestoreId),
+            client: c,
+            selected: _itensMarcados,
+            outro: _itemForaDaLista,
+            onChanged: (s) => setState(() => _itensMarcados = s),
+            onOutroChanged: (v) => setState(() => _itemForaDaLista = v),
+          ),
+        ],
         const SizedBox(height: 16),
         const Text('DESCREVA O PROBLEMA',
             style: TextStyle(

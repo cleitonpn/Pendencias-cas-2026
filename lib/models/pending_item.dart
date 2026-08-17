@@ -1,4 +1,5 @@
 import '../utils/producer_pool.dart';
+import '../utils/furniture_items.dart';
 import 'dart:convert';
 
 class PendingItem {
@@ -22,6 +23,15 @@ class PendingItem {
   final String responsible;
   final String description;
   final List<String> photoUrls; // download URLs of attached photos
+
+  /// Itens de mobiliário marcados no chamado, com a classificação que tinham
+  /// na hora. Vazio em pendência de qualquer outra equipe.
+  ///
+  /// Existe para o problema não depender de digitação: "cadeira dkr" e
+  /// "cadeira DKR" viravam duas coisas diferentes no relatório, e "o balcão
+  /// está torto" não dizia QUAL balcão. Marcando na lista do stand, dá para
+  /// contar depois se o problema está mais do lado interno ou do sublocado.
+  final List<FurniturePick> furnitureItems;
   final String origem;          // 'equipe' (criada pela equipe) | 'cliente' (expositor via QR) | 'organizadora'
   final String createdBy;       // quem registrou a pendência
   String resolvedBy;            // quem resolveu/validou
@@ -63,6 +73,7 @@ class PendingItem {
     this.responsible = '',
     required this.description,
     this.photoUrls = const [],
+    this.furnitureItems = const [],
     this.origem = 'equipe',
     this.createdBy = '',
     this.resolvedBy = '',
@@ -95,6 +106,8 @@ class PendingItem {
         'responsible': responsible,
         'description': description,
         'photo_urls': jsonEncode(photoUrls),
+        'furniture_items':
+            jsonEncode(furnitureItems.map((f) => f.toMap()).toList()),
         'origem': origem,
         'created_by': createdBy,
         'resolved_by': resolvedBy,
@@ -140,6 +153,7 @@ class PendingItem {
         responsible: map['responsible'] ?? '',
         description: map['description'] as String,
         photoUrls: _parsePhotos(map['photo_urls']),
+        furnitureItems: furniturePicksFrom(map['furniture_items']),
         origem: (map['origem'] as String?) ?? 'equipe',
         createdBy: (map['created_by'] as String?) ?? '',
         resolvedBy: (map['resolved_by'] as String?) ?? '',
@@ -179,6 +193,7 @@ class PendingItem {
         responsible: data['responsible'] ?? '',
         description: data['description'] ?? '',
         photoUrls: _parsePhotos(data['photoUrls']),
+        furnitureItems: furniturePicksFrom(data['furnitureItems']),
         origem: (data['origem'] as String?) ?? 'equipe',
         createdBy: (data['createdBy'] as String?) ?? '',
         resolvedBy: (data['resolvedBy'] as String?) ?? '',
@@ -199,6 +214,11 @@ class PendingItem {
             ? DateTime.tryParse(data['resolvedAt'] as String)
             : null,
       );
+
+  /// Os móveis marcados em uma linha, prontos para entrar num texto. Vazio
+  /// quando não há item marcado — quem usa decide se coloca colchete ou não.
+  String get furnitureLabel =>
+      furnitureItems.map((f) => f.raw).join(' | ');
 
   bool get fromClient => origem == 'cliente';
   bool get fromOrganizer => origem == 'organizadora';
@@ -222,10 +242,15 @@ class PendingItem {
         responsible.isNotEmpty ? '\nResponsável: $responsible' : '';
     final location =
         hangar.isNotEmpty ? 'Hangar: $hangar | Stand: $local' : 'Stand: $local';
+    // Os itens vão no texto do WhatsApp porque é por ele que a equipe recebe o
+    // chamado na prática. Sem isso, quem lê a mensagem continuaria sem saber
+    // qual dos móveis do stand é o do problema.
+    final itensLinha =
+        furnitureItems.isEmpty ? '' : '\nItem: $furnitureLabel';
     return '*PENDÊNCIA*\n'
         '$location\n'
         'Cliente: $clientName\n'
-        'Equipe: $team$respLine\n'
+        'Equipe: $team$respLine$itensLinha\n'
         'Pendência: $description\n'
         'Registrado: $dateStr';
   }

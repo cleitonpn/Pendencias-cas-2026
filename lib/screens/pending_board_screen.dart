@@ -6,6 +6,7 @@ import '../services/database_service.dart';
 import 'client_detail_screen.dart';
 import 'batch_validation_screen.dart';
 import '../widgets/pending_status.dart';
+import '../widgets/furniture_pick_chips.dart';
 
 /// Fair-wide list of every pending item, with a status filter and search.
 /// Lets the admin/producer see and jump to any pending without drilling
@@ -292,6 +293,7 @@ class _BoardCard extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style:
                             const TextStyle(fontSize: 13, color: Colors.black87)),
+                    FurniturePickChips(items: item.furnitureItems, dense: true),
                     if (item.isRejected) ...[
                       const SizedBox(height: 4),
                       PendingStatusBadge(item: item, fontSize: 11),

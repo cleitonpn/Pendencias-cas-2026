@@ -35,6 +35,7 @@ class Actor {
         'manager' => 'Gerente',
         'admin' => 'Admin',
         'logistica' => 'Logística',
+        'mobiliario' => 'Mobiliário',
         'organizadora' => 'Organizadora',
         _ => '',
       };

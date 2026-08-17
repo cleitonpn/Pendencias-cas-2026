@@ -7,6 +7,7 @@ import '../providers/app_provider.dart';
 import '../services/database_service.dart';
 import '../services/firestore_service.dart';
 import '../services/actor.dart';
+import '../widgets/furniture_pick_chips.dart';
 
 class ProducerPendingScreen extends StatefulWidget {
   final String? lockedProducer;
@@ -211,6 +212,11 @@ class _ProducerPendingScreenState extends State<ProducerPendingScreen> {
             '${item.clientName.isNotEmpty ? " — ${item.clientName}" : ""}* ($dd)');
         sb.write('• ${item.team}');
         if (item.responsible.isNotEmpty) sb.write(' (${item.responsible})');
+        // O móvel marcado vai junto: é o relatório que a equipe lê no
+        // WhatsApp, e sem o item ela chega no stand sem saber o que levar.
+        if (item.furnitureItems.isNotEmpty) {
+          sb.write(' [${item.furnitureLabel}]');
+        }
         sb.writeln(': ${item.description}');
       }
       return sb.toString().trim();
@@ -229,6 +235,9 @@ class _ProducerPendingScreenState extends State<ProducerPendingScreen> {
         for (final item in clients[clientKey]!) {
           sb.write('• ${item.team}');
           if (item.responsible.isNotEmpty) sb.write(' (${item.responsible})');
+          if (item.furnitureItems.isNotEmpty) {
+            sb.write(' [${item.furnitureLabel}]');
+          }
           sb.writeln(': ${item.description}');
         }
       }
@@ -720,6 +729,7 @@ class _ChronoList extends StatelessWidget {
                                 ),
                                 Text(item.description,
                                     style: const TextStyle(fontSize: 13)),
+                                FurniturePickChips(items: item.furnitureItems, dense: true),
                               ],
                             ),
                           ),
@@ -876,6 +886,7 @@ class _PendingList extends StatelessWidget {
                                                 Text(item.description,
                                                     style: const TextStyle(
                                                         fontSize: 13)),
+                                                FurniturePickChips(items: item.furnitureItems, dense: true),
                                               ],
                                             ),
                                           ),

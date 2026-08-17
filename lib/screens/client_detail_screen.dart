@@ -20,6 +20,7 @@ import '../services/session_service.dart';
 import 'add_pending_screen.dart';
 import 'edit_pending_screen.dart';
 import '../widgets/art_status_tile.dart';
+import '../widgets/furniture_pick_chips.dart';
 
 class ClientDetailScreen extends StatefulWidget {
   final Client client;
@@ -791,6 +792,7 @@ class _PendingCard extends StatelessWidget {
               ),
             ],
             Text(item.description, style: const TextStyle(fontSize: 14)),
+            FurniturePickChips(items: item.furnitureItems),
             PendingNotes(item: item, showHistory: true),
             if (item.photoUrls.isNotEmpty) ...[
               const SizedBox(height: 8),
@@ -938,6 +940,7 @@ class _AwaitingCard extends StatelessWidget {
               ),
             ],
             Text(item.description, style: const TextStyle(fontSize: 14)),
+            FurniturePickChips(items: item.furnitureItems),
             if (item.photoUrls.isNotEmpty) ...[
               const SizedBox(height: 8),
               PhotoStrip(urls: item.photoUrls),

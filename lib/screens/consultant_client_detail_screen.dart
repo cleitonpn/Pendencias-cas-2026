@@ -13,6 +13,7 @@ import '../widgets/pending_status.dart';
 import '../widgets/analyst_notes_widget.dart';
 import 'add_pending_screen.dart';
 import '../widgets/art_status_tile.dart';
+import '../widgets/furniture_pick_chips.dart';
 
 /// Read-only client detail for the Consultant role.
 /// The consultant can browse everything and CREATE pending items, but cannot
@@ -968,6 +969,7 @@ class _PendingCard extends StatelessWidget {
               ),
             ],
             Text(item.description, style: const TextStyle(fontSize: 14)),
+            FurniturePickChips(items: item.furnitureItems),
             PendingNotes(item: item, showHistory: true),
             if (item.photoUrls.isNotEmpty) ...[
               const SizedBox(height: 8),

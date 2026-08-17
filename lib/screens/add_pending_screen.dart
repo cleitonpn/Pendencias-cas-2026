@@ -7,6 +7,8 @@ import '../models/client.dart';
 import '../models/pending_item.dart';
 import '../services/storage_service.dart';
 import '../widgets/local_image_preview.dart';
+import '../widgets/furniture_picker.dart';
+import '../utils/furniture_items.dart';
 
 class AddPendingScreen extends StatefulWidget {
   final Client client;
@@ -51,6 +53,11 @@ class _AddPendingScreenState extends State<AddPendingScreen> {
   final List<XFile> _photos = [];
   final _picker = ImagePicker();
 
+  /// Itens de mobiliário marcados, por chave. Só vale quando a equipe é
+  /// Mobiliário.
+  Set<String> _itensMarcados = {};
+  bool _itemForaDaLista = false;
+
   @override
   void dispose() {
     _descCtrl.dispose();
@@ -87,6 +94,8 @@ class _AddPendingScreenState extends State<AddPendingScreen> {
     }
   }
 
+  bool get _ehMobiliario => _selectedTeam == 'Mobiliário';
+
   Future<void> _save() async {
     if (_selectedTeam == null) {
       _snack('Selecione a equipe responsável.', isError: true);
@@ -96,9 +105,25 @@ class _AddPendingScreenState extends State<AddPendingScreen> {
       _snack('Descreva a pendência.', isError: true);
       return;
     }
+    // Pedir o item, mas nunca barrar o chamado por causa dele: quem não achar
+    // na lista marca "não está na lista" e segue. A planilha atrasa; o
+    // problema no stand não espera.
+    if (_ehMobiliario && _itensMarcados.isEmpty && !_itemForaDaLista) {
+      _snack('Marque qual mobiliário está com problema '
+          '(ou "não está na lista").', isError: true);
+      return;
+    }
     setState(() => _saving = true);
 
     final responsible = _getResponsible(_selectedTeam!);
+
+    // A classificação é congelada aqui. Se o item virar externo semana que
+    // vem, este chamado continua contando do lado em que ele estava quando o
+    // problema aconteceu.
+    final List<FurniturePick> itens = _ehMobiliario
+        ? await furniturePicksFor(
+            client: widget.client, selected: _itensMarcados)
+        : const [];
 
     // Upload photos to Firebase Storage first (if any)
     List<String> photoUrls = [];
@@ -130,6 +155,7 @@ class _AddPendingScreenState extends State<AddPendingScreen> {
       responsible: responsible,
       description: _descCtrl.text.trim(),
       photoUrls: photoUrls,
+      furnitureItems: itens,
       createdBy: widget.createdBy,
       createdAt: DateTime.now(),
     );
@@ -308,6 +334,20 @@ class _AddPendingScreenState extends State<AddPendingScreen> {
                       style: const TextStyle(
                           color: Colors.blue, fontSize: 13)),
                 ]),
+              ),
+            ],
+
+            if (_ehMobiliario) ...[
+              const SizedBox(height: 20),
+              FurniturePicker(
+                // A chave amarra o seletor ao stand: sem ela, trocar de
+                // cliente reaproveitaria a lista carregada do anterior.
+                key: ValueKey(c.firestoreId),
+                client: c,
+                selected: _itensMarcados,
+                outro: _itemForaDaLista,
+                onChanged: (s) => setState(() => _itensMarcados = s),
+                onOutroChanged: (v) => setState(() => _itemForaDaLista = v),
               ),
             ],
 

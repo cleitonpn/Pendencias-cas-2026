@@ -10,6 +10,7 @@ import '../utils/furniture_items.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/inbox_bell.dart';
 import 'furniture_classify_screen.dart';
+import 'furniture_pending_screen.dart';
 import 'global_search_screen.dart';
 import 'login_screen.dart';
 
@@ -34,6 +35,11 @@ class _MobiliarioHomeScreenState extends State<MobiliarioHomeScreen> {
   final Map<int, ({int comMobiliario, int faltando})> _resumo = {};
   bool _carregando = true;
 
+  /// Chamados de mobiliário em aberto, somando todas as feiras. Null enquanto
+  /// não deu para saber — diferente de zero, que quer dizer "conferido, não
+  /// tem nada".
+  int? _chamadosAbertos;
+
   @override
   void initState() {
     super.initState();
@@ -44,6 +50,16 @@ class _MobiliarioHomeScreenState extends State<MobiliarioHomeScreen> {
     setState(() => _carregando = true);
     final provider = context.read<AppProvider>();
     final resumo = <int, ({int comMobiliario, int faltando})>{};
+
+    int? abertos;
+    try {
+      final chamados =
+          await FirestoreService.getPendingItemsByTeam('Mobiliário');
+      abertos = chamados.where((i) => !i.isPendingApproval).length;
+    } catch (_) {
+      // Fica sem número em vez de mostrar zero: "nenhum chamado" quando na
+      // verdade a consulta falhou faria a equipe parar de olhar.
+    }
 
     for (final f in provider.fairs.where((f) => !f.isMestra)) {
       if (f.id == null) continue;
@@ -73,6 +89,7 @@ class _MobiliarioHomeScreenState extends State<MobiliarioHomeScreen> {
         _resumo
           ..clear()
           ..addAll(resumo);
+        _chamadosAbertos = abertos;
         _carregando = false;
       });
     }
@@ -150,16 +167,23 @@ class _MobiliarioHomeScreenState extends State<MobiliarioHomeScreen> {
       ),
       body: _carregando
           ? const Center(child: CircularProgressIndicator())
-          : feiras.isEmpty
-              ? _vazio(provider)
-              : RefreshIndicator(
-                  onRefresh: _carregar,
-                  child: ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: feiras.length,
-                    itemBuilder: (context, i) => _cardFeira(feiras[i]),
-                  ),
-                ),
+          : RefreshIndicator(
+              onRefresh: _carregar,
+              child: ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  // Os chamados vêm antes da classificação: classificar é
+                  // trabalho de preparação, chamado é gente esperando no
+                  // stand.
+                  _cardChamados(),
+                  const SizedBox(height: 16),
+                  if (feiras.isEmpty)
+                    _vazio(provider)
+                  else
+                    ...feiras.map(_cardFeira),
+                ],
+              ),
+            ),
     );
   }
 
@@ -167,7 +191,9 @@ class _MobiliarioHomeScreenState extends State<MobiliarioHomeScreen> {
         child: Padding(
           padding: const EdgeInsets.all(28),
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+            // Vive dentro de uma ListView, onde a altura é infinita: sem o
+            // min, o Column tenta ocupar tudo e o layout estoura.
+            mainAxisSize: MainAxisSize.min,
             children: [
               const Icon(Icons.chair_alt, size: 72, color: Colors.grey),
               const SizedBox(height: 16),
@@ -201,6 +227,70 @@ class _MobiliarioHomeScreenState extends State<MobiliarioHomeScreen> {
           ),
         ),
       );
+
+  /// Porta de entrada para os chamados de mobiliário de todas as feiras.
+  Widget _cardChamados() {
+    final n = _chamadosAbertos;
+    final tem = (n ?? 0) > 0;
+    final cor = tem ? Colors.orange : Colors.green;
+    return Card(
+      margin: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: BorderSide(color: cor.shade200, width: 1.5),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: () async {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => FurniturePendingScreen(name: widget.name),
+            ),
+          );
+          await _carregar();
+        },
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: cor.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(Icons.build_circle_outlined, color: cor, size: 28),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Chamados de mobiliário',
+                      style: TextStyle(
+                          fontSize: 17, fontWeight: FontWeight.bold)),
+                  Text(
+                    n == null
+                        ? 'Não deu para conferir agora — toque para abrir'
+                        : (tem
+                            ? '$n em aberto'
+                            : 'Nenhum chamado em aberto'),
+                    style: TextStyle(
+                        fontSize: 12,
+                        color: n == null
+                            ? Colors.grey
+                            : (tem ? Colors.orange.shade900 : Colors.green.shade700),
+                        fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right, color: Colors.grey),
+          ]),
+        ),
+      ),
+    );
+  }
 
   Widget _cardFeira(Fair fair) {
     final r = _resumo[fair.id]!;

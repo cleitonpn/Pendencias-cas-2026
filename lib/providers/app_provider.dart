@@ -1003,12 +1003,19 @@ class AppProvider extends ChangeNotifier {
       clientId: item.clientId,
       clientName: item.clientName,
       producerName: item.producerName,
+      // Campos que o chamado recém-criado precisa levar consigo: é este objeto
+      // que a tela usa para montar o texto do WhatsApp e para exibir o que foi
+      // aberto. Recriar sem eles fazia o chamado nascer na tela sem os itens de
+      // mobiliário marcados e sem o grupo de produtores.
+      producerNames: item.producerNames,
+      consultantName: item.consultantName,
       local: item.local,
       hangar: item.hangar,
       team: item.team,
       responsible: item.responsible,
       description: item.description,
       photoUrls: item.photoUrls,
+      furnitureItems: item.furnitureItems,
       origem: item.origem,
       createdBy: item.createdBy,
       createdAt: item.createdAt,

@@ -85,6 +85,33 @@ function producerTopics(data) {
   return nomes.filter(Boolean).map((n) => sanitize("producer", n));
 }
 
+/** Tópico da equipe de mobiliário, quando o chamado é dela.
+ *
+ * Gerente, produtora e analista de sublocação não são líderes de equipe nem
+ * produtores do stand, então não entravam por nenhum dos caminhos existentes:
+ * o chamado de mobiliário chegava para todo mundo, menos para quem atende.
+ *
+ * @param {object} data documento da pendência
+ * @return {string[]} tópicos
+ */
+function furnitureTopics(data) {
+  return (data.team || "") === "Mobiliário" ? ["group_mobiliario"] : [];
+}
+
+/** Os móveis marcados no chamado, para entrar no texto da notificação.
+ *
+ * Quem recebe o aviso no celular decide na hora se sai do lugar. "Problema no
+ * mobiliário" não permite decidir; "1 balcão vitrine (Externo)" permite.
+ *
+ * @param {object} data documento da pendência
+ * @return {string} trecho pronto, ou "" quando não há item marcado
+ */
+function furnitureLabel(data) {
+  const itens = Array.isArray(data.furnitureItems) ? data.furnitureItems : [];
+  const nomes = itens.map((i) => (i && i.raw) || "").filter(Boolean);
+  return nomes.length ? ` [${nomes.join(" | ")}]` : "";
+}
+
 // New pending item → notify the assigned team and the producer.
 exports.onPendingCreated = onDocumentCreated(
     "pending_items/{id}", async (event) => {
@@ -105,7 +132,8 @@ exports.onPendingCreated = onDocumentCreated(
       // A feira vai no corpo: quem administra várias recebe aviso de todas,
       // mas o quadro mostra só a feira aberta — sem isso não dá para saber
       // onde procurar.
-      const body = `${fair ? `[${fair}] ` : ""}${client}${where}: ${desc}`;
+      const body = `${fair ? `[${fair}] ` : ""}${client}${where}` +
+        `${furnitureLabel(data)}: ${desc}`;
 
       // Só os envolvidos são notificados. Antes ia para o tópico da equipe
       // inteira, então todo líder daquela equipe recebia pendências de
@@ -132,6 +160,7 @@ exports.onPendingCreated = onDocumentCreated(
 
       const topics = ["admins", "group_analistas"];
       topics.push(...producerTopics(data));
+      topics.push(...furnitureTopics(data));
       if (consultant) topics.push(sanitize("consultant", consultant));
       // Líder: pelo nome do responsável daquele cliente/equipe. Sem
       // responsável definido, cai no tópico da equipe para ninguém ficar sem
@@ -280,6 +309,7 @@ exports.onPendingUpdated = onDocumentUpdated(
       function involved() {
         const t = ["admins", "group_analistas"];
         t.push(...producerTopics(after));
+        t.push(...furnitureTopics(after));
         if (consultant) t.push(sanitize("consultant", consultant));
         if (responsible) t.push(sanitize("leader", responsible));
         else if (after.team) t.push(sanitize("team", after.team));
@@ -1113,6 +1143,7 @@ exports.stalePendingReminder = onSchedule(
 
         const topics = ["admins", "group_analistas"];
         topics.push(...producerTopics(d));
+        topics.push(...furnitureTopics(d));
         if (d.consultantName) {
           topics.push(sanitize("consultant", d.consultantName));
         }

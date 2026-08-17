@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:montagem_uset/models/pending_item.dart';
+import 'package:montagem_uset/utils/furniture_items.dart';
 
 /// Ida e volta da pendência entre SQLite e Firestore.
 ///
@@ -113,6 +114,74 @@ void main() {
       expect(parsed.clientName, '');
       expect(parsed.photoUrls, isEmpty);
       expect(parsed.resolutionPhotoUrls, isEmpty);
+    });
+  });
+
+  group('itens de mobiliário marcados', () {
+    final comItens = PendingItem(
+      clientId: '2_15',
+      clientName: 'Acme',
+      local: 'B50',
+      hangar: '2',
+      team: 'Mobiliário',
+      description: 'Gaveta não fecha',
+      furnitureItems: const [
+        FurniturePick(
+            key: 'balcao_vitrine',
+            raw: '1 balcão vitrine',
+            kind: FurnitureKind.externo),
+      ],
+      createdAt: DateTime(2026, 7, 20, 9),
+    );
+
+    test('sobrevivem ao SQLite', () {
+      final back = PendingItem.fromMap(comItens.toMap());
+      expect(back.furnitureItems.single.raw, '1 balcão vitrine');
+      expect(back.furnitureItems.single.kind, FurnitureKind.externo);
+    });
+
+    test('sobrevivem ao Firestore', () {
+      final back = PendingItem.fromFirestore('doc3', {
+        'clientId': '2_15',
+        'team': 'Mobiliário',
+        'createdAt': DateTime(2026, 7, 20).toIso8601String(),
+        'furnitureItems': [
+          {'key': 'mesa', 'raw': '1 mesa dkr', 'kind': 'interno'},
+        ],
+      });
+      expect(back.furnitureItems.single.kind, FurnitureKind.interno);
+    });
+
+    test('chamado de outra equipe não ganha itens', () {
+      final back = PendingItem.fromMap(PendingItem(
+        clientId: '1_1',
+        clientName: 'X',
+        local: '',
+        hangar: '',
+        team: 'Elétrica',
+        description: 'tomada',
+        createdAt: DateTime(2026),
+      ).toMap());
+      expect(back.furnitureItems, isEmpty);
+    });
+
+    test('o item aparece no texto do WhatsApp', () {
+      // É por esse texto que a equipe recebe o chamado na prática; sem o item,
+      // quem lê continua sem saber qual móvel levar.
+      expect(comItens.toWhatsAppText(), contains('1 balcão vitrine'));
+    });
+
+    test('sem item marcado o texto não ganha linha vazia', () {
+      final semItens = PendingItem(
+        clientId: '1_1',
+        clientName: 'X',
+        local: 'A1',
+        hangar: '',
+        team: 'Elétrica',
+        description: 'tomada',
+        createdAt: DateTime(2026),
+      );
+      expect(semItens.toWhatsAppText(), isNot(contains('Item:')));
     });
   });
 

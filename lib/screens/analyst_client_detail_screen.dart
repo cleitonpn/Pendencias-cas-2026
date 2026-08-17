@@ -13,6 +13,7 @@ import '../widgets/pending_status.dart';
 import '../widgets/client_specs_card.dart';
 import '../widgets/analyst_notes_widget.dart';
 import '../widgets/art_status_tile.dart';
+import '../widgets/furniture_pick_chips.dart';
 
 class AnalystClientDetailScreen extends StatefulWidget {
   final Client client;
@@ -532,6 +533,7 @@ class _ReadOnlyPendingCard extends StatelessWidget {
               ),
             ],
             Text(item.description, style: const TextStyle(fontSize: 14)),
+            FurniturePickChips(items: item.furnitureItems),
             PendingNotes(item: item, showHistory: true),
             if (item.photoUrls.isNotEmpty) ...[
               const SizedBox(height: 8),

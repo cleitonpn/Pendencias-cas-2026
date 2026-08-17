@@ -17,7 +17,7 @@ class DatabaseService {
   static Future<Database> _initDb() async {
     final path = join(await getDatabasesPath(), 'cas2026.db');
     final database = await openDatabase(path,
-        version: 26, onCreate: _onCreate, onUpgrade: _onUpgrade);
+        version: 27, onCreate: _onCreate, onUpgrade: _onUpgrade);
     await _ensureSchema(database);
     return database;
   }
@@ -41,6 +41,7 @@ class DatabaseService {
       'awaiting_validation': 'INTEGER DEFAULT 0',
       'in_progress': 'INTEGER DEFAULT 0',
       'in_progress_by': "TEXT DEFAULT ''",
+      'furniture_items': "TEXT DEFAULT ''",
     },
     'clients': {
       'produtores': "TEXT DEFAULT ''",
@@ -135,6 +136,7 @@ class DatabaseService {
         client_id TEXT, client_name TEXT, local TEXT, hangar TEXT,
         team TEXT, responsible TEXT, description TEXT,
         photo_urls TEXT DEFAULT '',
+        furniture_items TEXT DEFAULT '',
         origem TEXT DEFAULT 'equipe',
         created_by TEXT DEFAULT '',
         resolved_by TEXT DEFAULT '',

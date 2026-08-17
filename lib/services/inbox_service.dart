@@ -77,6 +77,9 @@ class InboxService {
         return p.consultantName.toLowerCase().trim() == eu;
       case 'leader':
         return p.responsible.toLowerCase().trim() == eu;
+      case 'mobiliario':
+        // A equipe de mobiliário atende todas as feiras, mas só o que é dela.
+        return p.team == 'Mobiliário';
       default:
         return false;
     }
@@ -97,6 +100,7 @@ class InboxService {
         'admin': 'admins',
         'manager': 'admins',
         'logistica': 'logistica',
+        'mobiliario': 'mobiliario',
       };
       return grupos.contains(porPapel[Actor.role]);
     }
@@ -133,6 +137,7 @@ class InboxService {
                 : 'Nova pendência — ${p.team}',
             subtitle: '${p.clientName}'
                 '${p.local.isEmpty ? '' : ' (Stand ${p.local})'}'
+                '${p.furnitureItems.isEmpty ? '' : ' [${p.furnitureLabel}]'}'
                 ': ${p.description}',
             at: p.createdAt,
             clientId: p.clientId,
