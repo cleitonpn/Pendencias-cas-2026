@@ -380,6 +380,7 @@ const GROUP_TOPICS = {
   analistas: "group_analistas",
   admins: "admins",
   logistica: "group_logistica",
+  mobiliario: "group_mobiliario",
 };
 
 /** Tópicos para falar com UMA pessoa.
@@ -401,6 +402,7 @@ function userTopics(user) {
     case "analyst": return [sanitize("analyst", name)];
     case "leader": return [sanitize("leader", name)];
     case "logistica": return [sanitize("logistica", name)];
+    case "mobiliario": return [sanitize("mobiliario", name)];
     case "manager": return [sanitize("manager", name)];
     // Admin não tem tópico por nome: todos compartilham "admins".
     case "admin": return ["admins"];
@@ -584,6 +586,10 @@ const PIN_SOURCES = {
   organizer: {collection: "organizer_pins", extra: ["fairId", "fairIds"]},
   admin: {collection: "admin_users", byField: true},
   logistica: {collection: "logistics_users", byField: true},
+  // Equipe de mobiliário: gerente, produtora e analista de sublocação.
+  // Enxergam todas as feiras e todos os clientes, classificam os itens entre
+  // interno e externo e geram as OS.
+  mobiliario: {collection: "mobiliario_users", byField: true},
 };
 
 /** Normaliza o nome para o formato de id usado nas coleções por documento.

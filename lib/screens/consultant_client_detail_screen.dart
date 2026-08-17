@@ -478,6 +478,10 @@ class _ConsultantClientDetailScreenState
             ],
 
             // Balcões e cores, vindos da planilha.
+            FurnitureClassifyButton(
+              client: c,
+              fairName: context.read<AppProvider>().currentFairName,
+            ),
             ClientSpecExtras(client: c),
 
             // Especificações do stand

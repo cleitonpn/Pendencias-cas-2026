@@ -41,6 +41,7 @@ service cloud.firestore {
         'organizer_pins',
         'admin_users',
         'logistics_users',
+        'mobiliario_users',
         'admin_sessions',
         'pin_attempts'
       ];

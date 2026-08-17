@@ -10,6 +10,7 @@ import 'team_leader_home_screen.dart';
 import 'consultant_home_screen.dart';
 import 'analyst_home_screen.dart';
 import 'logistics_home_screen.dart';
+import 'mobiliario_home_screen.dart';
 import '../services/auth_bootstrap.dart';
 import '../services/pin_service.dart';
 
@@ -21,7 +22,7 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  String _role = 'producer'; // 'producer'|'consultant'|'manager'|'leader'|'analyst'|'admin'|'logistica'
+  String _role = 'producer'; // 'producer'|'consultant'|'manager'|'leader'|'analyst'|'admin'|'logistica'|'mobiliario'
 
   // Producer
   List<String> _producers = [];
@@ -58,6 +59,11 @@ class _LoginScreenState extends State<LoginScreen> {
   String? _selectedLogistics;
   bool _loadingLogistics = true;
 
+  // Equipe de mobiliário
+  List<String> _mobiliario = [];
+  String? _selectedMobiliario;
+  bool _loadingMobiliario = true;
+
   final _pinCtrl = TextEditingController();
   bool _verifying = false;
   String? _error;
@@ -72,6 +78,7 @@ class _LoginScreenState extends State<LoginScreen> {
     _loadAnalysts();
     _loadAdmins();
     _loadLogistics();
+    _loadMobiliario();
   }
 
   @override
@@ -274,6 +281,26 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  Future<void> _loadMobiliario() async {
+    try {
+      final r = await PinService.listNames('mobiliario');
+      if (mounted) {
+        setState(() {
+          _mobiliario = r.names;
+          _loadingMobiliario = false;
+          if (r.failed) _loadFailed = true;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _loadingMobiliario = false;
+          _loadFailed = true;
+        });
+      }
+    }
+  }
+
   void _setRole(String role) {
     setState(() {
       _role = role;
@@ -286,6 +313,7 @@ class _LoginScreenState extends State<LoginScreen> {
       if (role != 'analyst') _selectedAnalyst = null;
       if (role != 'admin') _selectedAdmin = null;
       if (role != 'logistica') _selectedLogistics = null;
+      if (role != 'mobiliario') _selectedMobiliario = null;
     });
   }
 
@@ -304,6 +332,8 @@ class _LoginScreenState extends State<LoginScreen> {
         await _enterAnalyst();
       } else if (_role == 'logistica') {
         await _enterLogistics();
+      } else if (_role == 'mobiliario') {
+        await _enterMobiliario();
       } else {
         await _enterLeader();
       }
@@ -499,6 +529,34 @@ class _LoginScreenState extends State<LoginScreen> {
                 LogisticsHomeScreen(logisticsName: _selectedLogistics!)));
   }
 
+  Future<void> _enterMobiliario() async {
+    if (_selectedMobiliario == null) {
+      setState(() => _error = 'Selecione seu nome.');
+      return;
+    }
+    if (_pinCtrl.text.isEmpty) {
+      setState(() => _error = 'Digite seu PIN.');
+      return;
+    }
+    final pinRes = await _checkPin('mobiliario', _selectedMobiliario!);
+    if (pinRes == null) return;
+    if (!mounted) return;
+    await NotificationService.subscribeMobiliario(_selectedMobiliario!);
+    await SessionService.save(role: 'mobiliario', name: _selectedMobiliario!);
+    await FirestoreService.updatePresence(
+      name: _selectedMobiliario!,
+      role: 'mobiliario',
+      team: '',
+      online: true,
+    );
+    if (!mounted) return;
+    Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+            builder: (_) =>
+                MobiliarioHomeScreen(name: _selectedMobiliario!)));
+  }
+
   Future<void> _enterLeader() async {
     if (_selectedLeader == null) {
       setState(() => _error = 'Selecione seu nome.');
@@ -630,6 +688,11 @@ class _LoginScreenState extends State<LoginScreen> {
                             icon: Icons.local_shipping_outlined,
                             active: _role == 'logistica',
                             onTap: () => _setRole('logistica')),
+                        _ToggleBtn(
+                            label: 'Mobiliário',
+                            icon: Icons.chair_alt_outlined,
+                            active: _role == 'mobiliario',
+                            onTap: () => _setRole('mobiliario')),
                       ],
                     ),
                   ),
@@ -1077,6 +1140,77 @@ class _LoginScreenState extends State<LoginScreen> {
                                   return GestureDetector(
                                     onTap: () => setState(() {
                                       _selectedLogistics = p;
+                                      _error = null;
+                                    }),
+                                    child: AnimatedContainer(
+                                      duration:
+                                          const Duration(milliseconds: 150),
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 14, vertical: 8),
+                                      decoration: BoxDecoration(
+                                        color: sel
+                                            ? const Color(0xFF1E3A5F)
+                                            : Colors.white,
+                                        borderRadius:
+                                            BorderRadius.circular(20),
+                                        border: Border.all(
+                                          color: sel
+                                              ? const Color(0xFF1E3A5F)
+                                              : Colors.grey.shade300,
+                                        ),
+                                      ),
+                                      child: Text(p,
+                                          style: TextStyle(
+                                              fontWeight: FontWeight.w600,
+                                              color: sel
+                                                  ? Colors.white
+                                                  : Colors.black87,
+                                              fontSize: 13)),
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
+                    const SizedBox(height: 16),
+
+                  // Equipe de mobiliário: mesmo formato dos demais papéis.
+                  if (_role == 'mobiliario') ...[
+                    const Text('SEU NOME',
+                        style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.grey,
+                            letterSpacing: 1)),
+                    const SizedBox(height: 10),
+                    _loadingMobiliario
+                        ? const Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(8),
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ))
+                        : _mobiliario.isEmpty
+                            ? Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                    color: Colors.orange.shade50,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                        color: Colors.orange.shade200)),
+                                child: Text(
+                                    _cannotRead
+                                        ? 'Não foi possível carregar a lista.\n'
+                                            'Verifique sua conexão e toque em Tentar de novo.'
+                                        : 'Nenhum usuário de mobiliário cadastrado.\nContate o administrador.',
+                                    style: TextStyle(
+                                        color: Colors.orange, fontSize: 13)),
+                              )
+                            : Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: _mobiliario.map((p) {
+                                  final sel = _selectedMobiliario == p;
+                                  return GestureDetector(
+                                    onTap: () => setState(() {
+                                      _selectedMobiliario = p;
                                       _error = null;
                                     }),
                                     child: AnimatedContainer(

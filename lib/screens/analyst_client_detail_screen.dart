@@ -249,6 +249,10 @@ class _AnalystClientDetailScreenState
             ],
 
             // Balcões e cores, vindos da planilha.
+            FurnitureClassifyButton(
+              client: c,
+              fairName: context.read<AppProvider>().currentFairName,
+            ),
             ClientSpecExtras(client: c),
 
             // Specs (read-only)

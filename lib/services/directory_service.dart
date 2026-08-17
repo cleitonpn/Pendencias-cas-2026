@@ -19,6 +19,7 @@ class AppUser {
         'manager' => 'Gerente',
         'admin' => 'Admin',
         'logistica' => 'Logística',
+        'mobiliario' => 'Mobiliário',
         _ => role,
       };
 
@@ -42,6 +43,7 @@ class DirectoryService {
     'manager',
     'admin',
     'logistica',
+    'mobiliario',
   ];
 
   /// Papéis que entram sempre no aviso de uma feira, trabalhem nela ou não.

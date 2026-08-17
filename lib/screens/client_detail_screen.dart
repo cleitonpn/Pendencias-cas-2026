@@ -462,6 +462,10 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
             ],
 
             // Balcões e cores, vindos da planilha.
+            FurnitureClassifyButton(
+              client: c,
+              fairName: context.read<AppProvider>().currentFairName,
+            ),
             ClientSpecExtras(client: c),
 
             // Stand specifications (filled by consultant, read-only here)

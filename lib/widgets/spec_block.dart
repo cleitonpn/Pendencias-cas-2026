@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/client.dart';
+import '../screens/furniture_classify_screen.dart';
+import '../services/actor.dart';
 
 /// Um campo da ficha do stand: título, ícone e o texto vindo da planilha.
 ///
@@ -56,6 +58,60 @@ class SpecBlock extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Atalho para classificar o mobiliário do stand entre interno e externo.
+///
+/// Aparece para a equipe de mobiliário e para o admin. O produtor e os demais
+/// papéis veem o mobiliário, mas quem decide o que sai do estoque e o que é
+/// sublocado é quem responde por ele.
+class FurnitureClassifyButton extends StatelessWidget {
+  final Client client;
+  final String fairName;
+  final VoidCallback? onChanged;
+
+  const FurnitureClassifyButton({
+    super.key,
+    required this.client,
+    required this.fairName,
+    this.onChanged,
+  });
+
+  static bool podeClassificar(String role) =>
+      role == 'mobiliario' || role == 'admin';
+
+  @override
+  Widget build(BuildContext context) {
+    if (client.mobilario.trim().isEmpty) return const SizedBox.shrink();
+    if (!podeClassificar(Actor.role)) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      child: SizedBox(
+        width: double.infinity,
+        child: OutlinedButton.icon(
+          icon: const Icon(Icons.call_split, size: 18),
+          label: const Text('Classificar mobiliário (interno / externo)'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: const Color(0xFF00796B),
+            side: const BorderSide(color: Color(0xFF00796B)),
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+          onPressed: () async {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => FurnitureClassifyScreen(
+                    client: client, fairName: fairName),
+              ),
+            );
+            onChanged?.call();
+          },
+        ),
+      ),
     );
   }
 }

@@ -493,7 +493,11 @@ class _ProducerClientDetailScreenState
                   ],
 
                   // Balcões e cores, vindos da planilha.
-                  ClientSpecExtras(client: c),
+                  FurnitureClassifyButton(
+              client: c,
+              fairName: context.read<AppProvider>().currentFairName,
+            ),
+            ClientSpecExtras(client: c),
 
                   // Stand specifications (filled by consultant, read-only)
                   ClientSpecsCard(clientId: c.firestoreId, legacyClientId: c.rowId),

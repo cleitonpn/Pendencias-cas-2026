@@ -869,6 +869,64 @@ class FirestoreService {
             .toList());
   }
 
+  // ─── Mobiliário: interno x externo ────────────────────────────────────────
+  //
+  // A planilha diz QUAIS itens o stand tem; quem decide o que é atendido pelo
+  // estoque e o que é sublocado é a equipe de mobiliário, durante a operação.
+  // Por isso a classificação vive aqui e não na planilha.
+  //
+  // A chave de cada item vem do texto, não da posição — ver
+  // utils/furniture_items.dart.
+
+  /// Classificação dos itens de um stand: chave do item → 'interno'|'externo'.
+  static Future<Map<String, String>> getFurnitureKinds(
+      String clientFirestoreId) async {
+    if (clientFirestoreId.isEmpty) return {};
+    final doc = await _db
+        .collection('furniture_kinds')
+        .doc(clientFirestoreId)
+        .get();
+    final itens = (doc.data() ?? const {})['items'];
+    if (itens is! Map) return {};
+    return {
+      for (final e in itens.entries) e.key.toString(): e.value.toString(),
+    };
+  }
+
+  /// Classificação de vários stands de uma vez, para a tela de pendências de
+  /// classificação e para a OS consolidada da feira.
+  static Future<Map<String, Map<String, String>>> getFurnitureKindsForFair(
+      String fairName) async {
+    final snap = await _db
+        .collection('furniture_kinds')
+        .where('fairName', isEqualTo: fairName)
+        .get();
+    final out = <String, Map<String, String>>{};
+    for (final d in snap.docs) {
+      final itens = (d.data())['items'];
+      if (itens is! Map) continue;
+      out[d.id] = {
+        for (final e in itens.entries) e.key.toString(): e.value.toString(),
+      };
+    }
+    return out;
+  }
+
+  static Future<void> setFurnitureKinds({
+    required String clientFirestoreId,
+    required String fairName,
+    required Map<String, String> items,
+    required String by,
+  }) async {
+    if (clientFirestoreId.isEmpty) return;
+    await _db.collection('furniture_kinds').doc(clientFirestoreId).set({
+      'fairName': fairName,
+      'items': items,
+      'updatedAt': DateTime.now().toIso8601String(),
+      'updatedBy': by,
+    });
+  }
+
   // ─── Titularidade do stand ────────────────────────────────────────────────
   //
   // A planilha diz quem PODE ser dono; quem É dono agora fica aqui, porque
@@ -1191,6 +1249,19 @@ class FirestoreService {
 
   static Future<void> deleteLogisticsUser(String name) =>
       _removeUser('logistica', name);
+
+  // ─── Equipe de Mobiliário ─────────────────────────────────────────────────
+
+  static Future<List<String>> getMobiliarioUsers() => _listNames('mobiliario');
+
+  static Future<String?> getMobiliarioUserPin(String name) =>
+      _userField<String>('mobiliario', name, 'pin');
+
+  static Future<void> saveMobiliarioUser(String name, String pin) =>
+      _setUser('mobiliario', name, pin: pin);
+
+  static Future<void> deleteMobiliarioUser(String name) =>
+      _removeUser('mobiliario', name);
 
   // ─── Freight Requests ─────────────────────────────────────────────────────
 
