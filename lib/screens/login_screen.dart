@@ -1171,6 +1171,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 }).toList(),
                               ),
                     const SizedBox(height: 16),
+                  ],
 
                   // Equipe de mobiliário: mesmo formato dos demais papéis.
                   if (_role == 'mobiliario') ...[

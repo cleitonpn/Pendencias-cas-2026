@@ -1,5 +1,4 @@
 import 'package:shared_preferences/shared_preferences.dart';
-import '../models/meeting.dart';
 import '../models/pending_item.dart';
 import 'actor.dart';
 import 'firestore_service.dart';
