@@ -107,7 +107,11 @@ class _ProducerClientListScreenState
   List<Client> get _allClients {
     final all = context.read<AppProvider>().clients;
     var list = all.where((c) {
-      if (c.produtor != widget.producerName) return false;
+      // Todo o grupo de produtores do stand enxerga, não só o primeiro. O
+      // card do pavilhão já contava assim, e só esta lista tinha ficado com a
+      // comparação antiga — por isso o segundo produtor via "140 clientes" no
+      // card e a lista vazia ao abrir.
+      if (!c.temProdutor(widget.producerName)) return false;
       final h = c.hangar.isEmpty ? 'Todos os Stands' : c.hangar;
       return h == widget.hangar;
     }).toList()
