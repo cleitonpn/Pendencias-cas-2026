@@ -222,6 +222,17 @@ class _FurnitureClassifyScreenState extends State<FurnitureClassifyScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          // O nome do cliente vem primeiro: num stand ainda
+                          // sem localização na planilha, o destaque era um
+                          // "Sem stand" que não dizia de quem era a ficha.
+                          Text(
+                            c.nome,
+                            style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: _navy),
+                          ),
+                          const SizedBox(height: 2),
                           Text(
                             [
                               if (c.hangar.isNotEmpty) 'Hangar ${c.hangar}',
@@ -231,8 +242,8 @@ class _FurnitureClassifyScreenState extends State<FurnitureClassifyScreen> {
                                 'Sem stand',
                             ].join('  ·  '),
                             style: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
                                 color: _navy),
                           ),
                           Text(

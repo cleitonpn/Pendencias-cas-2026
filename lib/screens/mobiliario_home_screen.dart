@@ -10,6 +10,7 @@ import '../services/session_service.dart';
 import '../utils/furniture_items.dart';
 import '../utils/stand_street.dart';
 import '../widgets/app_drawer.dart';
+import '../widgets/fair_info_header.dart';
 import '../widgets/inbox_bell.dart';
 import 'furniture_classify_screen.dart';
 import 'furniture_pending_screen.dart';
@@ -379,6 +380,7 @@ class _FurnitureFairScreenState extends State<_FurnitureFairScreen> {
   static const _externo = Color(0xFFE65100);
 
   List<Client> _clientes = [];
+  List<Client> _todosClientes = [];
   Map<String, Map<String, String>> _classificados = {};
   bool _carregando = true;
 
@@ -399,6 +401,10 @@ class _FurnitureFairScreenState extends State<_FurnitureFairScreen> {
     }
     if (!mounted) return;
     setState(() {
+      // O cabeçalho da feira lê datas e links do primeiro cliente. Passar só
+      // os que têm mobiliário esconderia o cabeçalho inteiro quando esse
+      // primeiro fosse justamente um sem as datas preenchidas.
+      _todosClientes = todos;
       _clientes = todos
           .where((c) => c.mobilario.trim().isNotEmpty)
           .toList();
@@ -439,6 +445,11 @@ class _FurnitureFairScreenState extends State<_FurnitureFairScreen> {
       body: _carregando
           ? const Center(child: CircularProgressIndicator())
           : Column(children: [
+              // Datas, pavilhão, planta e Drive da feira. A equipe de
+              // mobiliário programa a entrega por essas datas e precisa da
+              // planta para saber onde fica cada rua — sem isso, tinha de
+              // procurar em outra tela.
+              FairInfoHeader(clients: _todosClientes, showDriveLink: true),
               _osDaFeira(),
               Expanded(child: _lista()),
             ]),

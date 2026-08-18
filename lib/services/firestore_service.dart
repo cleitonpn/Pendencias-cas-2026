@@ -3,6 +3,7 @@ import '../models/pending_item.dart';
 import '../models/montage_update.dart';
 import '../models/freight_request.dart';
 import '../models/meeting.dart';
+import '../utils/analyst_notes.dart';
 import '../models/client.dart';
 import '../models/art_status.dart';
 import '../utils/client_fingerprint.dart';
@@ -771,26 +772,74 @@ class FirestoreService {
     );
   }
 
-  // ─── Analyst Notes ────────────────────────────────────────────────────────
+  // ─── Considerações dos analistas ──────────────────────────────────────────
+  //
+  // Uma LISTA, não um texto só. Antes o stand tinha uma única consideração e
+  // quem escrevesse depois abria a mesma caixa e gravava por cima: a
+  // observação do primeiro analista simplesmente sumia, sem aviso e sem
+  // ninguém perceber que tinha existido.
+  //
+  // Cada anotação é sua, com autor e data. Não se edita a de outro; quando
+  // não vale mais, apaga — e aí é uma decisão visível, não um acidente.
+  //
+  // Fica tudo num documento por cliente, e não numa subcoleção, porque as
+  // regras do Firestore aqui valem para um nível só (`{col}/{doc}`): uma
+  // subcoleção ficaria sem regra e portanto sem leitura.
 
-  static Future<Map<String, dynamic>?> getAnalystNote(String clientId) async {
+  /// As considerações de um stand, da mais nova para a mais antiga.
+  ///
+  /// Cada item: `{id, text, link, by, at}`.
+  static Future<List<Map<String, dynamic>>> getAnalystNotes(
+      String clientId) async {
     try {
       final doc = await _db.collection('analyst_notes').doc(clientId).get();
-      if (!doc.exists) return null;
-      return doc.data();
+      return analystNotesFrom(doc.data());
     } catch (_) {
-      return null;
+      return [];
     }
   }
 
-  static Future<void> saveAnalystNote(
+  /// Acrescenta uma consideração sem tocar nas que já existem.
+  ///
+  /// Usa arrayUnion: dois analistas escrevendo ao mesmo tempo somam as duas
+  /// anotações. Ler-alterar-gravar perderia a de quem gravasse primeiro.
+  static Future<void> addAnalystNote(
       String clientId, String text, String link, String by) async {
+    final agora = DateTime.now();
     await _db.collection('analyst_notes').doc(clientId).set({
-      'text': text,
-      'link': link,
-      'updatedBy': by,
-      'updatedAt': DateTime.now().toIso8601String(),
-    });
+      'notes': FieldValue.arrayUnion([
+        {
+          // O id vem do instante mais do autor: é o que permite apagar uma
+          // anotação específica quando duas têm o mesmo texto.
+          'id': '${agora.microsecondsSinceEpoch}_${by.hashCode}',
+          'text': text,
+          'link': link,
+          'by': by,
+          'at': agora.toIso8601String(),
+        }
+      ]),
+    }, SetOptions(merge: true));
+  }
+
+  /// Apaga uma consideração. [nota] tem de ser o mapa exato devolvido por
+  /// [getAnalystNotes], porque é assim que o arrayRemove encontra o item.
+  static Future<void> deleteAnalystNote(
+      String clientId, Map<String, dynamic> nota) async {
+    final ref = _db.collection('analyst_notes').doc(clientId);
+    // A anotação no formato antigo não está no array: ela é o corpo do
+    // documento, e some limpando os campos soltos.
+    if (nota['id'] == legadoId) {
+      await ref.set({
+        'text': FieldValue.delete(),
+        'link': FieldValue.delete(),
+        'updatedBy': FieldValue.delete(),
+        'updatedAt': FieldValue.delete(),
+      }, SetOptions(merge: true));
+      return;
+    }
+    await ref.set({
+      'notes': FieldValue.arrayRemove([nota]),
+    }, SetOptions(merge: true));
   }
 
   // ─── New Client Broadcast ─────────────────────────────────────────────────
