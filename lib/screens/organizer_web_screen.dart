@@ -1407,6 +1407,9 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
             outro: _itemForaDaLista,
             onChanged: (s) => setState(() => _itensMarcados = s),
             onOutroChanged: (v) => setState(() => _itemForaDaLista = v),
+            // Interno x externo é divisão de trabalho nossa: para quem está
+            // de fora a cadeira é só a cadeira.
+            mostrarClassificacao: false,
           ),
         ],
         const SizedBox(height: 16),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:printing/printing.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:intl/intl.dart';
@@ -54,6 +55,34 @@ class PdfService {
       subject: filename.replaceAll('_', ' ').replaceAll('.pdf', ''),
       fileNameOverrides: [filename],
     );
+  }
+
+  /// Abre o PDF já pronto para imprimir.
+  ///
+  /// A OS existe para virar papel na mão de alguém, e compartilhar não era
+  /// isso: no celular a pessoa tinha de mandar o arquivo para si mesma e só
+  /// então abrir, e na web não havia opção de imprimir nenhuma.
+  ///
+  /// [Printing.layoutPdf] resolve os dois com o visualizador de cada
+  /// plataforma — no navegador abre a caixa de impressão, no Android abre a
+  /// pré-visualização de impressão, que também salva e compartilha.
+  static Future<void> _entregar(pw.Document pdf, String filename) async {
+    final bytes = await pdf.save();
+    try {
+      await Printing.layoutPdf(
+        onLayout: (_) async => bytes,
+        name: filename,
+      );
+    } catch (_) {
+      // Aparelho sem serviço de impressão não pode ficar sem a OS: cai no
+      // compartilhamento, que é o caminho que já funcionava.
+      // ignore: deprecated_member_use
+      await Share.shareXFiles(
+        [XFile.fromData(bytes, name: filename, mimeType: 'application/pdf')],
+        subject: filename.replaceAll('_', ' ').replaceAll('.pdf', ''),
+        fileNameOverrides: [filename],
+      );
+    }
   }
 
   /// Um booleano não dava conta de três relatórios: passar `true` para as
@@ -700,7 +729,7 @@ class PdfService {
       ],
     ));
 
-    await _saveAndShare(
+    await _entregar(
         pdf,
         'OS_${kind.code}_${_slug(fairName)}_${_slug(client.nome)}.pdf');
   }
@@ -746,8 +775,79 @@ class PdfService {
       ],
     ));
 
-    await _saveAndShare(
+    await _entregar(
         pdf, 'OS_${kind.code}_${_slug(fairName)}_consolidada.pdf');
+  }
+
+  /// OS da feira inteira, uma folha por rua.
+  ///
+  /// A entrega acontece rua por rua: quem descarrega percorre a rua A inteira
+  /// e só depois vai para a B. Uma lista única, na ordem em que os stands
+  /// aparecem na planilha, faz a pessoa atravessar o pavilhão a cada item.
+  ///
+  /// Sai um arquivo só, mas cada rua começa em página nova — dá para arrancar
+  /// a folha e entregar na mão de quem cuida daquela rua.
+  static Future<void> generateFurnitureOrderByStreet({
+    required String fairName,
+    required List<
+            ({
+              String rua,
+              List<({Client client, List<FurnitureItem> itens})> stands
+            })>
+        ruas,
+    required FurnitureKind kind,
+    required DateTime entrega,
+  }) async {
+    final pdf = pw.Document();
+    final agora = DateTime.now();
+    final totalStands =
+        ruas.fold<int>(0, (s, r) => s + r.stands.length);
+    final totalItens = ruas.fold<int>(
+        0, (s, r) => s + r.stands.fold<int>(0, (t, e) => t + e.itens.length));
+
+    pdf.addPage(pw.MultiPage(
+      pageFormat: PdfPageFormat.a4,
+      margin: const pw.EdgeInsets.all(36),
+      header: (_) => _osHeader(
+          'ORDEM DE SERVIÇO — MOBILIÁRIO (POR RUA)', fairName, kind, agora),
+      footer: (ctx) => pw.Align(
+        alignment: pw.Alignment.centerRight,
+        child: pw.Text('${ctx.pageNumber}/${ctx.pagesCount}',
+            style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600)),
+      ),
+      build: (_) => [
+        pw.SizedBox(height: 6),
+        pw.Text(
+            '${ruas.length} rua(s)  ·  $totalStands stand(s)  ·  '
+            '$totalItens item(ns)  ·  ENTREGA: ${_dateFmt.format(entrega)}',
+            style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
+        for (var r = 0; r < ruas.length; r++) ...[
+          // A primeira rua continua na folha do resumo; as seguintes começam
+          // em folha nova, para cada uma poder ser entregue separada.
+          if (r > 0) pw.NewPage(),
+          pw.SizedBox(height: 10),
+          pw.Container(
+            width: double.infinity,
+            padding:
+                const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+            color: PdfColors.grey200,
+            child: pw.Text(
+                '${ruas[r].rua}  —  ${ruas[r].stands.length} stand(s)',
+                style: pw.TextStyle(
+                    fontSize: 12, fontWeight: pw.FontWeight.bold)),
+          ),
+          for (final s in ruas[r].stands) ...[
+            pw.SizedBox(height: 4),
+            _osCliente(s.client, s.itens, comCabecalhoDoCliente: true),
+          ],
+          pw.SizedBox(height: 18),
+          _osAssinaturas(),
+        ],
+      ],
+    ));
+
+    await _entregar(
+        pdf, 'OS_${kind.code}_${_slug(fairName)}_por_rua.pdf');
   }
 
   static pw.Widget _osAssinaturas() => pw.Row(

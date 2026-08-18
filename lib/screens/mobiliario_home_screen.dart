@@ -5,8 +5,10 @@ import '../models/fair.dart';
 import '../providers/app_provider.dart';
 import '../services/database_service.dart';
 import '../services/firestore_service.dart';
+import '../services/pdf_service.dart';
 import '../services/session_service.dart';
 import '../utils/furniture_items.dart';
+import '../utils/stand_street.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/inbox_bell.dart';
 import 'furniture_classify_screen.dart';
@@ -373,6 +375,8 @@ class _FurnitureFairScreen extends StatefulWidget {
 
 class _FurnitureFairScreenState extends State<_FurnitureFairScreen> {
   static const _navy = Color(0xFF1E3A5F);
+  static const _interno = Color(0xFF00796B);
+  static const _externo = Color(0xFFE65100);
 
   List<Client> _clientes = [];
   Map<String, Map<String, String>> _classificados = {};
@@ -434,7 +438,120 @@ class _FurnitureFairScreenState extends State<_FurnitureFairScreen> {
       ),
       body: _carregando
           ? const Center(child: CircularProgressIndicator())
-          : ListView.builder(
+          : Column(children: [
+              _osDaFeira(),
+              Expanded(child: _lista()),
+            ]),
+    );
+  }
+
+  /// OS de toda a feira, separada por rua.
+  ///
+  /// Fazer stand por stand numa feira de cem expositores é inviável — e o
+  /// fornecedor não quer cem papéis, quer a folha da rua dele.
+  Widget _osDaFeira() {
+    final temInterno = _classificados.values
+        .any((m) => m.containsValue('interno'));
+    final temExterno = _classificados.values
+        .any((m) => m.containsValue('externo'));
+    if (!temInterno && !temExterno) return const SizedBox.shrink();
+    return Container(
+      width: double.infinity,
+      color: Colors.white,
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('OS DA FEIRA — UMA FOLHA POR RUA',
+              style: TextStyle(
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey,
+                  letterSpacing: 0.8)),
+          const SizedBox(height: 8),
+          Row(children: [
+            if (temInterno)
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => _gerarOSDaFeira(FurnitureKind.interno),
+                  icon: const Icon(Icons.print_outlined, size: 16),
+                  label: const Text('Interna', style: TextStyle(fontSize: 12)),
+                  style:
+                      OutlinedButton.styleFrom(foregroundColor: _interno),
+                ),
+              ),
+            if (temInterno && temExterno) const SizedBox(width: 8),
+            if (temExterno)
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => _gerarOSDaFeira(FurnitureKind.externo),
+                  icon: const Icon(Icons.print_outlined, size: 16),
+                  label: const Text('Externa', style: TextStyle(fontSize: 12)),
+                  style:
+                      OutlinedButton.styleFrom(foregroundColor: _externo),
+                ),
+              ),
+          ]),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _gerarOSDaFeira(FurnitureKind kind) async {
+    // Só o que foi classificado como deste tipo. Item sem classificação fica
+    // de fora: mandar para o fornecedor algo que ninguém conferiu é pior do
+    // que a linha faltar e alguém perguntar.
+    final porRua = <String, List<({Client client, List<FurnitureItem> itens})>>{};
+    for (final c in _clientes) {
+      final feito = _classificados[c.firestoreId] ?? const {};
+      final doTipo = furnitureItemsFrom(c.mobilario)
+          .where((i) => furnitureKindFrom(feito[i.key]) == kind)
+          .toList();
+      if (doTipo.isEmpty) continue;
+      porRua.putIfAbsent(ruaDe(c.local), () => []).add(
+          (client: c, itens: doTipo));
+    }
+    if (porRua.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Nenhum item ${kind.label.toLowerCase()} '
+              'classificado nesta feira.')));
+      return;
+    }
+    for (final lista in porRua.values) {
+      lista.sort((a, b) => compararStands(a.client.local, b.client.local));
+    }
+    final ruas = porRua.keys.toList()..sort(compararRuas);
+
+    final entrega = await _pedirDataEntrega();
+    if (entrega == null || !mounted) return;
+
+    await PdfService.generateAndShow(
+      context,
+      () => PdfService.generateFurnitureOrderByStreet(
+        fairName: widget.fair.name,
+        ruas: [
+          for (final r in ruas) (rua: r, stands: porRua[r]!),
+        ],
+        kind: kind,
+        entrega: entrega,
+      ),
+    );
+  }
+
+  Future<DateTime?> _pedirDataEntrega() {
+    final hoje = DateTime.now();
+    return showDatePicker(
+      context: context,
+      initialDate: hoje,
+      firstDate: hoje.subtract(const Duration(days: 30)),
+      lastDate: hoje.add(const Duration(days: 365)),
+      helpText: 'Data de entrega',
+    );
+  }
+
+  Widget _lista() {
+    return ListView.builder(
               padding: const EdgeInsets.all(12),
               itemCount: _clientes.length,
               itemBuilder: (context, i) {
@@ -497,7 +614,6 @@ class _FurnitureFairScreenState extends State<_FurnitureFairScreen> {
                   ),
                 );
               },
-            ),
-    );
+            );
   }
 }

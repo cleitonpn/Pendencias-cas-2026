@@ -33,6 +33,14 @@ class FurniturePicker extends StatefulWidget {
   /// Cor da equipe de mobiliário, para a seleção combinar com o cartão dela.
   final Color color;
 
+  /// Mostrar o selo Interno/Externo em cada item.
+  ///
+  /// Falso nos portais do expositor e da organizadora: para eles a cadeira é
+  /// só a cadeira. Interno x externo é divisão de trabalho nossa — quem está
+  /// de fora não tem como agir sobre isso, e ver "Externo" só levanta a
+  /// pergunta de por que aquilo importa.
+  final bool mostrarClassificacao;
+
   const FurniturePicker({
     super.key,
     required this.client,
@@ -41,6 +49,7 @@ class FurniturePicker extends StatefulWidget {
     required this.onChanged,
     required this.onOutroChanged,
     this.color = const Color(0xFF00796B),
+    this.mostrarClassificacao = true,
   });
 
   /// Os itens que podem ser marcados num stand, já sem os descartados.
@@ -167,8 +176,10 @@ class _FurniturePickerState extends State<FurniturePicker> {
                         fontWeight:
                             marcado ? FontWeight.w600 : FontWeight.normal,
                         color: marcado ? widget.color : Colors.black87)),
-                const SizedBox(height: 2),
-                _selo(kind),
+                if (widget.mostrarClassificacao) ...[
+                  const SizedBox(height: 2),
+                  _selo(kind),
+                ],
               ],
             ),
           ),

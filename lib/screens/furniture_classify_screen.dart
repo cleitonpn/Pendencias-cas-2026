@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../models/client.dart';
 import '../services/actor.dart';
 import '../services/firestore_service.dart';
 import '../services/pdf_service.dart';
 import '../utils/furniture_items.dart';
+import '../utils/stand_street.dart';
+import '../widgets/analyst_notes_widget.dart';
+import '../widgets/client_specs_card.dart';
 
 /// Divide o mobiliário de um stand entre interno e externo.
 ///
@@ -155,18 +159,182 @@ class _FurnitureClassifyScreenState extends State<FurnitureClassifyScreen> {
                             style: const TextStyle(
                                 fontSize: 12, color: Colors.red)),
                       ),
-                    _cabecalho(),
                     Expanded(
-                      child: ListView.builder(
-                        padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
-                        itemCount: _itens.length,
-                        itemBuilder: (context, i) => _linha(_itens[i]),
+                      child: ListView(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        children: [
+                          // As informações do stand vêm antes da lista: quem
+                          // classifica precisa saber onde é, quem responde e o
+                          // que o consultor combinou — senão a decisão de
+                          // interno x externo é feita no escuro.
+                          _infoCliente(),
+                          _cabecalho(),
+                          Padding(
+                            padding:
+                                const EdgeInsets.symmetric(horizontal: 12),
+                            child: Column(children: _itens.map(_linha).toList()),
+                          ),
+                        ],
                       ),
                     ),
                     _botoesOS(),
                     _rodape(),
                   ],
                 ),
+    );
+  }
+
+  /// Onde é, quem responde e o que já foi combinado sobre este stand.
+  ///
+  /// A equipe de mobiliário chega no stand sem ter acompanhado o projeto. Sem
+  /// isto, descobrir quem é o produtor ou ler a consideração do consultor
+  /// exigia sair do app e perguntar no grupo.
+  Widget _infoCliente() {
+    final c = widget.client;
+    final rua = ruaDe(c.local);
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.only(top: 12, bottom: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            // ClientSpecsCard e AnalystNotesWidget trazem o próprio recuo de
+            // 16; só o que é desta tela precisa do recuo aqui.
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // A localização em destaque: é o dado que a pessoa usa primeiro, ao
+                // sair para o pavilhão.
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE8F0FB),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFFBBD0EC)),
+                  ),
+                  child: Row(children: [
+                    const Icon(Icons.place_outlined, color: _navy, size: 26),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            [
+                              if (c.hangar.isNotEmpty) 'Hangar ${c.hangar}',
+                              if (c.local.isNotEmpty)
+                                'Stand ${c.local}'
+                              else
+                                'Sem stand',
+                            ].join('  ·  '),
+                            style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: _navy),
+                          ),
+                          Text(
+                            [
+                              if (rua != semRua) 'Rua $rua' else semRua,
+                              if (c.area.isNotEmpty) '${c.area} m²',
+                              if (c.tipo.isNotEmpty) c.tipo,
+                            ].join('  ·  '),
+                            style: const TextStyle(fontSize: 12, color: _navy),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ]),
+                ),
+                const SizedBox(height: 10),
+                _campo(Icons.engineering_outlined, 'Produtor',
+                    c.produtores.isEmpty ? c.produtor : c.produtores.join(', ')),
+                _campo(Icons.support_agent_outlined, 'Consultor', c.atendimento),
+                _campo(Icons.apartment_outlined, 'Organizadora', c.organizadora),
+                if (c.projectLink.isNotEmpty)
+                  _link(Icons.link, 'Ver projeto', c.projectLink, Colors.blue),
+                if (c.linkMemorial.isNotEmpty)
+                  _link(Icons.description_outlined, 'Ver memorial descritivo',
+                      c.linkMemorial, Colors.teal),
+              ],
+            ),
+          ),
+          // Especificações do stand: é aqui que ficam as considerações que o
+          // consultor deixou, e elas costumam mudar o que a equipe leva.
+          ClientSpecsCard(
+              clientId: c.firestoreId, legacyClientId: c.rowId),
+          // A equipe de mobiliário também anota: o que faltou, o que foi
+          // trocado no lugar. Sem poder escrever, essa informação ficava no
+          // WhatsApp e sumia.
+          AnalystNotesWidget(
+            clientId: c.firestoreId,
+            canEdit: true,
+            editorName: Actor.name,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _campo(IconData icone, String rotulo, String valor) {
+    if (valor.trim().isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Icon(icone, size: 16, color: Colors.grey.shade600),
+        const SizedBox(width: 8),
+        Text('$rotulo: ',
+            style: TextStyle(
+                fontSize: 12.5,
+                color: Colors.grey.shade600,
+                fontWeight: FontWeight.w600)),
+        Expanded(
+          child: Text(valor,
+              style: const TextStyle(fontSize: 12.5, color: Colors.black87)),
+        ),
+      ]),
+    );
+  }
+
+  Widget _link(IconData icone, String rotulo, String url, MaterialColor cor) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: InkWell(
+        onTap: () async {
+          final uri = Uri.tryParse(url);
+          if (uri == null) return;
+          if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Não foi possível abrir o link.')),
+              );
+            }
+          }
+        },
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: cor.shade50,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: cor.shade200),
+          ),
+          child: Row(children: [
+            Icon(icone, color: cor.shade700, size: 18),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(rotulo,
+                  style: TextStyle(
+                      color: cor.shade700,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13)),
+            ),
+            Icon(Icons.open_in_new, color: cor.shade400, size: 15),
+          ]),
+        ),
+      ),
     );
   }
 
