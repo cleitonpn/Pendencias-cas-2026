@@ -17,7 +17,7 @@ class DatabaseService {
   static Future<Database> _initDb() async {
     final path = join(await getDatabasesPath(), 'cas2026.db');
     final database = await openDatabase(path,
-        version: 27, onCreate: _onCreate, onUpgrade: _onUpgrade);
+        version: 28, onCreate: _onCreate, onUpgrade: _onUpgrade);
     await _ensureSchema(database);
     return database;
   }
@@ -48,6 +48,7 @@ class DatabaseService {
       'balcao_padrao': "TEXT DEFAULT ''",
       'balcao_personalizado': "TEXT DEFAULT ''",
       'cores': "TEXT DEFAULT ''",
+      'eletrica': "TEXT DEFAULT ''",
       'tipo': "TEXT DEFAULT ''",
       'produtores_key': "TEXT DEFAULT ''",
     },
@@ -114,6 +115,7 @@ class DatabaseService {
         balcao_padrao TEXT DEFAULT '',
         balcao_personalizado TEXT DEFAULT '',
         cores TEXT DEFAULT '',
+        eletrica TEXT DEFAULT '',
         tipo TEXT DEFAULT '',
         produtores_key TEXT DEFAULT '',
         pavilhao TEXT DEFAULT '',

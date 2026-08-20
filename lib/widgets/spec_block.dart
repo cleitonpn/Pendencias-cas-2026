@@ -116,11 +116,11 @@ class FurnitureClassifyButton extends StatelessWidget {
   }
 }
 
-/// Balcão padrão, balcão personalizado e cores.
+/// Balcão padrão, balcão personalizado, cores e elétrica.
 ///
 /// Ficam juntos num widget só para entrarem iguais em todas as telas de ficha
-/// — admin, consultor, produtor e analista. Repetir os três blocos em cada
-/// tela abriria espaço para eles divergirem com o tempo.
+/// — admin, gerente, líder, consultor, produtor e analista. Repetir os blocos
+/// em cada tela abriria espaço para eles divergirem com o tempo.
 class ClientSpecExtras extends StatelessWidget {
   final Client client;
   const ClientSpecExtras({super.key, required this.client});
@@ -146,6 +146,15 @@ class ClientSpecExtras extends StatelessWidget {
             color: const Color(0xFFC2185B),
             icon: Icons.palette_outlined,
             text: client.cores,
+          ),
+          // A especificação elétrica, não o nome do eletricista: até agora só
+          // o responsável chegava ao app, e o que ele precisa instalar ficava
+          // só na planilha.
+          SpecBlock(
+            title: 'ELÉTRICA',
+            color: const Color(0xFFF57F17),
+            icon: Icons.electrical_services_outlined,
+            text: client.eletrica,
           ),
         ],
       );

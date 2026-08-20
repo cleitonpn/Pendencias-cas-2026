@@ -226,6 +226,11 @@ class SheetsService {
         'balcao personalizado ', 'balcão customizado', 'balcao customizado']);
     final coresIdx         = findCol(['cores', 'cor', 'cores do stand',
         'cor do stand']);
+    // A especificação elétrica do stand, não o nome do eletricista: são duas
+    // colunas diferentes e a equipe precisa das duas.
+    final eletricaIdx      = findCol(['elétrica', 'eletrica',
+        'instalação elétrica', 'instalacao eletrica', 'ponto elétrico',
+        'ponto eletrico', 'pontos elétricos', 'pontos eletricos']);
 
     // Event-level date columns.  'montagem'/'evento'/'desmontagem' alone are
     // accepted as fallbacks for sheets that don't use the "data " prefix.
@@ -310,6 +315,7 @@ class SheetsService {
         balcaoPadrao: s(balcaoPadraoIdx),
         balcaoPersonalizado: s(balcaoPersIdx),
         cores: s(coresIdx),
+        eletrica: s(eletricaIdx),
         pavilhao: s(pavilhaoIdx),
         dataMontagem: s(dataMontagemIdx),
         dataEvento: s(dataEventoIdx),
@@ -392,6 +398,11 @@ class SheetsService {
         'balcao personalizado ', 'balcão customizado', 'balcao customizado']);
     final coresIdx         = findCol(['cores', 'cor', 'cores do stand',
         'cor do stand']);
+    // A especificação elétrica do stand, não o nome do eletricista: são duas
+    // colunas diferentes e a equipe precisa das duas.
+    final eletricaIdx      = findCol(['elétrica', 'eletrica',
+        'instalação elétrica', 'instalacao eletrica', 'ponto elétrico',
+        'ponto eletrico', 'pontos elétricos', 'pontos eletricos']);
     final linkPlantaIdx    = findCol(['link planta', 'link da planta',
         'planta baixa', 'planta', 'mapa']);
     final linkDriveIdx     = findCol(['link drive', 'drive',
@@ -473,6 +484,7 @@ class SheetsService {
         balcaoPadrao: s(balcaoPadraoIdx),
         balcaoPersonalizado: s(balcaoPersIdx),
         cores: s(coresIdx),
+        eletrica: s(eletricaIdx),
         pavilhao: s(pavilhaoIdx),
         dataMontagem: s(dataMontagemIdx),
         dataEvento: s(dataEventoIdx),

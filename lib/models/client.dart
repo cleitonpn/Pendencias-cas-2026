@@ -42,6 +42,13 @@ class Client {
   final String balcaoPersonalizado;
   final String cores;
 
+  /// Coluna "elétrica" da planilha — o que o stand tem de instalação elétrica.
+  ///
+  /// Diferente de [eletricista], que é a pessoa responsável. Esta é a
+  /// especificação: pontos, tomadas, carga. Quem vai montar precisa das duas
+  /// coisas, e só o nome do eletricista estava chegando ao app.
+  final String eletrica;
+
   /// Coluna "tipo" da planilha — o tipo de montagem do stand. Nas feiras
   /// grandes é a informação que diz de cara o que aquele stand é.
   final String tipo;
@@ -95,6 +102,7 @@ class Client {
     this.balcaoPadrao = '',
     this.balcaoPersonalizado = '',
     this.cores = '',
+    this.eletrica = '',
     this.tipo = '',
     this.pavilhao = '',
     this.dataMontagem = '',
@@ -159,6 +167,7 @@ class Client {
         balcaoPadrao: balcaoPadrao,
         balcaoPersonalizado: balcaoPersonalizado,
         cores: cores,
+        eletrica: eletrica,
         tipo: tipo,
         pavilhao: pavilhao,
         dataMontagem: dataMontagem,
@@ -200,6 +209,7 @@ class Client {
         'balcao_padrao': balcaoPadrao,
         'balcao_personalizado': balcaoPersonalizado,
         'cores': cores,
+        'eletrica': eletrica,
         'tipo': tipo,
         'produtores_key': produtoresKeyFrom(produtores),
         'pavilhao': pavilhao,
@@ -244,6 +254,7 @@ class Client {
         balcaoPadrao: map['balcao_padrao'] ?? '',
         balcaoPersonalizado: map['balcao_personalizado'] ?? '',
         cores: map['cores'] ?? '',
+        eletrica: map['eletrica'] ?? '',
         tipo: map['tipo'] ?? '',
         pavilhao: map['pavilhao'] ?? '',
         dataMontagem: map['data_montagem'] ?? '',
