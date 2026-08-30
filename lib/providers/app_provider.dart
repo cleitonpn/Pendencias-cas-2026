@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/client.dart';
+import '../models/art_status.dart';
 import '../models/fair.dart';
 import '../models/pending_item.dart';
 import '../services/sheets_service.dart';
