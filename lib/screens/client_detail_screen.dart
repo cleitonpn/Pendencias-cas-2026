@@ -470,10 +470,18 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
             ClientSpecExtras(client: c),
 
             // Stand specifications (filled by consultant, read-only here)
-            ClientSpecsCard(clientId: c.firestoreId, legacyClientId: c.rowId),
+            ClientSpecsCard(
+                clientId: c.firestoreId,
+                legacyClientId: c.rowId,
+                clientKey: c.clientKey,
+                clientName: c.nome),
 
             // Analyst notes (read-only for admin)
-            AnalystNotesWidget(clientId: c.firestoreId, canEdit: false),
+            AnalystNotesWidget(
+                clientId: c.firestoreId,
+                clientKey: c.clientKey,
+                clientName: c.nome,
+                canEdit: false),
 
             // Botões de ação
             Padding(

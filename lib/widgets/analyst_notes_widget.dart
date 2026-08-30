@@ -16,6 +16,11 @@ import '../services/firestore_service.dart';
 class AnalystNotesWidget extends StatefulWidget {
   final String clientId;
 
+  /// Identidade do stand, para conferir o documento lido. Ver
+  /// utils/client_key.dart — o id do documento é posicional.
+  final String clientKey;
+  final String clientName;
+
   /// Quem pode acrescentar e apagar considerações.
   final bool canEdit;
   final String editorName;
@@ -23,6 +28,8 @@ class AnalystNotesWidget extends StatefulWidget {
   const AnalystNotesWidget({
     super.key,
     required this.clientId,
+    this.clientKey = '',
+    this.clientName = '',
     this.canEdit = false,
     this.editorName = '',
   });
@@ -55,7 +62,8 @@ class _AnalystNotesWidgetState extends State<AnalystNotesWidget> {
   }
 
   Future<void> _carregar() async {
-    final notas = await FirestoreService.getAnalystNotes(widget.clientId);
+    final notas = await FirestoreService.getAnalystNotes(widget.clientId,
+        clientKey: widget.clientKey, nome: widget.clientName);
     if (!mounted) return;
     setState(() {
       _notas = notas;
@@ -73,7 +81,8 @@ class _AnalystNotesWidgetState extends State<AnalystNotesWidget> {
     setState(() => _salvando = true);
     try {
       await FirestoreService.addAnalystNote(
-          widget.clientId, texto, link, widget.editorName);
+          widget.clientId, texto, link, widget.editorName,
+          clientKey: widget.clientKey, nome: widget.clientName);
       if (!mounted) return;
       _textCtrl.clear();
       _linkCtrl.clear();

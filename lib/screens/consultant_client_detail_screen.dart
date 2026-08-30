@@ -80,13 +80,19 @@ class _ConsultantClientDetailScreenState
   }
 
   Future<void> _loadSpecs() async {
-    var specs = await FirestoreService.getClientSpecs(widget.client.firestoreId);
+    var specs = await FirestoreService.getClientSpecs(
+        widget.client.firestoreId,
+        clientKey: widget.client.clientKey,
+        nome: widget.client.nome);
     // Migration: old versions saved specs under the device-local rowId.
     // If nothing found at the new stable key, try the old key and move the data.
     if (specs == null && widget.client.firestoreId != widget.client.rowId) {
-      final legacy = await FirestoreService.getClientSpecs(widget.client.rowId);
+      final legacy = await FirestoreService.getClientSpecs(widget.client.rowId,
+          clientKey: widget.client.clientKey, nome: widget.client.nome);
       if (legacy != null) {
-        await FirestoreService.saveClientSpecs(widget.client.firestoreId, legacy);
+        await FirestoreService.saveClientSpecs(
+            widget.client.firestoreId, legacy,
+            clientKey: widget.client.clientKey, nome: widget.client.nome);
         specs = legacy;
       }
     }
@@ -508,7 +514,11 @@ class _ConsultantClientDetailScreenState
             ),
 
             // Analyst notes (read-only for consultant)
-            AnalystNotesWidget(clientId: widget.client.firestoreId, canEdit: false),
+            AnalystNotesWidget(
+                clientId: widget.client.firestoreId,
+                clientKey: widget.client.clientKey,
+                clientName: widget.client.nome,
+                canEdit: false),
 
             // Create pending button (the only action available)
             Padding(

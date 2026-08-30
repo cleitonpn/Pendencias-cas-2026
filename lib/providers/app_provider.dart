@@ -8,6 +8,7 @@ import '../services/database_service.dart';
 import '../services/firestore_service.dart';
 import '../services/notification_service.dart';
 import '../utils/fair_key.dart';
+import '../utils/client_key.dart';
 import '../utils/producer_pool.dart';
 import '../services/cloud_writes.dart';
 import '../services/actor.dart';
@@ -872,11 +873,29 @@ class AppProvider extends ChangeNotifier {
     final fairName = _currentFair?.name ?? '';
     if (fairName.isEmpty) return;
     try {
-      final mapa = await ArtStatusService.porFeira(fairName);
-      if (mapa.isEmpty) return;
+      final docs = await ArtStatusService.docsPorFeira(fairName);
+      if (docs.isEmpty) return;
       for (final c in _clients) {
-        if (c.firestoreId.isEmpty) continue;
-        c.arte = mapa[c.firestoreId];
+        // Primeiro pela chave estável: o documento novo da ferramenta é endereçado
+        //    por ela, e casar assim não depende de posição nenhuma.
+        var doc = c.clientKey.isEmpty ? null : docs[c.clientKey];
+
+        // Depois, queda para o id posicional, para o documento que a ferramenta
+        //    ainda não migrou. É aqui que mora o defeito antigo: depois de uma
+        //    reordenação, aquele id pertence a outro expositor. Por isso a
+        //    queda só vale se o documento não desmentir — se ele trouxer
+        //    identidade e ela for de outro stand, fica sem prova em vez de
+        //    mostrar a prova errada.
+        if (doc == null && c.firestoreId.isNotEmpty) {
+          final candidato = docs[c.firestoreId];
+          if (candidato != null &&
+              documentoDoCliente(candidato,
+                  clientKey: c.clientKey, nome: c.nome)) {
+            doc = candidato;
+          }
+        }
+
+        c.arte = doc == null ? null : ArtStatus.fromMap(doc);
       }
     } catch (_) {
       // offline, ou a feira ainda não está na ferramenta de aprovação
@@ -916,6 +935,8 @@ class AppProvider extends ChangeNotifier {
           completedAt: now,
           completedBy: _completionAuthor,
           fairName: fairNome,
+          clientKey: client.clientKey,
+          clientName: client.nome,
         ),
       );
     }
@@ -946,7 +967,19 @@ class AppProvider extends ChangeNotifier {
 
     for (final c in locals) {
       if (c.firestoreId.isEmpty) continue;
-      final remote = cloud[c.firestoreId];
+      var remote = cloud[c.firestoreId];
+
+      // O documento mora sob a posição do stand na planilha. Depois de uma
+      // linha inserida acima, o que está naquele id é o check-off de outro
+      // expositor — e aplicá-lo marcaria como concluído um stand em que
+      // ninguém encostou. Documento que se identifica como de outro é
+      // descartado; documento sem carimbo (anterior a isto) segue valendo,
+      // porque recusá-lo apagaria de uma vez todo check-off já publicado.
+      if (remote != null &&
+          !documentoDoCliente(remote.identidade,
+              clientKey: c.clientKey, nome: c.nome)) {
+        remote = null;
+      }
 
       if (remote == null) {
         // Local-only check-off: queue it to be published.
@@ -955,6 +988,8 @@ class AppProvider extends ChangeNotifier {
             clientFirestoreId: c.firestoreId,
             completedAt: c.completedAt,
             completedBy: _completionAuthor,
+            clientKey: c.clientKey,
+            clientName: c.nome,
           ));
         }
         continue;

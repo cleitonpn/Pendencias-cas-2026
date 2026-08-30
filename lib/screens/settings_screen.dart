@@ -8,6 +8,7 @@ import '../services/session_service.dart';
 import '../services/admin_api.dart';
 import '../services/version_gate.dart';
 import '../utils/stand_link.dart';
+import '../utils/client_key.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -2489,9 +2490,101 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
 
+            const SizedBox(height: 8),
+            Card(
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+              child: ListTile(
+                leading: const CircleAvatar(
+                  backgroundColor: Color(0xFF1E3A5F),
+                  child: Icon(Icons.rule, color: Colors.white, size: 20),
+                ),
+                title: const Text('Nomes repetidos na planilha',
+                    style: TextStyle(fontWeight: FontWeight.w600)),
+                subtitle: const Text(
+                    'Stands com o mesmo nome na mesma feira ficam sem prova '
+                    'de arte, porque não dá para saber qual é qual',
+                    style: TextStyle(fontSize: 12, color: Colors.grey)),
+                trailing: TextButton(
+                  onPressed: _verNomesRepetidos,
+                  child: const Text('Conferir',
+                      style: TextStyle(color: Color(0xFF1E3A5F))),
+                ),
+              ),
+            ),
+
             const SizedBox(height: 24),
           ],
         ),
+      ),
+    );
+  }
+
+  /// Quais stands ficaram sem chave estável por terem nome repetido na feira.
+  ///
+  /// A chave que liga o app à ferramenta de aprovação de arte é feira + nome
+  /// do expositor. Dois stands com o mesmo nome dariam a mesma chave, e
+  /// desempatar por posição traria de volta o problema que a chave existe para
+  /// eliminar. Então nenhum dos dois recebe chave — e esta tela é o lugar onde
+  /// isso deixa de ser invisível.
+  Future<void> _verNomesRepetidos() async {
+    final provider = context.read<AppProvider>();
+    final achados = <String, List<String>>{};
+    for (final f in provider.fairs.where((f) => !f.isMestra)) {
+      if (f.id == null) continue;
+      try {
+        final clientes = await DatabaseService.getClients(fairId: f.id!);
+        final dup = nomesAmbiguos(clientes.map((c) => c.nome));
+        if (dup.isNotEmpty) achados[f.name] = dup;
+      } catch (_) {
+        // Feira indisponível agora; as outras continuam.
+      }
+    }
+    if (!mounted) return;
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        title: const Text('Nomes repetidos'),
+        content: SizedBox(
+          width: 420,
+          child: achados.isEmpty
+              ? const Text(
+                  'Nenhum nome repetido nas feiras deste aparelho. Todos os '
+                  'stands têm chave estável.',
+                  style: TextStyle(fontSize: 13))
+              : SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                          'Estes stands estão sem chave estável e por isso '
+                          'não recebem prova de arte. Diferencie os nomes na '
+                          'planilha e sincronize.',
+                          style: TextStyle(fontSize: 12, color: Colors.grey)),
+                      const SizedBox(height: 12),
+                      for (final e in achados.entries) ...[
+                        Text(e.key,
+                            style: const TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 13)),
+                        for (final n in e.value)
+                          Padding(
+                            padding: const EdgeInsets.only(left: 8, top: 2),
+                            child: Text('• $n',
+                                style: const TextStyle(fontSize: 13)),
+                          ),
+                        const SizedBox(height: 10),
+                      ],
+                    ],
+                  ),
+                ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Fechar')),
+        ],
       ),
     );
   }

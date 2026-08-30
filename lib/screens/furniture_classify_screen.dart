@@ -57,7 +57,10 @@ class _FurnitureClassifyScreenState extends State<FurnitureClassifyScreen> {
   Future<void> _carregar() async {
     try {
       final atual =
-          await FirestoreService.getFurnitureKinds(widget.client.firestoreId);
+          await FirestoreService.getFurnitureKinds(
+              widget.client.firestoreId,
+              clientKey: widget.client.clientKey,
+              nome: widget.client.nome);
       if (mounted) {
         setState(() {
           _classificacao = atual;
@@ -106,6 +109,8 @@ class _FurnitureClassifyScreenState extends State<FurnitureClassifyScreen> {
         fairName: widget.fairName,
         items: limpo,
         by: Actor.name,
+        clientKey: widget.client.clientKey,
+        nome: widget.client.nome,
       );
       if (!mounted) return;
       Navigator.pop(context, true);
@@ -275,12 +280,17 @@ class _FurnitureClassifyScreenState extends State<FurnitureClassifyScreen> {
           // Especificações do stand: é aqui que ficam as considerações que o
           // consultor deixou, e elas costumam mudar o que a equipe leva.
           ClientSpecsCard(
-              clientId: c.firestoreId, legacyClientId: c.rowId),
+              clientId: c.firestoreId,
+              legacyClientId: c.rowId,
+              clientKey: c.clientKey,
+              clientName: c.nome),
           // A equipe de mobiliário também anota: o que faltou, o que foi
           // trocado no lugar. Sem poder escrever, essa informação ficava no
           // WhatsApp e sumia.
           AnalystNotesWidget(
             clientId: c.firestoreId,
+            clientKey: c.clientKey,
+            clientName: c.nome,
             canEdit: true,
             editorName: Actor.name,
           ),

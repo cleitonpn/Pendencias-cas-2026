@@ -5,6 +5,15 @@ class Client {
   final int fairId;          // which fair this client belongs to
   final String rowId;
   final String firestoreId;  // stable cross-device key: normalizedFairName_rowNum
+
+  /// Identidade que NÃO depende da posição na planilha: feira + nome do
+  /// expositor. Irmã do [firestoreId] — as duas são calculadas na leitura da
+  /// planilha, onde o nome da feira é conhecido —, mas esta sobrevive a
+  /// inserir, apagar e reordenar linhas.
+  ///
+  /// Vazia quando não dá para formar chave: sem nome, ou nome repetido na
+  /// mesma feira. Ver utils/client_key.dart.
+  final String clientKey;
   final String nome;
   final String montagem;
   final String local;
@@ -76,6 +85,7 @@ class Client {
     this.fairId = 1,
     required this.rowId,
     this.firestoreId = '',
+    this.clientKey = '',
     required this.nome,
     required this.montagem,
     required this.local,
@@ -141,6 +151,7 @@ class Client {
         fairId: newFairId,
         rowId: newRowId,
         firestoreId: newFirestoreId.isNotEmpty ? newFirestoreId : firestoreId,
+        clientKey: clientKey,
         nome: nome,
         montagem: montagem,
         local: local,
@@ -183,6 +194,7 @@ class Client {
         'fair_id': fairId,
         'row_id': rowId,
         'firestore_id': firestoreId,
+        'client_key': clientKey,
         'nome': nome,
         'montagem': montagem,
         'local': local,
@@ -228,6 +240,7 @@ class Client {
         firestoreId: (map['firestore_id'] as String?)?.isNotEmpty == true
             ? map['firestore_id'] as String
             : map['row_id'] as String,
+        clientKey: (map['client_key'] as String?) ?? '',
         nome: map['nome'] ?? '',
         montagem: map['montagem'] ?? '',
         local: map['local'] ?? '',

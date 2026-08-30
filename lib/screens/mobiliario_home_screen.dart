@@ -8,6 +8,7 @@ import '../services/firestore_service.dart';
 import '../services/pdf_service.dart';
 import '../services/session_service.dart';
 import '../utils/furniture_items.dart';
+import '../utils/client_key.dart';
 import '../utils/stand_street.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/fair_info_header.dart';
@@ -16,6 +17,24 @@ import 'furniture_classify_screen.dart';
 import 'furniture_pending_screen.dart';
 import 'global_search_screen.dart';
 import 'login_screen.dart';
+
+/// A classificação que pertence a ESTE stand.
+///
+/// O documento mora sob o `firestoreId`, que é a posição na planilha. Depois
+/// de uma linha inserida, o que está naquele id é a classificação do vizinho —
+/// e contá-la mostraria o stand como pronto sem ninguém ter classificado, ou
+/// mandaria para a OS a lista de outro. Documento que se identifica como de
+/// outro vale como não existente.
+Map<String, String> _classificacaoDe(
+    Map<String, FurnitureKindsDoc> todos, Client c) {
+  final doc = todos[c.firestoreId];
+  if (doc == null) return const {};
+  if (!documentoDoCliente(doc.identidade,
+      clientKey: c.clientKey, nome: c.nome)) {
+    return const {};
+  }
+  return doc.items;
+}
 
 /// Tela da equipe de mobiliário.
 ///
@@ -78,7 +97,7 @@ class _MobiliarioHomeScreenState extends State<MobiliarioHomeScreen> {
         var faltando = 0;
         for (final c in comMob) {
           final itens = furnitureItemsFrom(c.mobilario);
-          final jaFeito = classificados[c.firestoreId] ?? const {};
+          final jaFeito = _classificacaoDe(classificados, c);
           if (itens.any((i) => !jaFeito.containsKey(i.key))) faltando++;
         }
         resumo[f.id!] = (comMobiliario: comMob.length, faltando: faltando);
@@ -381,7 +400,7 @@ class _FurnitureFairScreenState extends State<_FurnitureFairScreen> {
 
   List<Client> _clientes = [];
   List<Client> _todosClientes = [];
-  Map<String, Map<String, String>> _classificados = {};
+  Map<String, FurnitureKindsDoc> _classificados = {};
   bool _carregando = true;
 
   @override
@@ -392,7 +411,7 @@ class _FurnitureFairScreenState extends State<_FurnitureFairScreen> {
 
   Future<void> _carregar() async {
     final todos = await DatabaseService.getClients(fairId: widget.fair.id!);
-    Map<String, Map<String, String>> classif = {};
+    Map<String, FurnitureKindsDoc> classif = {};
     try {
       classif =
           await FirestoreService.getFurnitureKindsForFair(widget.fair.name);
@@ -421,7 +440,7 @@ class _FurnitureFairScreenState extends State<_FurnitureFairScreen> {
 
   bool _falta(Client c) {
     final itens = furnitureItemsFrom(c.mobilario);
-    final feito = _classificados[c.firestoreId] ?? const {};
+    final feito = _classificacaoDe(_classificados, c);
     return itens.any((i) => !feito.containsKey(i.key));
   }
 
@@ -462,9 +481,9 @@ class _FurnitureFairScreenState extends State<_FurnitureFairScreen> {
   /// fornecedor não quer cem papéis, quer a folha da rua dele.
   Widget _osDaFeira() {
     final temInterno = _classificados.values
-        .any((m) => m.containsValue('interno'));
+        .any((d) => d.items.containsValue('interno'));
     final temExterno = _classificados.values
-        .any((m) => m.containsValue('externo'));
+        .any((d) => d.items.containsValue('externo'));
     if (!temInterno && !temExterno) return const SizedBox.shrink();
     return Container(
       width: double.infinity,
@@ -514,7 +533,7 @@ class _FurnitureFairScreenState extends State<_FurnitureFairScreen> {
     // que a linha faltar e alguém perguntar.
     final porRua = <String, List<({Client client, List<FurnitureItem> itens})>>{};
     for (final c in _clientes) {
-      final feito = _classificados[c.firestoreId] ?? const {};
+      final feito = _classificacaoDe(_classificados, c);
       final doTipo = furnitureItemsFrom(c.mobilario)
           .where((i) => furnitureKindFrom(feito[i.key]) == kind)
           .toList();
@@ -568,7 +587,7 @@ class _FurnitureFairScreenState extends State<_FurnitureFairScreen> {
               itemBuilder: (context, i) {
                 final c = _clientes[i];
                 final itens = furnitureItemsFrom(c.mobilario);
-                final feito = _classificados[c.firestoreId] ?? const {};
+                final feito = _classificacaoDe(_classificados, c);
                 final faltam =
                     itens.where((it) => !feito.containsKey(it.key)).length;
                 final internos = feito.values

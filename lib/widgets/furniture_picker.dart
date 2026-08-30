@@ -85,7 +85,9 @@ class _FurniturePickerState extends State<FurniturePicker> {
     var kinds = <String, String>{};
     try {
       kinds = await FirestoreService.getFurnitureKinds(
-          widget.client.firestoreId);
+          widget.client.firestoreId,
+          clientKey: widget.client.clientKey,
+          nome: widget.client.nome);
     } catch (_) {
       // Sem a classificação a lista ainda serve: os itens aparecem como "sem
       // classificação" e o chamado sai. Ficar sem a lista por causa disso
@@ -259,7 +261,8 @@ Future<List<FurniturePick>> furniturePicksFor({
   if (selected.isEmpty) return const [];
   var kinds = <String, String>{};
   try {
-    kinds = await FirestoreService.getFurnitureKinds(client.firestoreId);
+    kinds = await FirestoreService.getFurnitureKinds(client.firestoreId,
+        clientKey: client.clientKey, nome: client.nome);
   } catch (_) {
     // Sem classificação os itens entram como "sem classificação" — o que é a
     // verdade, e melhor do que perder o item marcado.

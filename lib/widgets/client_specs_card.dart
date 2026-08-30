@@ -5,10 +5,22 @@ import '../services/firestore_service.dart';
 /// Handles its own async loading. Shows nothing while loading or when empty.
 class ClientSpecsCard extends StatefulWidget {
   final String clientId;
+
+  /// Identidade do stand, para conferir o documento lido. O documento mora sob
+  /// o `firestoreId`, que é posicional: sem isto, uma linha inserida na
+  /// planilha faz a especificação do vizinho aparecer aqui.
+  final String clientKey;
+  final String clientName;
   // Legacy rowId key used before stable firestoreId was introduced.
   // If set and clientId yields no data, this key is tried as fallback.
   final String? legacyClientId;
-  const ClientSpecsCard({super.key, required this.clientId, this.legacyClientId});
+  const ClientSpecsCard({
+    super.key,
+    required this.clientId,
+    this.legacyClientId,
+    this.clientKey = '',
+    this.clientName = '',
+  });
 
   @override
   State<ClientSpecsCard> createState() => _ClientSpecsCardState();
@@ -25,10 +37,12 @@ class _ClientSpecsCardState extends State<ClientSpecsCard> {
   }
 
   Future<void> _load() async {
-    var specs = await FirestoreService.getClientSpecs(widget.clientId);
+    var specs = await FirestoreService.getClientSpecs(widget.clientId,
+        clientKey: widget.clientKey, nome: widget.clientName);
     if (specs == null && widget.legacyClientId != null &&
         widget.legacyClientId != widget.clientId) {
-      specs = await FirestoreService.getClientSpecs(widget.legacyClientId!);
+      specs = await FirestoreService.getClientSpecs(widget.legacyClientId!,
+          clientKey: widget.clientKey, nome: widget.clientName);
     }
     if (mounted) setState(() { _specs = specs; _loaded = true; });
   }

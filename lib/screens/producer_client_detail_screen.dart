@@ -501,10 +501,18 @@ class _ProducerClientDetailScreenState
             ClientSpecExtras(client: c),
 
                   // Stand specifications (filled by consultant, read-only)
-                  ClientSpecsCard(clientId: c.firestoreId, legacyClientId: c.rowId),
+                  ClientSpecsCard(
+                clientId: c.firestoreId,
+                legacyClientId: c.rowId,
+                clientKey: c.clientKey,
+                clientName: c.nome),
 
                   // Analyst notes (read-only for producer)
-                  AnalystNotesWidget(clientId: c.firestoreId, canEdit: false),
+                  AnalystNotesWidget(
+                clientId: c.firestoreId,
+                clientKey: c.clientKey,
+                clientName: c.nome,
+                canEdit: false),
 
                   // Montage progress photos (producer can add)
                   MontageSection(

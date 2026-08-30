@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/client.dart';
+import '../utils/client_key.dart';
 import '../utils/producer_pool.dart';
 
 class SheetsService {
@@ -255,6 +256,18 @@ class SheetsService {
 
     final clients = <Client>[];
 
+    // A chave estável precisa saber, ANTES de montar a lista, quais nomes se
+    // repetem na feira: nome repetido não recebe chave. Por isso a varredura
+    // vem antes do laço.
+    final chavesPorNome = clientKeysFor(
+      fairName,
+      dataRows.map((r) =>
+          (nomeIdx >= 0 && nomeIdx < r.length ? r[nomeIdx] : null)
+              ?.toString()
+              .trim() ??
+          ''),
+    );
+
     for (int i = 0; i < dataRows.length; i++) {
       final row = dataRows[i];
 
@@ -286,6 +299,9 @@ class SheetsService {
         fairId: fairId,
         rowId: '${fairId}_${i + 1}',
         firestoreId: '${_normalize(fairName)}_${i + 1}',
+        // O firestoreId acima é a POSIÇÃO na aba: inserir uma linha reescreve
+        // o de todo mundo abaixo. A clientKey não muda com isso.
+        clientKey: chavesPorNome[normalizeKeyPart(nome)] ?? '',
         nome: nome,
         montagem: s(montagemIdx),
         tipo: s(tipoIdx),
@@ -421,6 +437,22 @@ class SheetsService {
 
     final grouped = <String, List<Client>>{};
 
+    // Cada linha da mestra é de uma feira; a ambiguidade de nome é dentro de
+    // cada uma, não da aba inteira. Duas feiras podem ter um expositor
+    // homônimo sem que nenhuma das duas fique sem chave.
+    final nomesPorFeira = <String, List<String>>{};
+    for (final r in dataRows) {
+      String cel(int idx) =>
+          (idx >= 0 && idx < r.length ? r[idx] : null)?.toString().trim() ?? '';
+      final f = cel(feiraIdx);
+      if (f.isEmpty) continue;
+      (nomesPorFeira[f] ??= []).add(cel(nomeIdx));
+    }
+    final chavesPorFeira = {
+      for (final e in nomesPorFeira.entries)
+        e.key: clientKeysFor(e.key, e.value),
+    };
+
     for (int i = 0; i < dataRows.length; i++) {
       final row = dataRows[i];
 
@@ -453,6 +485,11 @@ class SheetsService {
         fairId: 0,           // placeholder — caller calls reidentify()
         rowId: '0_${i + 1}', // placeholder row id
         firestoreId: '${_normalize(feiraNome)}_$rowNumInFair',
+        // Posicional, e na mestra ainda pior: depende de quantas linhas DESTA
+        // feira vieram antes. A clientKey não depende de nenhuma das duas
+        // coisas.
+        clientKey:
+            chavesPorFeira[feiraNome]?[normalizeKeyPart(nome)] ?? '',
         nome: nome,
         // A mestra já mostrava o TIPO no lugar da montagem; mantido para não
         // mudar o que essas feiras exibem hoje.

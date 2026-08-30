@@ -4,6 +4,7 @@ import '../models/montage_update.dart';
 import '../models/freight_request.dart';
 import '../models/meeting.dart';
 import '../utils/analyst_notes.dart';
+import '../utils/client_key.dart';
 import '../models/client.dart';
 import '../models/art_status.dart';
 import '../utils/client_fingerprint.dart';
@@ -605,11 +606,21 @@ class FirestoreService {
 
   // ─── Client Specs ────────────────────────────────────────────────────────────
 
-  static Future<Map<String, dynamic>?> getClientSpecs(String clientId) async {
+  static Future<Map<String, dynamic>?> getClientSpecs(
+    String clientId, {
+    String clientKey = '',
+    String nome = '',
+  }) async {
     try {
       final doc = await _db.collection('client_specs').doc(clientId).get();
       if (!doc.exists) return null;
-      return doc.data();
+      final data = doc.data();
+      // Especificação de outro stand mandaria a equipe montar com o
+      // revestimento e a cor do vizinho.
+      if (!documentoDoCliente(data, clientKey: clientKey, nome: nome)) {
+        return null;
+      }
+      return data;
     } catch (_) {
       return null;
     }
@@ -692,11 +703,11 @@ class FirestoreService {
   // ─── Spec Locking ─────────────────────────────────────────────────────────
 
   static Future<void> saveClientSpecs(
-      String clientId, Map<String, dynamic> specs) async {
-    await _db
-        .collection('client_specs')
-        .doc(clientId)
-        .set(specs, SetOptions(merge: true));
+      String clientId, Map<String, dynamic> specs,
+      {String clientKey = '', String nome = ''}) async {
+    await _db.collection('client_specs').doc(clientId).set(
+        {...specs, ...carimboDoCliente(clientKey: clientKey, nome: nome)},
+        SetOptions(merge: true));
   }
 
   static Future<void> lockClientSpecs(String clientId) async {
@@ -790,10 +801,19 @@ class FirestoreService {
   ///
   /// Cada item: `{id, text, link, by, at}`.
   static Future<List<Map<String, dynamic>>> getAnalystNotes(
-      String clientId) async {
+    String clientId, {
+    String clientKey = '',
+    String nome = '',
+  }) async {
     try {
       final doc = await _db.collection('analyst_notes').doc(clientId).get();
-      return analystNotesFrom(doc.data());
+      final data = doc.data();
+      // Documento que se identifica como de outro stand não é mostrado: uma
+      // consideração no cliente errado é pior do que consideração nenhuma.
+      if (!documentoDoCliente(data, clientKey: clientKey, nome: nome)) {
+        return [];
+      }
+      return analystNotesFrom(data);
     } catch (_) {
       return [];
     }
@@ -804,9 +824,11 @@ class FirestoreService {
   /// Usa arrayUnion: dois analistas escrevendo ao mesmo tempo somam as duas
   /// anotações. Ler-alterar-gravar perderia a de quem gravasse primeiro.
   static Future<void> addAnalystNote(
-      String clientId, String text, String link, String by) async {
+      String clientId, String text, String link, String by,
+      {String clientKey = '', String nome = ''}) async {
     final agora = DateTime.now();
     await _db.collection('analyst_notes').doc(clientId).set({
+      ...carimboDoCliente(clientKey: clientKey, nome: nome),
       'notes': FieldValue.arrayUnion([
         {
           // O id vem do instante mais do autor: é o que permite apagar uma
@@ -929,14 +951,25 @@ class FirestoreService {
   // utils/furniture_items.dart.
 
   /// Classificação dos itens de um stand: chave do item → 'interno'|'externo'.
+  /// [clientKey] e [nome] são para conferência: o documento mora sob o
+  /// `firestoreId`, que é posicional, e depois de uma reordenação da planilha
+  /// o que está ali pode ser a classificação de outro stand. Documento que se
+  /// identifica como de outro devolve vazio — melhor reclassificar do que
+  /// mandar para o fornecedor a lista do vizinho.
   static Future<Map<String, String>> getFurnitureKinds(
-      String clientFirestoreId) async {
+    String clientFirestoreId, {
+    String clientKey = '',
+    String nome = '',
+  }) async {
     if (clientFirestoreId.isEmpty) return {};
     final doc = await _db
         .collection('furniture_kinds')
         .doc(clientFirestoreId)
         .get();
-    final itens = (doc.data() ?? const {})['items'];
+    final data = doc.data();
+    if (data == null) return {};
+    if (!documentoDoCliente(data, clientKey: clientKey, nome: nome)) return {};
+    final itens = data['items'];
     if (itens is! Map) return {};
     return {
       for (final e in itens.entries) e.key.toString(): e.value.toString(),
@@ -945,19 +978,24 @@ class FirestoreService {
 
   /// Classificação de vários stands de uma vez, para a tela de pendências de
   /// classificação e para a OS consolidada da feira.
-  static Future<Map<String, Map<String, String>>> getFurnitureKindsForFair(
+  static Future<Map<String, FurnitureKindsDoc>> getFurnitureKindsForFair(
       String fairName) async {
     final snap = await _db
         .collection('furniture_kinds')
         .where('fairName', isEqualTo: fairName)
         .get();
-    final out = <String, Map<String, String>>{};
+    final out = <String, FurnitureKindsDoc>{};
     for (final d in snap.docs) {
-      final itens = (d.data())['items'];
+      final data = d.data();
+      final itens = data['items'];
       if (itens is! Map) continue;
-      out[d.id] = {
-        for (final e in itens.entries) e.key.toString(): e.value.toString(),
-      };
+      out[d.id] = FurnitureKindsDoc(
+        items: {
+          for (final e in itens.entries) e.key.toString(): e.value.toString(),
+        },
+        clientKey: (data['clientKey'] as String?) ?? '',
+        clientName: (data['clientName'] as String?) ?? '',
+      );
     }
     return out;
   }
@@ -967,10 +1005,13 @@ class FirestoreService {
     required String fairName,
     required Map<String, String> items,
     required String by,
+    String clientKey = '',
+    String nome = '',
   }) async {
     if (clientFirestoreId.isEmpty) return;
     await _db.collection('furniture_kinds').doc(clientFirestoreId).set({
       'fairName': fairName,
+      ...carimboDoCliente(clientKey: clientKey, nome: nome),
       'items': items,
       'updatedAt': DateTime.now().toIso8601String(),
       'updatedBy': by,
@@ -1148,6 +1189,10 @@ class FirestoreService {
               ..remove('is_completed')
               ..remove('completed_at')
               ..['fairName'] = fairName
+              // Nome de campo explicito para a ponte com a ferramenta de
+              // aprovacao de arte: o toMap grava 'client_key' (convencao do
+              // SQLite), e quem le de fora nao tem por que conhecer isso.
+              ..['clientKey'] = e.key.clientKey
               // Array de verdade, não texto: é o que permite perguntar
               // "quais stands esta pessoa pode assumir" numa consulta só.
               ..['produtoresList'] = e.key.produtores
@@ -1380,11 +1425,17 @@ class FirestoreService {
     DateTime? completedAt,
     String completedBy = '',
     String fairName = '',
+    String clientKey = '',
+    String clientName = '',
   }) async {
     if (clientFirestoreId.isEmpty) return;
     await _db.collection('client_status').doc(clientFirestoreId).set({
       'fairId': fairId,
       'fairName': fairName,
+      // Carimbo de identidade: o id do documento é a POSIÇÃO do stand na
+      // planilha, e uma linha inserida acima entrega este check-off para
+      // outro expositor. Com o carimbo, a troca deixa de ser silenciosa.
+      ...carimboDoCliente(clientKey: clientKey, nome: clientName),
       'completed': completed,
       'completedAt': completed
           ? (completedAt ?? DateTime.now()).toIso8601String()
@@ -1417,6 +1468,8 @@ class FirestoreService {
           {
             'fairId': fairId,
             'fairName': fairName,
+            ...carimboDoCliente(
+                clientKey: r.clientKey, nome: r.clientName),
             'completed': true,
             'completedAt':
                 (r.completedAt ?? DateTime.now()).toIso8601String(),
@@ -1441,6 +1494,8 @@ class FirestoreService {
     for (final doc in snap.docs) {
       final data = doc.data() as Map<String, dynamic>;
       result[doc.id] = ClientStatus(
+        clientKey: (data['clientKey'] as String?) ?? '',
+        clientName: (data['clientName'] as String?) ?? '',
         completed: data['completed'] == true,
         completedAt: data['completedAt'] is String
             ? DateTime.tryParse(data['completedAt'] as String)
@@ -1453,15 +1508,45 @@ class FirestoreService {
 }
 
 /// One stand to publish during a completion backfill.
+/// A classificação de mobiliário de um stand, com a identidade que o
+/// documento diz ter.
+///
+/// A identidade vem junto porque o documento mora sob o `firestoreId`, que é a
+/// posição do stand na planilha: quem lê a feira inteira precisa saber se
+/// aquela classificação é mesmo do stand que está contando.
+class FurnitureKindsDoc {
+  /// chave do item → 'interno' | 'externo' | 'nao_mobiliario'
+  final Map<String, String> items;
+  final String clientKey;
+  final String clientName;
+
+  const FurnitureKindsDoc({
+    required this.items,
+    this.clientKey = '',
+    this.clientName = '',
+  });
+
+  Map<String, dynamic> get identidade => {
+        if (clientKey.isNotEmpty) 'clientKey': clientKey,
+        if (clientName.isNotEmpty) 'clientName': clientName,
+      };
+}
+
 class ClientCompletionRecord {
   final String clientFirestoreId;
   final DateTime? completedAt;
   final String completedBy;
 
+  /// Identidade do stand, gravada junto do check-off. Ver [ClientStatus].
+  final String clientKey;
+  final String clientName;
+
   const ClientCompletionRecord({
     required this.clientFirestoreId,
     this.completedAt,
     this.completedBy = '',
+    this.clientKey = '',
+    this.clientName = '',
   });
 }
 
@@ -1480,16 +1565,21 @@ class ArtStatusService {
   static CollectionReference<Map<String, dynamic>> get _col =>
       FirebaseFirestore.instance.collection('cv_status');
 
-  /// O status da arte de todos os stands de uma feira, por firestoreId.
+  /// Os documentos de arte de uma feira, crus, por id do documento.
+  ///
+  /// Devolve o mapa cru — e não [ArtStatus] pronto — porque quem casa precisa
+  /// conferir a identidade gravada antes de acreditar. O id pode ser a
+  /// `clientKey` (documento novo) ou o `firestoreId` posicional (documento
+  /// ainda não migrado pela ferramenta), e o segundo pode ter mudado de dono
+  /// desde que foi escrito.
   ///
   /// Consulta pelo NOME da feira, e não pelo id local: o id muda de aparelho
   /// para aparelho, o nome não. É a mesma escolha de `getFairClients`.
-  static Future<Map<String, ArtStatus>> porFeira(String fairName) async {
+  static Future<Map<String, Map<String, dynamic>>> docsPorFeira(
+      String fairName) async {
     if (fairName.trim().isEmpty) return const {};
     final snap = await _col.where('fairName', isEqualTo: fairName.trim()).get();
-    return {
-      for (final d in snap.docs) d.id: ArtStatus.fromMap(d.data()),
-    };
+    return {for (final d in snap.docs) d.id: d.data()};
   }
 }
 
@@ -1498,9 +1588,26 @@ class ClientStatus {
   final DateTime? completedAt;
   final String completedBy;
 
+  /// Identidade gravada junto do check-off, quando existe.
+  ///
+  /// O documento mora sob o `firestoreId`, que é a posição do stand na
+  /// planilha: inserir uma linha acima faz este check-off passar a valer para
+  /// outro expositor. Estes dois campos são o que permite perceber isso —
+  /// vazios em documento anterior ao carimbo, que continua sendo aceito.
+  final String clientKey;
+  final String clientName;
+
   const ClientStatus({
     required this.completed,
     this.completedAt,
     this.completedBy = '',
+    this.clientKey = '',
+    this.clientName = '',
   });
+
+  /// O que este documento diz ser, para conferir contra o cliente lido.
+  Map<String, dynamic> get identidade => {
+        if (clientKey.isNotEmpty) 'clientKey': clientKey,
+        if (clientName.isNotEmpty) 'clientName': clientName,
+      };
 }
