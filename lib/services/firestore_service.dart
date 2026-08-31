@@ -1581,6 +1581,47 @@ class ArtStatusService {
     final snap = await _col.where('fairName', isEqualTo: fairName.trim()).get();
     return {for (final d in snap.docs) d.id: d.data()};
   }
+
+  /// Anexa a prova de arte a uma lista de expositores.
+  ///
+  /// Vive aqui, e não em cada tela, porque são TRÊS lugares que precisam disso
+  /// — o app pelo provider, o portal da organizadora e o QR do expositor — e
+  /// os dois portais não passam pelo provider: eles montam os clientes direto
+  /// da planilha e por isso nunca chegavam a ler o cv_status. A prova só
+  /// aparecia para eles quando a coluna da planilha estava preenchida à mão.
+  ///
+  /// Falha de rede não é erro aqui: sem a prova a tela ainda serve, e o link
+  /// da planilha continua valendo como reserva.
+  static Future<void> anexarArte(
+      List<Client> clients, String fairName) async {
+    if (clients.isEmpty || fairName.trim().isEmpty) return;
+    Map<String, Map<String, dynamic>> docs;
+    try {
+      docs = await docsPorFeira(fairName);
+    } catch (_) {
+      return;
+    }
+    if (docs.isEmpty) return;
+
+    for (final c in clients) {
+      // Primeiro pela chave estável, que não depende da posição na planilha.
+      var doc = c.clientKey.isEmpty ? null : docs[c.clientKey];
+
+      // Depois, queda para o id posicional — conferida. Se o documento
+      // trouxer identidade e ela for de outro stand, fica sem prova em vez de
+      // mostrar a prova errada.
+      if (doc == null && c.firestoreId.isNotEmpty) {
+        final candidato = docs[c.firestoreId];
+        if (candidato != null &&
+            documentoDoCliente(candidato,
+                clientKey: c.clientKey, nome: c.nome)) {
+          doc = candidato;
+        }
+      }
+
+      c.arte = doc == null ? null : ArtStatus.fromMap(doc);
+    }
+  }
 }
 
 class ClientStatus {

@@ -167,6 +167,9 @@ class _StandRequestScreenState extends State<StandRequestScreen> {
         isMestraChild: _fair!.isMestraChild,
       );
       _clients = clients;
+      // Mesmo caso do portal da organizadora: sem isto o expositor só via a
+      // prova quando a coluna da planilha estava preenchida à mão.
+      await ArtStatusService.anexarArte(_clients, _fair!.name);
       // Pre-select the stand if it came in the URL.
       if (widget.rowId != null) {
         final match = clients.where((c) => c.rowId == widget.rowId).toList();

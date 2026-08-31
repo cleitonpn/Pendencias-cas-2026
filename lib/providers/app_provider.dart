@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/client.dart';
-import '../models/art_status.dart';
 import '../models/fair.dart';
 import '../models/pending_item.dart';
 import '../services/sheets_service.dart';
@@ -874,30 +873,7 @@ class AppProvider extends ChangeNotifier {
     final fairName = _currentFair?.name ?? '';
     if (fairName.isEmpty) return;
     try {
-      final docs = await ArtStatusService.docsPorFeira(fairName);
-      if (docs.isEmpty) return;
-      for (final c in _clients) {
-        // Primeiro pela chave estável: o documento novo da ferramenta é endereçado
-        //    por ela, e casar assim não depende de posição nenhuma.
-        var doc = c.clientKey.isEmpty ? null : docs[c.clientKey];
-
-        // Depois, queda para o id posicional, para o documento que a ferramenta
-        //    ainda não migrou. É aqui que mora o defeito antigo: depois de uma
-        //    reordenação, aquele id pertence a outro expositor. Por isso a
-        //    queda só vale se o documento não desmentir — se ele trouxer
-        //    identidade e ela for de outro stand, fica sem prova em vez de
-        //    mostrar a prova errada.
-        if (doc == null && c.firestoreId.isNotEmpty) {
-          final candidato = docs[c.firestoreId];
-          if (candidato != null &&
-              documentoDoCliente(candidato,
-                  clientKey: c.clientKey, nome: c.nome)) {
-            doc = candidato;
-          }
-        }
-
-        c.arte = doc == null ? null : ArtStatus.fromMap(doc);
-      }
+      await ArtStatusService.anexarArte(_clients, fairName);
     } catch (_) {
       // offline, ou a feira ainda não está na ferramenta de aprovação
     }

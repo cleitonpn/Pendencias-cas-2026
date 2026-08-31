@@ -406,6 +406,11 @@ class _OrganizerWebScreenState extends State<OrganizerWebScreen> {
     setState(() => _step = _Step.loading);
     try {
       _clients = await _fetchFairClients(_fair!);
+      // A prova de arte vem da ferramenta de aprovação, não da planilha. Este
+      // portal monta os clientes direto da aba e por isso nunca chegava a
+      // lê-la: a organizadora só via print quando a coluna da planilha estava
+      // preenchida à mão.
+      await ArtStatusService.anexarArte(_clients, _fair!.name);
       _clientCache[_fair!.id!] = _clients;
       _setStep(_Step.pickStand);
     } catch (e) {
