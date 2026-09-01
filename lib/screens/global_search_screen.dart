@@ -90,6 +90,11 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
         ConsultantClientDetailScreen(client: client, consultantName: name),
       'analyst' =>
         AnalystClientDetailScreen(client: client, analystName: name),
+      // Logística e mobiliário abrem a mesma ficha de leitura. As duas telas
+      // já tinham o botão de busca, mas o resultado não abria nada: o toque
+      // simplesmente não fazia efeito, sem aviso nenhum.
+      'logistica' || 'mobiliario' => AnalystClientDetailScreen(
+          client: client, analystName: name, podeAnotar: false),
       'admin' || 'manager' || 'leader' => ClientDetailScreen(client: client),
       _ => null,
     };

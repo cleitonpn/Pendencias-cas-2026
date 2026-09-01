@@ -8,6 +8,7 @@ import '../services/firestore_service.dart';
 import '../services/session_service.dart';
 import '../widgets/app_drawer.dart';
 import 'login_screen.dart';
+import 'analyst_hangar_list_screen.dart';
 import 'freight_requests_screen.dart';
 
 class LogisticsHomeScreen extends StatelessWidget {
@@ -135,49 +136,97 @@ class _FairCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         side: BorderSide(color: _modeColor.withOpacity(0.5), width: 1.5),
       ),
-      child: InkWell(
-        onTap: () => Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => FreightRequestsScreen(
-              fairId: fair.id!,
-              fairName: fair.name,
-              viewerRole: 'logistica',
-              viewerName: logisticsName,
+      child: Column(
+        children: [
+          // O toque no cartão continua indo para os fretes: é o trabalho do
+          // dia a dia da logística, e mudar isso trocaria o caminho que a
+          // equipe já tem na memória.
+          InkWell(
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => FreightRequestsScreen(
+                  fairId: fair.id!,
+                  fairName: fair.name,
+                  viewerRole: 'logistica',
+                  viewerName: logisticsName,
+                ),
+              ),
+            ),
+            borderRadius: BorderRadius.circular(14),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: _modeColor.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(Icons.local_shipping_outlined,
+                        color: _modeColor, size: 28),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(fair.name,
+                            style: const TextStyle(
+                                fontSize: 18, fontWeight: FontWeight.bold)),
+                        Text('$_modeLabel  ·  Fretes',
+                            style: TextStyle(fontSize: 12, color: _modeColor)),
+                      ],
+                    ),
+                  ),
+                  const Icon(Icons.chevron_right, color: Colors.grey),
+                ],
+              ),
             ),
           ),
-        ),
-        borderRadius: BorderRadius.circular(14),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: _modeColor.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(10),
+          const Divider(height: 1),
+          // Caminho novo: a mesma ficha de stand que o analista enxerga —
+          // projeto, memorial, especificações, mobiliário e as pendências em
+          // aberto. A logística precisa disso para carregar o caminhão certo,
+          // e até agora tinha de perguntar.
+          InkWell(
+            onTap: () async {
+              await context.read<AppProvider>().selectFair(fair);
+              if (!context.mounted) return;
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => AnalystHangarListScreen(
+                    analystName: logisticsName,
+                    papelLabel: 'Logística',
+                    // Leitura: o bloco de considerações é dos analistas, e a
+                    // logística precisa da informação, não de assinar por ela.
+                    podeAnotar: false,
+                  ),
                 ),
-                child: Icon(Icons.local_shipping_outlined,
-                    color: _modeColor, size: 28),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(fair.name,
-                        style: const TextStyle(
-                            fontSize: 18, fontWeight: FontWeight.bold)),
-                    Text(_modeLabel,
-                        style: TextStyle(fontSize: 12, color: _modeColor)),
-                  ],
+              );
+            },
+            borderRadius: const BorderRadius.vertical(
+                bottom: Radius.circular(14)),
+            child: const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Row(children: [
+                Icon(Icons.storefront_outlined,
+                    color: Color(0xFF1E3A5F), size: 20),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Text('Stands e projetos',
+                      style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF1E3A5F))),
                 ),
-              ),
-              const Icon(Icons.chevron_right, color: Colors.grey),
-            ],
+                Icon(Icons.chevron_right, color: Colors.grey, size: 20),
+              ]),
+            ),
           ),
-        ),
+        ],
       ),
     );
   }

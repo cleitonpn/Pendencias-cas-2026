@@ -19,10 +19,18 @@ class AnalystClientDetailScreen extends StatefulWidget {
   final Client client;
   final String analystName;
 
+  /// Pode acrescentar consideração, ou só ler.
+  ///
+  /// A logística usa estas mesmas telas para consultar o projeto do stand,
+  /// mas não escreve no bloco dos analistas — ela precisa da informação, não
+  /// de assinar por ela.
+  final bool podeAnotar;
+
   const AnalystClientDetailScreen({
     super.key,
     required this.client,
     required this.analystName,
+    this.podeAnotar = true,
   });
 
   @override
@@ -268,7 +276,7 @@ class _AnalystClientDetailScreenState
               clientId: c.firestoreId,
               clientKey: c.clientKey,
               clientName: c.nome,
-              canEdit: true,
+              canEdit: widget.podeAnotar,
               editorName: widget.analystName,
             ),
 

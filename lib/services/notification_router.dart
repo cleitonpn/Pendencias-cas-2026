@@ -96,6 +96,13 @@ class NotificationRouter {
       case 'analyst':
         return AnalystClientDetailScreen(
             client: client, analystName: name);
+      // Logística e mobiliário abrem a mesma ficha de leitura. O mobiliário
+      // passou a RECEBER notificação de chamado na etapa 3 e caía aqui no
+      // default: a notificação chegava e tocar nela não abria nada.
+      case 'logistica':
+      case 'mobiliario':
+        return AnalystClientDetailScreen(
+            client: client, analystName: name, podeAnotar: false);
       case 'admin':
       case 'manager':
       case 'leader':

@@ -7,7 +7,20 @@ import 'analyst_client_list_screen.dart';
 
 class AnalystHangarListScreen extends StatelessWidget {
   final String analystName;
-  const AnalystHangarListScreen({super.key, required this.analystName});
+
+  /// Rótulo do papel na barra de título — a mesma tela serve analista e
+  /// logística, e dizer "Analista" para quem é da logística confunde.
+  final String papelLabel;
+
+  /// Repassado até o detalhe do stand. Ver [AnalystClientDetailScreen].
+  final bool podeAnotar;
+
+  const AnalystHangarListScreen({
+    super.key,
+    required this.analystName,
+    this.papelLabel = 'Analista',
+    this.podeAnotar = true,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -20,11 +33,18 @@ class AnalystHangarListScreen extends StatelessWidget {
       appBar: AppBar(
         backgroundColor: const Color(0xFF1E3A5F),
         elevation: 0,
-        title: Text(provider.currentFairName,
-            style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-                fontSize: 20)),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(provider.currentFairName,
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 20)),
+            Text(papelLabel,
+                style: const TextStyle(color: Colors.white70, fontSize: 12)),
+          ],
+        ),
         actions: [
           provider.isLoading
               ? const Padding(
@@ -73,6 +93,7 @@ class AnalystHangarListScreen extends StatelessWidget {
                         builder: (_) => AnalystClientListScreen(
                           hangar: hangar,
                           analystName: analystName,
+                          podeAnotar: podeAnotar,
                         ),
                       ),
                     ),

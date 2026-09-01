@@ -8,8 +8,15 @@ import 'analyst_client_detail_screen.dart';
 class AnalystClientListScreen extends StatefulWidget {
   final String hangar;
   final String analystName;
+
+  /// Repassado ao detalhe do stand. Ver [AnalystClientDetailScreen].
+  final bool podeAnotar;
+
   const AnalystClientListScreen(
-      {super.key, required this.hangar, required this.analystName});
+      {super.key,
+      required this.hangar,
+      required this.analystName,
+      this.podeAnotar = true});
 
   @override
   State<AnalystClientListScreen> createState() =>
@@ -108,6 +115,7 @@ class _AnalystClientListScreenState extends State<AnalystClientListScreen> {
                                 builder: (_) => AnalystClientDetailScreen(
                                       client: clients[i],
                                       analystName: widget.analystName,
+                                      podeAnotar: widget.podeAnotar,
                                     )));
                         await _loadCounts();
                         setState(() {});
