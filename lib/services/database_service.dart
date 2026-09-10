@@ -5,6 +5,7 @@ import '../models/client.dart';
 import '../models/fair.dart';
 import '../models/pending_item.dart';
 import '../utils/producer_pool.dart';
+import '../utils/fair_key.dart';
 
 class DatabaseService {
   static Database? _db;
@@ -638,11 +639,44 @@ class DatabaseService {
     required String sheetName,
   }) async {
     final database = await db;
-    final existing = await database.query('fairs',
-        where: "name = ? AND sheet_mode = 'mestra_child'",
-        whereArgs: [name],
-        limit: 1);
-    if (existing.isNotEmpty) return existing.first['id'] as int;
+    final chave = fairKey(name);
+
+    // Procura pela chave NORMALIZADA, não pelo texto cru. O nome digitado na
+    // coluna FEIRA varia entre sincronizações — caixa, espaço a mais, acento
+    // — e comparar o texto cru fazia "ABAV " nascer como uma segunda feira ao
+    // lado de "ABAV".
+    final existentes = await database.query('fairs',
+        columns: ['id', 'name'],
+        where: "sheet_mode = 'mestra_child'");
+    for (final f in existentes) {
+      if (fairKey((f['name'] as String?) ?? '') == chave) {
+        return f['id'] as int;
+      }
+    }
+
+    // Id derivado do nome: o mesmo em todos os aparelhos. Ver
+    // utils/fair_key.dart — o id local era o que duplicava a feira.
+    final id = derivedFairId(name);
+    if (id > 0) {
+      final ocupado = await database.query('fairs',
+          columns: ['id'], where: 'id = ?', whereArgs: [id], limit: 1);
+      if (ocupado.isEmpty) {
+        await database.insert('fairs', {
+          'id': id,
+          'name': name,
+          'spreadsheet_id': spreadsheetId,
+          'sheet_name': sheetName,
+          'created_at': DateTime.now().toIso8601String(),
+          'mode': 'producao',
+          'sheet_mode': 'mestra_child',
+        });
+        return id;
+      }
+    }
+
+    // Colisão (ou nome que não gera chave): cai no autoincremento. Volta a
+    // ser um id local, então esta feira pode duplicar — mas é melhor do que
+    // roubar o id de outra, e a fusão de duplicatas ainda recolhe o estrago.
     return database.insert('fairs', {
       'name': name,
       'spreadsheet_id': spreadsheetId,
@@ -651,6 +685,78 @@ class DatabaseService {
       'mode': 'producao',
       'sheet_mode': 'mestra_child',
     });
+  }
+
+  /// Junta feiras derivadas repetidas, deixando uma só.
+  ///
+  /// Elas existem porque, antes do id derivado do nome, cada aparelho criava a
+  /// sua com um id local e publicava um documento próprio. Consertar a criação
+  /// não apaga as que já estão lá.
+  ///
+  /// Só junta o que é seguramente a mesma feira: derivada da mesma planilha, da
+  /// mesma aba, com o mesmo nome normalizado. Fica a de MENOR id, que é o
+  /// mesmo critério em todos os aparelhos — assim todos convergem para a
+  /// mesma sobrevivente em vez de cada um escolher uma.
+  ///
+  /// Nada se perde no caminho: pendência, check-off, consideração e
+  /// classificação de mobiliário de feira derivada são endereçados pelo NOME
+  /// da feira ou pelo firestoreId do stand (`nome_da_feira_linha`), e nenhum
+  /// dos dois carrega o id local. A sobrevivente enxerga tudo o que as outras
+  /// enxergavam.
+  ///
+  /// Devolve os ids removidos, para o chamador poder apagá-los na nuvem.
+  static Future<List<int>> mergeDuplicateDerivedFairs() async {
+    final database = await db;
+    final linhas = await database.query('fairs',
+        where: "sheet_mode = 'mestra_child'", orderBy: 'id');
+
+    final grupos = <String, List<Map<String, Object?>>>{};
+    for (final f in linhas) {
+      final chave = [
+        fairKey((f['name'] as String?) ?? ''),
+        (f['spreadsheet_id'] as String?) ?? '',
+        (f['sheet_name'] as String?) ?? '',
+      ].join('|');
+      (grupos[chave] ??= []).add(f);
+    }
+
+    final removidos = <int>[];
+    for (final grupo in grupos.values) {
+      if (grupo.length < 2) continue;
+      final fica = grupo.first; // menor id: orderBy 'id'
+      final ficaId = fica['id'] as int;
+
+      // O modo mais avançado do grupo sobrevive. Manutenção é o que abre o QR
+      // para o expositor: rebaixá-lo numa fusão fecharia o atendimento no meio
+      // do evento sem ninguém entender por quê.
+      var modo = (fica['mode'] as String?) ?? 'producao';
+      var autoApprove = (fica['auto_approve'] as int? ?? 0) == 1;
+      var autoValidate = (fica['auto_validate'] as int? ?? 0) == 1;
+      for (final f in grupo.skip(1)) {
+        final m = (f['mode'] as String?) ?? 'producao';
+        if (fairModeRank(m) > fairModeRank(modo)) modo = m;
+        // Desligado é o padrão; ligado foi alguém que decidiu.
+        if ((f['auto_approve'] as int? ?? 0) == 1) autoApprove = true;
+        if ((f['auto_validate'] as int? ?? 0) == 1) autoValidate = true;
+      }
+      await database.update(
+        'fairs',
+        {
+          'mode': modo,
+          'auto_approve': autoApprove ? 1 : 0,
+          'auto_validate': autoValidate ? 1 : 0,
+        },
+        where: 'id = ?',
+        whereArgs: [ficaId],
+      );
+
+      for (final f in grupo.skip(1)) {
+        final id = f['id'] as int;
+        await deleteFair(id);
+        removidos.add(id);
+      }
+    }
+    return removidos;
   }
 
   static Future<List<Client>> getClients({required int fairId}) async {

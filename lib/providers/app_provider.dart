@@ -106,11 +106,51 @@ class AppProvider extends ChangeNotifier {
       // já que init() só roda na splash.
       _fairsLoadFailed = true;
     }
+    await _mergeDuplicateFairs();
     _fairs = await DatabaseService.getFairs();
     await _refreshIgnoredFairs();
     notifyListeners();
     _startFairsStream();
     _startCircularStream();
+  }
+
+  /// Junta as feiras derivadas repetidas e apaga as sobras, aqui e na nuvem.
+  ///
+  /// Elas existem porque, antes do id derivado do nome, cada aparelho criava a
+  /// sua derivada com um id local e publicava um documento próprio: a mesma
+  /// feira virava duas na lista de todo mundo, cada uma com o seu modo.
+  ///
+  /// Roda na abertura, e não só na sincronização da mestra, para o aparelho se
+  /// curar mesmo sem ninguém sincronizar nada.
+  Future<void> _mergeDuplicateFairs() async {
+    List<int> removidos;
+    try {
+      removidos = await DatabaseService.mergeDuplicateDerivedFairs();
+    } catch (_) {
+      return;
+    }
+    if (removidos.isEmpty) return;
+
+    // A feira aberta não pode continuar apontando para uma duplicata que
+    // acabou de sair do banco: ela seguiria na tela com um id que não existe
+    // mais, e toda consulta por fair_id voltaria vazia.
+    if (_currentFair?.id != null && removidos.contains(_currentFair!.id)) {
+      _currentFair = null;
+      _clients = [];
+      _hangars = [];
+    }
+
+    // Apagar também na nuvem: deixar o documento lá faria a duplicata voltar
+    // no próximo arranque, quando a lista de feiras é lida de novo.
+    for (final id in removidos) {
+      try {
+        await FirestoreService.deleteFairFromCloud(id);
+      } catch (_) {
+        // Sem rede agora. A fusão local já valeu, e a nuvem é reconferida na
+        // próxima abertura.
+      }
+    }
+    debugPrint('[feiras] duplicatas removidas: $removidos');
   }
 
   /// Recarrega a lista de feiras da nuvem. Usado quando o app está sem feiras
@@ -728,6 +768,7 @@ class AppProvider extends ChangeNotifier {
       try { await FirestoreService.deleteFairFromCloud(df.id!); } catch (_) {}
     }
 
+    await _mergeDuplicateFairs();
     _fairs = await DatabaseService.getFairs();
     if (_currentFair?.id != null) {
       await _syncClientCompletion(_currentFair!.id!);
