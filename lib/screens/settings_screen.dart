@@ -2513,12 +2513,135 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
 
+            const SizedBox(height: 8),
+            Card(
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+              child: ListTile(
+                leading: const CircleAvatar(
+                  backgroundColor: Color(0xFF1E3A5F),
+                  child: Icon(Icons.image_search,
+                      color: Colors.white, size: 20),
+                ),
+                title: const Text('Comunicação visual não aparece?',
+                    style: TextStyle(fontWeight: FontWeight.w600)),
+                subtitle: const Text(
+                    'Mostra o que o app está enxergando da ferramenta de '
+                    'aprovação, na feira aberta',
+                    style: TextStyle(fontSize: 12, color: Colors.grey)),
+                trailing: TextButton(
+                  onPressed: _verDiagnosticoArte,
+                  child: const Text('Conferir',
+                      style: TextStyle(color: Color(0xFF1E3A5F))),
+                ),
+              ),
+            ),
+
             const SizedBox(height: 24),
           ],
         ),
       ),
     );
   }
+
+  /// O que o app enxerga de `cv_status` na feira aberta.
+  ///
+  /// "Não aparece o CV" tem várias causas com o mesmo sintoma — nada
+  /// publicado, publicado com outro nome de feira, publicado e casado mas sem
+  /// arte recebida, ou casado e recusado por ser de outro stand. Nenhuma
+  /// delas se anuncia, e sem isto a única saída é adivinhar.
+  Future<void> _verDiagnosticoArte() async {
+    final provider = context.read<AppProvider>();
+    final fair = provider.currentFair;
+    if (fair == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Abra uma feira antes de conferir.')));
+      return;
+    }
+    ArteDiagnostico d;
+    try {
+      d = await ArtStatusService.diagnosticarArte(
+          provider.clients, fair.name);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Não foi possível consultar: $e'),
+          backgroundColor: Colors.red));
+      return;
+    }
+    if (!mounted) return;
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        title: const Text('Comunicação visual'),
+        content: SizedBox(
+          width: 460,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(d.veredito,
+                    style: const TextStyle(fontSize: 13)),
+                const SizedBox(height: 14),
+                _linhaDiag('Feira consultada', d.fairName),
+                _linhaDiag('Documentos publicados', '${d.documentos}'),
+                _linhaDiag('Stands nesta feira', '${d.stands}'),
+                _linhaDiag('Casados pela chave estável',
+                    '${d.casadosPorChave}'),
+                _linhaDiag('Casados pelo id antigo',
+                    '${d.casadosPorPosicao}'),
+                if (d.recusadosPorIdentidade > 0)
+                  _linhaDiag('Recusados (documento de outro stand)',
+                      '${d.recusadosPorIdentidade}'),
+                if (d.exemplosDeId.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  const Text('Como os documentos estão endereçados:',
+                      style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.grey)),
+                  for (final id in d.exemplosDeId)
+                    Text('• $id',
+                        style: const TextStyle(
+                            fontSize: 12, fontFamily: 'monospace')),
+                ],
+                if (d.exemplosSemCasar.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  const Text('Stands sem casar:',
+                      style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.grey)),
+                  for (final n in d.exemplosSemCasar)
+                    Text('• $n', style: const TextStyle(fontSize: 12)),
+                ],
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Fechar')),
+        ],
+      ),
+    );
+  }
+
+  Widget _linhaDiag(String rotulo, String valor) => Padding(
+        padding: const EdgeInsets.only(bottom: 3),
+        child: Row(children: [
+          Expanded(
+            child: Text(rotulo,
+                style: const TextStyle(fontSize: 12, color: Colors.grey)),
+          ),
+          Text(valor,
+              style: const TextStyle(
+                  fontSize: 12, fontWeight: FontWeight.w600)),
+        ]),
+      );
 
   /// Quais stands ficaram sem chave estável por terem nome repetido na feira.
   ///

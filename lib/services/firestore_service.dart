@@ -1622,6 +1622,109 @@ class ArtStatusService {
       c.arte = doc == null ? null : ArtStatus.fromMap(doc);
     }
   }
+
+  /// O que o app está enxergando em `cv_status` para esta feira.
+  ///
+  /// Existe porque "não aparece o CV" tem quatro causas com o mesmo sintoma, e
+  /// nenhuma delas se anuncia:
+  ///
+  ///  - a ferramenta ainda não publicou nada para esta feira;
+  ///  - publicou, mas com outro nome de feira — a consulta é por igualdade
+  ///    exata em `fairName`, então um acento ou espaço a mais devolve zero
+  ///    documentos sem erro nenhum;
+  ///  - publicou e casou, mas o stand não tem arte recebida, e aí não há prova
+  ///    para mostrar — só status;
+  ///  - casou pelo id posicional e foi recusado, porque o documento diz ser de
+  ///    outro stand.
+  ///
+  /// Sem isto, distinguir uma da outra é adivinhação.
+  static Future<ArteDiagnostico> diagnosticarArte(
+      List<Client> clients, String fairName) async {
+    final docs = await docsPorFeira(fairName);
+    var porChave = 0;
+    var porPosicao = 0;
+    var recusados = 0;
+    final semCasar = <String>[];
+
+    for (final c in clients) {
+      if (c.clientKey.isNotEmpty && docs.containsKey(c.clientKey)) {
+        porChave++;
+        continue;
+      }
+      final candidato =
+          c.firestoreId.isEmpty ? null : docs[c.firestoreId];
+      if (candidato != null) {
+        if (documentoDoCliente(candidato,
+            clientKey: c.clientKey, nome: c.nome)) {
+          porPosicao++;
+        } else {
+          recusados++;
+        }
+        continue;
+      }
+      if (semCasar.length < 8) semCasar.add(c.nome);
+    }
+
+    return ArteDiagnostico(
+      fairName: fairName,
+      documentos: docs.length,
+      stands: clients.length,
+      casadosPorChave: porChave,
+      casadosPorPosicao: porPosicao,
+      recusadosPorIdentidade: recusados,
+      exemplosSemCasar: semCasar,
+      exemplosDeId: docs.keys.take(5).toList(),
+    );
+  }
+}
+
+/// O resultado de [ArtStatusService.diagnosticarArte].
+class ArteDiagnostico {
+  final String fairName;
+
+  /// Documentos que a ferramenta publicou para esta feira. Zero aqui quer
+  /// dizer que o problema está antes do casamento.
+  final int documentos;
+
+  final int stands;
+  final int casadosPorChave;
+  final int casadosPorPosicao;
+  final int recusadosPorIdentidade;
+  final List<String> exemplosSemCasar;
+  final List<String> exemplosDeId;
+
+  const ArteDiagnostico({
+    required this.fairName,
+    required this.documentos,
+    required this.stands,
+    required this.casadosPorChave,
+    required this.casadosPorPosicao,
+    required this.recusadosPorIdentidade,
+    required this.exemplosSemCasar,
+    required this.exemplosDeId,
+  });
+
+  int get casados => casadosPorChave + casadosPorPosicao;
+
+  /// A leitura do resultado em uma frase, já apontando o que fazer.
+  String get veredito {
+    if (documentos == 0) {
+      return 'A ferramenta de aprovação não publicou nada para uma feira '
+          'chamada exatamente "$fairName". Ou ela ainda não rodou a '
+          'publicação desta feira, ou lá o nome está escrito de outro jeito — '
+          'a busca é por igualdade exata, e um acento ou espaço a mais já '
+          'devolve zero.';
+    }
+    if (casados == 0) {
+      return 'A ferramenta publicou $documentos documento(s) para esta feira, '
+          'mas nenhum casou com os stands daqui. Os documentos estão '
+          'endereçados por outro id — é o passo 3 do combinado: a ferramenta '
+          'passar a gravar sob a clientKey.';
+    }
+    return '$casados de $stands stand(s) com informação de arte. '
+        'Stand casado que mesmo assim não mostra prova é stand sem arte '
+        'recebida ainda — aí a ferramenta não tem o que publicar.';
+  }
 }
 
 class ClientStatus {
